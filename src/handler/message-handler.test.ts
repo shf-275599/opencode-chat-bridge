@@ -443,6 +443,7 @@ describe("createMessageHandler", () => {
   it("group chat replies to message instead of sending to chat", async () => {
     mockFetchOk("")
     const deps = makeDeps({
+      botOpenId: "bot-1",
       progressTracker: {
         sendThinking: vi.fn().mockResolvedValue(null),
         updateWithResponse: vi.fn().mockResolvedValue(undefined),
@@ -452,7 +453,11 @@ describe("createMessageHandler", () => {
     const handler = createMessageHandler(deps)
 
     const handlerPromise = handler(
-      makeEvent({ chat_type: "group", message_id: "group-msg-1" }),
+      makeEvent({
+        chat_type: "group",
+        message_id: "group-msg-1",
+        mentions: [{ id: { open_id: "bot-1" } }],
+      }),
     )
 
     await vi.waitFor(() => {
@@ -739,7 +744,8 @@ describe("createMessageHandler", () => {
     )
     expect(postCall).toBeDefined()
     const body = JSON.parse((postCall![1] as { body: string }).body)
-    expect(body.parts[0].text).toBe("Hello")
+    expect(body.parts[0].text).toContain("Hello")
+    expect(body.parts[0].text).not.toContain("> original question")
   })
 
   it("does not fetch quoted message when parent_id is absent", async () => {

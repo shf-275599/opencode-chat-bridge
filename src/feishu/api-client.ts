@@ -10,11 +10,11 @@ const logger = createLogger("feishu-api")
 
 const FEISHU_BASE_URL = "https://open.feishu.cn/open-apis"
 
-export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+export const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024 // 50 MB
 
 export class FileTooLargeError extends Error {
   constructor(public readonly filename: string, public readonly size: number) {
-    super(`File "${filename}" exceeds the ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB size limit (Content-Length: ${size} bytes)`)
+    super(`File "${filename}" exceeds the ${MAX_DOWNLOAD_BYTES / 1024 / 1024}MB size limit (Content-Length: ${size} bytes)`)
     this.name = "FileTooLargeError"
   }
 }
@@ -37,6 +37,9 @@ export interface FeishuApiClient {
   deleteReaction(messageId: string, reactionId: string): Promise<FeishuApiResponse>
   getMessage(messageId: string): Promise<FeishuApiResponse>
   downloadResource(messageId: string, fileKey: string, type: "image" | "file"): Promise<{ data: Buffer, filename?: string }>
+  getBotInfo(): Promise<{ app_name: string; open_id: string }>
+  uploadImage(imageData: Buffer, imageType?: string): Promise<string>
+  uploadFile(fileData: Buffer, fileName: string, fileType?: string): Promise<string>
 }
 
 
@@ -90,16 +93,16 @@ async function downloadResourceImpl(
   const parsedLength = contentLength ? parseInt(contentLength, 10) : NaN
   let data: Buffer
 
-  if (!Number.isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE_BYTES) {
+  if (!Number.isNaN(parsedLength) && parsedLength > MAX_DOWNLOAD_BYTES) {
     // Known size exceeds limit — no need to drain, just throw
     await response.body?.cancel().catch(() => {})
     throw new FileTooLargeError(filename ?? fileKey, parsedLength)
   }
 
-  if (!Number.isNaN(parsedLength) && parsedLength <= MAX_FILE_SIZE_BYTES) {
+  if (!Number.isNaN(parsedLength) && parsedLength <= MAX_DOWNLOAD_BYTES) {
     // Fast path: known size, within limit
     const arrayBuffer = await response.arrayBuffer()
-    if (arrayBuffer.byteLength > MAX_FILE_SIZE_BYTES) {
+    if (arrayBuffer.byteLength > MAX_DOWNLOAD_BYTES) {
       throw new FileTooLargeError(filename ?? fileKey, arrayBuffer.byteLength)
     }
     data = Buffer.from(arrayBuffer)
@@ -117,7 +120,7 @@ async function downloadResourceImpl(
         const { done, value } = await reader.read()
         if (done) break
         totalBytes += value.byteLength
-        if (totalBytes > MAX_FILE_SIZE_BYTES) {
+        if (totalBytes > MAX_DOWNLOAD_BYTES) {
           await reader.cancel().catch(() => {})
           throw new FileTooLargeError(filename ?? fileKey, totalBytes)
         }
@@ -262,6 +265,55 @@ export function createFeishuApiClient(options: FeishuApiClientOptions): FeishuAp
 
     async downloadResource(messageId, fileKey, type) {
       return downloadResourceImpl(getToken, () => { tokenState = null }, messageId, fileKey, type)
+    },
+
+    async getBotInfo() {
+      const resp = await apiRequest("GET", "/bot/v3/info")
+      // /bot/v3/info returns { code, bot: { open_id, app_name } } — bot is top-level, not under data
+      const bot = (resp.bot ?? resp.data?.bot) as { open_id?: string; app_name?: string } | undefined
+      return {
+        open_id: bot?.open_id ?? "",
+        app_name: bot?.app_name ?? "",
+      }
+    },
+
+    async uploadImage(imageData, imageType = "message") {
+      const token = await getToken()
+      const form = new FormData()
+      form.append("image_type", imageType)
+      form.append("image", new Blob([imageData]), "image.png")
+
+      const response = await fetch(`${FEISHU_BASE_URL}/im/v1/images`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+
+      const data = (await response.json()) as FeishuApiResponse
+      if (data.code !== 0) {
+        throw new Error(`Feishu uploadImage error: ${data.code} - ${data.msg}`)
+      }
+      return (data.data?.image_key as string) ?? ""
+    },
+
+    async uploadFile(fileData, fileName, fileType = "stream") {
+      const token = await getToken()
+      const form = new FormData()
+      form.append("file_type", fileType)
+      form.append("file_name", fileName)
+      form.append("file", new Blob([fileData]), fileName)
+
+      const response = await fetch(`${FEISHU_BASE_URL}/im/v1/files`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+
+      const data = (await response.json()) as FeishuApiResponse
+      if (data.code !== 0) {
+        throw new Error(`Feishu uploadFile error: ${data.code} - ${data.msg}`)
+      }
+      return (data.data?.file_key as string) ?? ""
     },
   }
 }

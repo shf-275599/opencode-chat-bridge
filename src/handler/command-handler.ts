@@ -35,7 +35,7 @@ interface Session {
 
 // ── Card builders ──
 
-function buildSessionsCard(sessions: Session[]): Record<string, unknown> {
+function buildSessionsCard(sessions: Session[], currentSessionId?: string): Record<string, unknown> {
   const recentSessions = sessions.slice(0, 10)
   return {
     config: { wide_screen_mode: true },
@@ -51,19 +51,22 @@ function buildSessionsCard(sessions: Session[]): Record<string, unknown> {
         tag: "markdown",
         content: "**点击连接到对应会话：**",
       },
-      ...recentSessions.map((s) => ({
-        tag: "action",
-        actions: [
-          {
-            tag: "button",
-            text: {
-              tag: "plain_text",
-              content: `${s.title ? s.title + " — " : ""}${s.id}`,
+      ...recentSessions.map((s) => {
+        const isCurrentSession = s.id === currentSessionId
+        return {
+          tag: "action",
+          actions: [
+            {
+              tag: "button",
+              text: {
+                tag: "plain_text",
+                content: `${isCurrentSession ? "▶ " : ""}${s.title ? s.title + " — " : ""}${s.id}`,
+              },
+              value: { action: "command_execute", command: `/connect ${s.id}` },
             },
-            value: { action: "command_execute", command: `/connect ${s.id}` },
-          },
-        ],
-      })),
+          ],
+        }
+      }),
     ],
   }
 }
@@ -127,7 +130,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   const { serverUrl, sessionManager, feishuClient, logger } = deps
 
   async function replyText(
-    chatId: string,
+    _chatId: string,
     messageId: string,
     text: string,
   ): Promise<void> {
@@ -183,6 +186,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   }
 
   async function handleSessions(
+    feishuKey: string,
     chatId: string,
     messageId: string,
   ): Promise<void> {
@@ -191,13 +195,31 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       throw new Error(`List sessions failed: HTTP ${resp.status}`)
     }
 
-    const sessions = (await resp.json()) as Session[]
+    let sessions = (await resp.json()) as Session[]
     if (sessions.length === 0) {
       await replyText(chatId, messageId, "暂无会话。")
       return
     }
 
-    const card = buildSessionsCard(sessions)
+    // Get current bound session for this chat
+    const currentSessionId = await sessionManager.getExisting(feishuKey)
+
+    if (currentSessionId) {
+      // Check if it's already in the list
+      const existingIndex = sessions.findIndex((s) => s.id === currentSessionId)
+      if (existingIndex >= 0) {
+        // Move it to top
+        const current = sessions.splice(existingIndex, 1)[0]
+        if (current) {
+          sessions.unshift(current)
+        }
+      } else {
+        // Not in API response at all — add it manually at top
+        sessions.unshift({ id: currentSessionId, title: "当前会话" })
+      }
+    }
+
+    const card = buildSessionsCard(sessions, currentSessionId)
     await feishuClient.replyMessage(messageId, {
       msg_type: "interactive",
       content: JSON.stringify(card),
@@ -264,7 +286,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   }
 
   async function handleHelp(
-    chatId: string,
+    _chatId: string,
     messageId: string,
   ): Promise<void> {
     const card = buildHelpCard()
@@ -299,7 +321,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           return true
 
         case "/sessions":
-          await handleSessions(chatId, messageId)
+          await handleSessions(feishuKey, chatId, messageId)
           return true
 
         case "/connect": {

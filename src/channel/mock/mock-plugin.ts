@@ -49,7 +49,7 @@ export class MockPlugin extends BaseChannelPlugin {
       startAccount: async (accountId: string, _signal: AbortSignal): Promise<void> => {
         this.startedAccounts.push(accountId)
       },
-      stopAccount: async (accountId: string): Promise<void> => {
+      stopAccount: async (_accountId: string): Promise<void> => {
         // no-op for mock
       },
     }

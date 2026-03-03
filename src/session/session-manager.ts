@@ -1,4 +1,4 @@
-import { type Database, type Statement } from "bun:sqlite"
+import { type Database } from "bun:sqlite"
 import { createLogger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
 
@@ -12,6 +12,7 @@ interface SessionManagerOptions {
 
 export interface SessionManager {
   getOrCreate(feishuKey: string, agent?: string): Promise<string>
+  getExisting(feishuKey: string): Promise<string | undefined>
   getSession(feishuKey: string): SessionMapping | null
   deleteMapping(feishuKey: string): boolean
   setMapping(feishuKey: string, sessionId: string, agent?: string): boolean
@@ -129,6 +130,11 @@ export function createSessionManager(
       upsertStmt.run(feishuKey, sessionId, agentName, now, now, 0)
       logger.info(`Session created: ${feishuKey} → ${sessionId}`)
       return sessionId
+    },
+
+    async getExisting(feishuKey) {
+      const existing = getStmt.get(feishuKey) as SessionMapping | null
+      return existing?.session_id
     },
 
     getSession(feishuKey) {

@@ -266,7 +266,6 @@ describe("E2E Smoke Tests", () => {
       serverUrl: "http://127.0.0.1:4096",
       sessionManager: createMockSessionManager(sessionId),
       dedup: { isDuplicate: vi.fn().mockReturnValue(false), close: vi.fn() } as any,
-      dedup: { isDuplicate: vi.fn().mockReturnValue(false), close: vi.fn() } as any,
       eventProcessor,
       feishuClient,
       progressTracker: createMockProgressTracker(),

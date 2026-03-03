@@ -4,7 +4,7 @@ Architecture guide for contributors. Covers module layout, key abstractions, dat
 
 ## What This Project Does
 
-`opencode-lark` bridges Feishu group chats with opencode TUI sessions. Messages sent in Feishu flow into opencode as if typed in the terminal. Agent replies stream back to Feishu as live-updating cards.
+`opencode-lark` bridges Feishu group chats with opencode TUI sessions. Messages sent in Feishu flow into opencode as if typed in the terminal. Agent replies stream back to Feishu — `StreamingBridge` accumulates `TextDelta` events and queues them into CardKit streaming card updates (with serialized delivery to avoid rate limits), while tool and sub-agent status are shown via separate CardKit cards.
 
 ```
 Feishu client
@@ -31,9 +31,8 @@ src/
 ├── handler/         MessageHandler (inbound pipeline) + StreamingBridge (SSE → cards)
 ├── session/         TUI session discovery, thread→session mapping, progress cards
 ├── streaming/       EventProcessor (SSE parsing), SessionObserver, SubAgentTracker
-├── memory/          SQLite-backed per-thread conversation history
 ├── cron/            CronService (scheduled jobs) + HeartbeatService
-└── utils/           Config loader, logger, SQLite init, EventListenerMap
+└── utils/           Config loader, logger, SQLite init, EventListenerMap, paths helper
 ```
 
 ---
@@ -69,7 +68,7 @@ Discovers live opencode TUI sessions for a working directory. Binds a Feishu thr
 
 ### StreamingBridge (`src/handler/streaming-integration.ts`)
 
-Translates accumulated `TextDelta` events into Feishu CardKit updates. Debounces rapid updates to avoid rate limits, and renders a final card once `SessionIdle` fires.
+Buffers `TextDelta` events and queues them into CardKit streaming card updates (serialized to avoid rate limits). Sends the final text reply and closes the streaming card when `SessionIdle` fires. Tool and sub-agent status are shown via separate CardKit cards.
 
 ---
 
@@ -85,11 +84,10 @@ Feishu WebSocket
         → MessageHandler
           1. MessageDedup: skip if already seen
           2. SessionManager: resolve or discover session
-          3. MemoryManager: prepend conversation history
+          3. Inject Lark context signature (first message per session)
           4. HTTP POST to opencode /session/{id}/message
           5. Register SSE listener for this session
-          6. ProgressTracker: show "thinking..." card in Feishu
-```
+          6. ProgressTracker: show "thinking..." reaction/card in Feishu
 
 ### Outbound (opencode → Feishu)
 
@@ -98,7 +96,7 @@ opencode SSE stream
   → EventProcessor: parse raw event → typed event
     → SessionObserver: fan-out to registered listeners
       → StreamingBridge
-          TextDelta  → accumulate text, debounced CardKit update
+          TextDelta  → accumulate text, queued CardKit update
           SessionIdle → flush final card to Feishu via CardKitClient
           ToolStart  → update progress card
 ```
@@ -109,7 +107,7 @@ opencode SSE stream
 1. Load config (`opencode-lark.jsonc` or env vars)
 2. Connect to opencode server (exponential-backoff retry, max 10 attempts)
 3. Init SQLite database
-4. Create shared services (SessionManager, MemoryManager, EventProcessor, StreamingBridge)
+4. Create shared services (SessionManager, EventProcessor, StreamingBridge)
 5. Subscribe to opencode SSE event stream
 6. Instantiate FeishuPlugin + register with ChannelManager
 7. Start channels (WebSocket) + webhook server (card action callbacks)

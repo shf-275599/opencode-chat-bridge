@@ -237,10 +237,10 @@ describe("ChannelPlugin types", () => {
       },
       gateway: {
         startAccount: async (accountId: string, signal: AbortSignal) => {
-          console.log(`Starting ${accountId}`);
+          // no-op
         },
         stopAccount: async (accountId: string) => {
-          console.log(`Stopping ${accountId}`);
+          // no-op
         },
       },
       messaging: {
@@ -260,10 +260,10 @@ describe("ChannelPlugin types", () => {
       },
       outbound: {
         sendText: async (target: OutboundTarget, text: string) => {
-          console.log(`Sending to ${target.address}: ${text}`);
+          // no-op
         },
         sendCard: async (target: OutboundTarget, card: unknown) => {
-          console.log(`Sending card to ${target.address}`);
+          // no-op
         },
       },
       streaming: {
@@ -273,7 +273,7 @@ describe("ChannelPlugin types", () => {
           pendingUpdates: [],
           createdAt: Date.now(),
           flush: async () => {
-            console.log("Flushing stream");
+            // no-op
           },
         }),
         coalesceUpdates: (updates: string[], intervalMs: number) =>
@@ -283,7 +283,7 @@ describe("ChannelPlugin types", () => {
         resolveThread: (inbound: NormalizedMessage) =>
           `thread_${inbound.chatId}` as ThreadKey,
         mapSession: (threadKey: ThreadKey, sessionId: string) => {
-          console.log(`Mapped ${threadKey} to ${sessionId}`);
+          // no-op
         },
         getSession: (threadKey: ThreadKey) => `session_${threadKey}`,
       },

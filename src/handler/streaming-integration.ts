@@ -8,6 +8,7 @@ import type { QuestionAsked, PermissionRequested } from "../streaming/event-proc
 import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
 import { StreamingCardSession } from "../streaming/streaming-card.js"
+import type { OutboundMediaHandler } from "./outbound-media.js"
 
 // ── Types ──
 
@@ -17,6 +18,7 @@ export interface StreamingBridgeDeps {
   subAgentTracker: SubAgentTracker
   logger: Logger
   seenInteractiveIds: Set<string>
+  outboundMedia?: OutboundMediaHandler
 }
 
 export interface StreamingBridge {
@@ -196,6 +198,13 @@ export function createStreamingBridge(
                   } catch (err) {
                     logger.warn(`sendFinalResponse failed: ${err}`)
                   }
+                  if (deps.outboundMedia) {
+                    try {
+                      await deps.outboundMedia.sendDetectedFiles(chatId, responseText)
+                    } catch (err) {
+                      logger.warn(`outboundMedia.sendDetectedFiles failed: ${err}`)
+                    }
+                  }
                   onComplete(responseText)
                   resolve()
                 })
@@ -205,6 +214,13 @@ export function createStreamingBridge(
                     await sendFinalResponse(responseText)
                   } catch (replyErr) {
                     logger.warn(`sendFinalResponse failed after card.close error: ${replyErr}`)
+                  }
+                  if (deps.outboundMedia) {
+                    try {
+                      await deps.outboundMedia.sendDetectedFiles(chatId, responseText)
+                    } catch (mediaErr) {
+                      logger.warn(`outboundMedia.sendDetectedFiles failed: ${mediaErr}`)
+                    }
                   }
                   onComplete(responseText)
                   resolve()
@@ -235,6 +251,13 @@ export function createStreamingBridge(
             await sendFinalResponse(fallbackText)
           } catch (err) {
             logger.warn(`sendFinalResponse in timeout fallback failed: ${err}`)
+          }
+          if (deps.outboundMedia) {
+            try {
+              await deps.outboundMedia.sendDetectedFiles(chatId, fallbackText)
+            } catch (mediaErr) {
+              logger.warn(`outboundMedia.sendDetectedFiles in timeout fallback failed: ${mediaErr}`)
+            }
           }
           onComplete(fallbackText)
           resolve()

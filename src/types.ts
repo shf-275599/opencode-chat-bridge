@@ -14,6 +14,7 @@ export interface FeishuMessageEvent {
   parent_id?: string
   sender: FeishuSender
   message: FeishuMessageContent
+  mentions?: Array<{ id: { open_id: string } }>
 }
 
 export interface FeishuSender {
@@ -48,6 +49,7 @@ export interface FeishuApiResponse {
   code: number
   msg: string
   data?: Record<string, unknown>
+  bot?: { open_id?: string; app_name?: string; avatar_url?: string }
 }
 
 // ── Session Types ──

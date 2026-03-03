@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.14] - 2026-03-04
+
+### Added
+
+- Outbound media: agent responses containing file paths are detected, validated against an allowlist, and uploaded to Feishu as images/files
+- Lark context signature: first message per session includes a `[Lark]` prefix with save-file instructions so the AI knows files go to a specific directory
+- Bot identity resolution: `getBotInfo()` fetches bot's open_id at startup for accurate @mention filtering in group chats
+- `/sessions` command: current active session pinned at top, sessions listed as interactive card buttons for quick connection
+- `/sessions` command: sessions displayed as interactive cards (no relative timestamps)
+- `sessionManager.getExisting()` method for retrieving current session without creating new one
+- `getAttachmentsDir()` shared utility for consistent attachment directory paths (`src/utils/paths.ts`)
+- AGENTS.md files in key src/ subdirectories for contributor orientation
+
+### Fixed
+
+- `getBotInfo()` response parsing: Feishu `/bot/v3/info` returns `bot` at top level (not under `data`), causing empty `botOpenId` and broken group @mention filtering
+- TOCTOU race condition in outbound media: all filesystem operations now use resolved `realPath` consistently
+- String prefix prefilter added to `sendDetectedFiles()` in `outbound-media.ts` — skips unnecessary filesystem calls for paths outside allowlist
+- Lark signature Set bounded to 1001 entries (`> 1000` triggers clear) to prevent unbounded memory growth
+- 3 failing tests fixed (mock `getExisting`, group @mention test, quoted message assertion)
+
+### Changed
+
+- `MAX_FILE_SIZE_BYTES` split into `MAX_DOWNLOAD_BYTES` (50MB) and `MAX_UPLOAD_BYTES` (20MB) for clarity
+- Deleted orphaned `src/memory/` directory (functionality previously removed)
+- 8 unused variables prefixed with `_`, removed unused `Statement` import and 3 unused class fields
+- `expandTilde`, `extractFilePaths`, `isImageFile` un-exported (internal-only in outbound-media.ts)
+- Removed duplicate `dedup:` key in smoke test
+- 6 `console.log` calls replaced with no-op in test files
+- Centralized 3 hardcoded attachment directory paths to use shared `getAttachmentsDir()`
+
+### Security
+
+- Outbound media allowlist enforces TOCTOU-safe path resolution
+- String prefix prefilter in `sendDetectedFiles()` prevents unnecessary filesystem access for non-allowlist paths
+- Signature injection bounded (Set clears after exceeding 1000 entries) to prevent memory exhaustion
+
+### Docs
+
+- Root AGENTS.md updated: removed deleted `memory/` module references from Data Flow and Startup Phases
+- Sub-directory AGENTS.md files added for handler/, feishu/, streaming/, session/, channel/, utils/
+
 ## [0.1.3] - 2026-02-26
 
 ### Fixed

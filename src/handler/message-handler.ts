@@ -18,6 +18,8 @@ import type { SessionObserver } from "../streaming/session-observer.js"
 import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
 import type { CommandHandler } from "./command-handler.js"
+import type { OutboundMediaHandler } from "./outbound-media.js"
+import { getAttachmentsDir } from "../utils/paths.js"
 import { writeFile, mkdir, access } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import { tmpdir } from "node:os"
@@ -38,6 +40,8 @@ export interface HandlerDeps {
   streamingBridge?: StreamingBridge
   observer?: SessionObserver
   commandHandler?: CommandHandler
+  botOpenId?: string
+  outboundMedia?: OutboundMediaHandler
 }
 
 // ── Constants ──
@@ -50,8 +54,7 @@ let cachedDownloadDir: string | null = null
 
 async function resolveDownloadDir(): Promise<string> {
   if (cachedDownloadDir) return cachedDownloadDir
-  const cwdBase = process.env["OPENCODE_CWD"] ?? process.cwd()
-  const primaryDir = join(cwdBase, ".opencode-lark", "attachments")
+  const primaryDir = getAttachmentsDir()
   try {
     await mkdir(primaryDir, { recursive: true })
     await access(primaryDir)
@@ -242,6 +245,7 @@ export function createMessageHandler(
     logger,
   } = deps
   const notifiedFeishuKeys = new Set<string>()
+  const signedSessions = new Set<string>()
 
   return async function handleMessage(
     event: FeishuMessageEvent,
@@ -249,6 +253,16 @@ export function createMessageHandler(
     // ── 1. Dedup check ──
     if (dedup.isDuplicate(event.event_id)) {
       return
+    }
+
+    // ── 1b. Skip group messages that don't @mention the bot ──
+    if (event.chat_type === "group") {
+      if (!deps.botOpenId) {
+        logger.warn("botOpenId not configured — ignoring group message")
+        return
+      }
+      const botMentioned = event.mentions?.some(m => m.id.open_id === deps.botOpenId)
+      if (!botMentioned) return
     }
 
     // ── 2. Handle message types ──
@@ -367,6 +381,20 @@ export function createMessageHandler(
       }
     }
 
+    // ── 7c. Add Lark context signature (first message per session only) ──
+    if (!signedSessions.has(sessionId)) {
+      // Prevent unbounded growth — re-signing is harmless
+      if (signedSessions.size > 1000) signedSessions.clear()
+      signedSessions.add(sessionId)
+      const attachDir = getAttachmentsDir()
+      if (parts[0]) {
+        parts[0] = {
+          type: "text",
+          text: parts[0].text + `\n[Lark] Save files → ${attachDir} (auto-sent to user)`,
+        }
+      }
+    }
+
     // ── 8. Build the POST-to-opencode function ──
     const promptUrl = `${serverUrl}/session/${sessionId}/message`
     const postBody = JSON.stringify({ parts })
@@ -413,7 +441,7 @@ export function createMessageHandler(
           eventListeners,
           eventProcessor,
           postToOpencode,
-          (responseText: string) => {
+          (_responseText: string) => {
             if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
             if (deps.observer) deps.observer.markSessionFree(sessionId)
           },
@@ -515,7 +543,7 @@ export function createMessageHandler(
 
   async function waitForEventDrivenResponse(
     sessionId: string,
-    userText: string,
+    _userText: string,
     event: FeishuMessageEvent,
     thinkingMessageId: string | null,
   ): Promise<void> {
@@ -543,6 +571,15 @@ export function createMessageHandler(
             // Send response
 
             sendResponse(responseText, event, thinkingMessageId)
+              .then(async () => {
+                if (deps.outboundMedia) {
+                  try {
+                    await deps.outboundMedia.sendDetectedFiles(event.chat_id, responseText)
+                  } catch (err) {
+                    logger.warn(`outboundMedia.sendDetectedFiles failed: ${err}`)
+                  }
+                }
+              })
               .then(resolve)
               .catch(reject)
             break
@@ -580,8 +617,8 @@ export function createMessageHandler(
 
   async function handleSyncFallback(
     rawText: string,
-    sessionId: string,
-    userText: string,
+    _sessionId: string,
+    _userText: string,
     event: FeishuMessageEvent,
     thinkingMessageId: string | null,
   ): Promise<void> {
@@ -620,6 +657,13 @@ export function createMessageHandler(
 
 
     await sendResponse(responseText, event, thinkingMessageId)
+    if (deps.outboundMedia) {
+      try {
+        await deps.outboundMedia.sendDetectedFiles(event.chat_id, responseText)
+      } catch (err) {
+        logger.warn(`outboundMedia.sendDetectedFiles in sync fallback failed: ${err}`)
+      }
+    }
   }
 
   // ── Shared response sender ──

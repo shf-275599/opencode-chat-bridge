@@ -31,6 +31,7 @@ import { SubAgentTracker } from "./streaming/subagent-tracker.js"
 import { createMessageHandler } from "./handler/message-handler.js"
 import { createStreamingBridge } from "./handler/streaming-integration.js"
 import { createCommandHandler } from "./handler/command-handler.js"
+import { createOutboundMediaHandler } from "./handler/outbound-media.js"
 import { createSessionObserver } from "./streaming/session-observer.js"
 import { addListener, removeListener } from "./utils/event-listeners.js"
 import { createSubAgentCardHandler } from "./streaming/subagent-card.js"
@@ -130,6 +131,16 @@ async function main(): Promise<void> {
     appSecret: config.feishu.appSecret,
   })
 
+  // Fetch bot's own open_id for @mention filtering in group chats
+  let botOpenId: string | undefined
+  try {
+    const botInfo = await feishuClient.getBotInfo()
+    botOpenId = botInfo.open_id || undefined
+    logger.info(`Bot identity: ${botInfo.app_name} (${botInfo.open_id})`)
+  } catch (err) {
+    logger.warn(`Failed to fetch bot info — group @mention filtering disabled: ${err}`)
+  }
+
   const cardkitClient = new CardKitClient({
     appId: config.feishu.appId,
     appSecret: config.feishu.appSecret,
@@ -153,12 +164,18 @@ async function main(): Promise<void> {
 
   const subAgentTracker = new SubAgentTracker({ serverUrl })
 
+  const outboundMedia = createOutboundMediaHandler({
+    feishuClient,
+    logger,
+  })
+
   const streamingBridge = createStreamingBridge({
     cardkitClient,
     feishuClient,
     subAgentTracker,
     logger,
     seenInteractiveIds,
+    outboundMedia,
   })
 
   const observer = createSessionObserver({
@@ -191,6 +208,8 @@ async function main(): Promise<void> {
     streamingBridge,
     observer,
     commandHandler,
+    botOpenId,
+    outboundMedia,
   })
 
   // Create card action handlers

@@ -153,7 +153,7 @@ export class FeishuPlugin extends BaseChannelPlugin {
     // 5. Streaming adapter
     this.streaming = {
       createStreamingSession: (target: StreamTarget): StreamingSession => {
-        const cardSession = new StreamingCardSession({
+        const _cardSession = new StreamingCardSession({
           cardkitClient: this.cardkitClient,
           feishuClient: this.feishuClient,
           chatId: target.address,

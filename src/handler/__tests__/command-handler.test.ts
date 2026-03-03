@@ -10,6 +10,7 @@ function createMockSessionManager(
   return {
     getOrCreate: vi.fn().mockResolvedValue(mapping?.session_id ?? "ses-new"),
     getSession: vi.fn().mockReturnValue(mapping),
+    getExisting: vi.fn().mockResolvedValue(mapping?.session_id),
     deleteMapping: vi.fn().mockReturnValue(true),
     setMapping: vi.fn().mockReturnValue(true),
     cleanup: vi.fn().mockReturnValue(0),

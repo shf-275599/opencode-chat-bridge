@@ -39,10 +39,7 @@ export class StreamingCardSession {
   private state: CardState | null = null
   private closed = false
   private queue: Promise<void> = Promise.resolve()
-  private lastUpdateTime = 0
-  private pendingText: string | null = null
   private lastSentContent = ""
-  private readonly updateThrottleMs = 100
 
   private toolStatuses: ToolStatus[] = []
   private subtaskButtons: SubtaskButton[] = []

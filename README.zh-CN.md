@@ -20,6 +20,7 @@
 - **Session 自动发现** — 自动发现并绑定当前目录的最新 TUI session，重启后映射关系持久保存。
 - **优雅重连** — 启动时指数退避重连 opencode server，最多重试 10 次，无需手动等待 server 就绪。
 - **可扩展渠道层** — `ChannelPlugin` 接口设计，可扩展接入 Slack、Discord 等其他平台，无需修改核心逻辑。
+- **文件与图片支持** — 支持飞书图片和文件消息（不限于文字）。附件下载保存至 `${OPENCODE_CWD}/.opencode-lark/attachments/`，并将本地路径传给 opencode 供其读取分析。支持流式下载，50 MB 大小限制，文件名安全处理。
 
 ---
 
@@ -42,6 +43,18 @@ opencode TUI
 **入站（飞书 → TUI）：** 飞书通过 WebSocket 发送消息，opencode-lark 标准化处理后找到绑定的 session，拼接对话历史，POST 到 opencode API。TUI 即时收到消息。
 
 **出站（TUI → 飞书）：** opencode-lark 订阅 opencode SSE 流。agent 输出文字时，`TextDelta` 事件累积并触发防抖卡片更新。`SessionIdle` 到达后，最终卡片推送到飞书。
+
+### 支持的消息类型
+
+| 消息类型 | 支持 | 说明 |
+|---|---|---|
+| `text` | ✅ | 普通文字消息 |
+| `post` | ✅ | 富文本 / 多段落消息 |
+| `image` | ✅ | 图片和截图 — 自动下载保存到本地 |
+| `file` | ✅ | 文档、代码文件等 — 自动下载保存到本地 |
+| `audio` / `video` / `sticker` | ❌ | 记录日志后跳过，不处理 |
+
+下载的文件保存在 `${OPENCODE_CWD}/.opencode-lark/attachments/`（若该路径不可写则回退至系统临时目录）。
 
 ---
 

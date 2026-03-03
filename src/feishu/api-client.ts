@@ -10,6 +10,15 @@ const logger = createLogger("feishu-api")
 
 const FEISHU_BASE_URL = "https://open.feishu.cn/open-apis"
 
+export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+
+export class FileTooLargeError extends Error {
+  constructor(public readonly filename: string, public readonly size: number) {
+    super(`File "${filename}" exceeds the ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB size limit (Content-Length: ${size} bytes)`)
+    this.name = "FileTooLargeError"
+  }
+}
+
 interface FeishuApiClientOptions {
   appId: string
   appSecret: string
@@ -27,6 +36,103 @@ export interface FeishuApiClient {
   addReaction(messageId: string, emojiType: string): Promise<FeishuApiResponse>
   deleteReaction(messageId: string, reactionId: string): Promise<FeishuApiResponse>
   getMessage(messageId: string): Promise<FeishuApiResponse>
+  downloadResource(messageId: string, fileKey: string, type: "image" | "file"): Promise<{ data: Buffer, filename?: string }>
+}
+
+
+async function downloadResourceImpl(
+  getToken: () => Promise<string>,
+  clearToken: () => void,
+  messageId: string,
+  fileKey: string,
+  type: "image" | "file",
+  retryCount = 0,
+): Promise<{ data: Buffer, filename?: string }> {
+  const token = await getToken()
+
+  const urlPath = type === "image"
+    ? `/im/v1/images/${fileKey}`
+    : `/im/v1/messages/${messageId}/resources/${fileKey}?type=file`
+
+  const response = await fetch(`${FEISHU_BASE_URL}${urlPath}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  // Token expired — clear and retry once (binary endpoints return HTTP 401)
+  if (response.status === 401 && retryCount < 1) {
+    await response.body?.cancel().catch(() => {})
+    clearToken()
+    return downloadResourceImpl(getToken, clearToken, messageId, fileKey, type, retryCount + 1)
+  }
+
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {})
+    throw new Error(`Feishu download error [${urlPath}]: ${response.status}`)
+  }
+
+  // Try to extract filename from Content-Disposition header
+  const disposition = response.headers.get("content-disposition")
+  let filename: string | undefined
+  if (disposition) {
+    const match = disposition.match(/filename\*?=["']?(?:UTF-8'')?([^"';\s]+)/i)
+    if (match?.[1]) {
+      try {
+        filename = decodeURIComponent(match[1])
+      } catch {
+        filename = match[1]
+      }
+    }
+  }
+
+  // Check Content-Length before downloading body
+  const contentLength = response.headers.get("content-length")
+  const parsedLength = contentLength ? parseInt(contentLength, 10) : NaN
+  let data: Buffer
+
+  if (!Number.isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE_BYTES) {
+    // Known size exceeds limit — no need to drain, just throw
+    await response.body?.cancel().catch(() => {})
+    throw new FileTooLargeError(filename ?? fileKey, parsedLength)
+  }
+
+  if (!Number.isNaN(parsedLength) && parsedLength <= MAX_FILE_SIZE_BYTES) {
+    // Fast path: known size, within limit
+    const arrayBuffer = await response.arrayBuffer()
+    if (arrayBuffer.byteLength > MAX_FILE_SIZE_BYTES) {
+      throw new FileTooLargeError(filename ?? fileKey, arrayBuffer.byteLength)
+    }
+    data = Buffer.from(arrayBuffer)
+  } else {
+    // No Content-Length or unparseable — stream with byte counter
+    const body = response.body
+    if (!body) {
+      throw new Error(`Feishu download error [${urlPath}]: response body is null`)
+    }
+    const reader = body.getReader()
+    const chunks: Uint8Array[] = []
+    let totalBytes = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        totalBytes += value.byteLength
+        if (totalBytes > MAX_FILE_SIZE_BYTES) {
+          await reader.cancel().catch(() => {})
+          throw new FileTooLargeError(filename ?? fileKey, totalBytes)
+        }
+        chunks.push(value)
+      }
+    } catch (err) {
+      if (err instanceof FileTooLargeError) throw err
+      throw new Error(`Feishu download error [${urlPath}]: stream read failed: ${err}`)
+    }
+    data = Buffer.concat(chunks)
+  }
+
+  return { data, filename }
 }
 
 export function createFeishuApiClient(options: FeishuApiClientOptions): FeishuApiClient {
@@ -154,6 +260,10 @@ export function createFeishuApiClient(options: FeishuApiClientOptions): FeishuAp
 
     async getMessage(messageId) {
       return apiRequest("GET", `/im/v1/messages/${messageId}`)
+    },
+
+    async downloadResource(messageId, fileKey, type) {
+      return downloadResourceImpl(getToken, () => { tokenState = null }, messageId, fileKey, type)
     },
   }
 }

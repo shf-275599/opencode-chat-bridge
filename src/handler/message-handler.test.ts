@@ -4,6 +4,7 @@ import { createMessageHandler, type HandlerDeps } from "./message-handler.js"
 import { EventProcessor } from "../streaming/event-processor.js"
 import { createMockLogger, createMockFeishuClient } from "../__tests__/setup.js"
 import type { FeishuMessageEvent } from "../types.js"
+import { FileTooLargeError } from "../feishu/api-client.js"
 
 function makeEvent(overrides: Partial<FeishuMessageEvent> = {}): FeishuMessageEvent {
   return {
@@ -85,17 +86,17 @@ describe("createMessageHandler", () => {
     expect(deps.sessionManager.getOrCreate).not.toHaveBeenCalled()
   })
 
-  it("skips non-text/post messages", async () => {
+  it("skips unsupported message types with clear log", async () => {
     const deps = makeDeps()
     const handler = createMessageHandler(deps)
 
     await handler(
-      makeEvent({ message: { message_type: "image", content: "" } }),
+      makeEvent({ message: { message_type: "audio", content: "" } }),
     )
 
     expect(deps.sessionManager.getOrCreate).not.toHaveBeenCalled()
     expect(deps.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("Skipping non-text"),
+      expect.stringContaining("Unsupported message type: audio"),
     )
   })
 
@@ -761,5 +762,193 @@ describe("createMessageHandler", () => {
     await handlerPromise
 
     expect(feishuClient.getMessage).not.toHaveBeenCalled()
+  })
+
+  it("handles image message — downloads and forwards as text", async () => {
+    mockFetchOk("")
+    const feishuClient = createMockFeishuClient()
+    ;(feishuClient.downloadResource as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: Buffer.from("fake-png-data"),
+      filename: undefined,
+    })
+    const deps = makeDeps({ feishuClient })
+    const handler = createMessageHandler(deps)
+
+    const imageContent = JSON.stringify({ image_key: "img_abc123" })
+    const handlerPromise = handler(
+      makeEvent({ message: { message_type: "image", content: imageContent } }),
+    )
+
+    await vi.waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    }))
+
+    await handlerPromise
+
+    // Verify downloadResource was called with correct args
+    expect(feishuClient.downloadResource).toHaveBeenCalledWith("msg-1", "img_abc123", "image")
+
+    // Verify POST to opencode contains the file reference text
+    const fetchCalls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+    const postCall = fetchCalls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
+    )
+    expect(postCall).toBeDefined()
+    const body = JSON.parse((postCall![1] as { body: string }).body)
+    expect(body.parts[0].text).toContain("User sent an image.")
+    expect(body.parts[0].text).toContain("Saved to:")
+    expect(body.parts[0].text).toContain("Please look at this image.")
+  })
+
+  it("handles file message — downloads and forwards as text", async () => {
+    mockFetchOk("")
+    const feishuClient = createMockFeishuClient()
+    ;(feishuClient.downloadResource as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: Buffer.from("fake-file-data"),
+      filename: undefined,
+    })
+    const deps = makeDeps({ feishuClient })
+    const handler = createMessageHandler(deps)
+
+    const fileContent = JSON.stringify({ file_key: "file_xyz789", file_name: "report.pdf" })
+    const handlerPromise = handler(
+      makeEvent({ message: { message_type: "file", content: fileContent } }),
+    )
+
+    await vi.waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    }))
+
+    await handlerPromise
+
+    // Verify downloadResource was called with correct args
+    expect(feishuClient.downloadResource).toHaveBeenCalledWith("msg-1", "file_xyz789", "file")
+
+    // Verify POST to opencode contains the file reference text
+    const fetchCalls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+    const postCall = fetchCalls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
+    )
+    expect(postCall).toBeDefined()
+    const body = JSON.parse((postCall![1] as { body: string }).body)
+    expect(body.parts[0].text).toContain("User sent a file: report.pdf")
+    expect(body.parts[0].text).toContain("Saved to:")
+    expect(body.parts[0].text).toContain("Please review this file.")
+  })
+
+  it("handles file download failure — forwards error to opencode", async () => {
+    mockFetchOk("")
+    const feishuClient = createMockFeishuClient()
+    ;(feishuClient.downloadResource as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Download failed"),
+    )
+    const deps = makeDeps({ feishuClient })
+    const handler = createMessageHandler(deps)
+
+    const imageContent = JSON.stringify({ image_key: "img_bad" })
+    const handlerPromise = handler(
+      makeEvent({ message: { message_type: "image", content: imageContent } }),
+    )
+
+    await vi.waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    }))
+
+    await handlerPromise
+
+    // Error should be logged
+    expect(deps.logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to handle image message"),
+    )
+
+    // Error message should be forwarded to opencode
+    expect(deps.sessionManager.getOrCreate).toHaveBeenCalled()
+    const fetchCalls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+    const postCall = fetchCalls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
+    )
+    expect(postCall).toBeDefined()
+    const body = JSON.parse((postCall![1] as { body: string }).body)
+    expect(body.parts[0].text).toContain("download failed")
+    expect(body.parts[0].text).toContain("file_key: img_bad")
+  })
+
+  it("handles image message with missing image_key — forwards error", async () => {
+    mockFetchOk("")
+    const deps = makeDeps()
+    const handler = createMessageHandler(deps)
+
+    const imageContent = JSON.stringify({})
+    const handlerPromise = handler(
+      makeEvent({ message: { message_type: "image", content: imageContent } }),
+    )
+
+    await vi.waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    }))
+
+    await handlerPromise
+
+    expect(deps.logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to handle image message"),
+    )
+    // Error forwarded as text to opencode
+    expect(deps.sessionManager.getOrCreate).toHaveBeenCalled()
+  })
+
+  it("handles FileTooLargeError — sends size limit message to opencode", async () => {
+    mockFetchOk("")
+    const feishuClient = createMockFeishuClient()
+    ;(feishuClient.downloadResource as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new FileTooLargeError("big_file.zip", 60 * 1024 * 1024),
+    )
+    const deps = makeDeps({ feishuClient })
+    const handler = createMessageHandler(deps)
+
+    const fileContent = JSON.stringify({ file_key: "file_xyz", file_name: "big_file.zip" })
+    const handlerPromise = handler(
+      makeEvent({ message: { message_type: "file", content: fileContent } }),
+    )
+
+    await vi.waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    }))
+
+    await handlerPromise
+
+    // Should forward specific size-limit message
+    const fetchCalls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+    const postCall = fetchCalls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
+    )
+    expect(postCall).toBeDefined()
+    const body = JSON.parse((postCall![1] as { body: string }).body)
+    expect(body.parts[0].text).toContain("exceeds the 50MB size limit")
+    expect(body.parts[0].text).toContain("big_file.zip")
   })
 })

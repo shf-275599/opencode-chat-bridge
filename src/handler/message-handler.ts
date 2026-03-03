@@ -9,7 +9,7 @@
 import type { SessionManager } from "../session/session-manager.js"
 import type { MessageDedup } from "../feishu/message-dedup.js"
 import type { EventProcessor } from "../streaming/event-processor.js"
-import type { FeishuApiClient } from "../feishu/api-client.js"
+import { FileTooLargeError, type FeishuApiClient } from "../feishu/api-client.js"
 import type { ProgressTracker } from "../session/progress-tracker.js"
 import type { Logger } from "../utils/logger.js"
 import type { FeishuMessageEvent } from "../types.js"
@@ -18,6 +18,10 @@ import type { SessionObserver } from "../streaming/session-observer.js"
 import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
 import type { CommandHandler } from "./command-handler.js"
+import { writeFile, mkdir, access } from "node:fs/promises"
+import { join, resolve } from "node:path"
+import { tmpdir } from "node:os"
+import { randomBytes } from "node:crypto"
 
 // ── Dependency injection interface ──
 
@@ -39,6 +43,108 @@ export interface HandlerDeps {
 // ── Constants ──
 
 const EVENT_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+
+// ── Helper: resolve the download directory ──
+
+let cachedDownloadDir: string | null = null
+
+async function resolveDownloadDir(): Promise<string> {
+  if (cachedDownloadDir) return cachedDownloadDir
+  const cwdBase = process.env["OPENCODE_CWD"] ?? process.cwd()
+  const primaryDir = join(cwdBase, ".opencode-lark", "attachments")
+  try {
+    await mkdir(primaryDir, { recursive: true })
+    await access(primaryDir)
+    cachedDownloadDir = primaryDir
+    return primaryDir
+  } catch {
+    const fallbackDir = join(tmpdir(), "opencode-lark-downloads")
+    await mkdir(fallbackDir, { recursive: true })
+    cachedDownloadDir = fallbackDir
+    return fallbackDir
+  }
+}
+
+// ── Helper: sanitize untrusted Feishu filename ──
+
+function sanitizeFilename(raw: string): string {
+  // Strip path separators, parent-dir traversals, and control characters
+  let name = raw
+    .replace(/[/\\]/g, "")
+    .replace(/\.\./g, "")
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .trim()
+
+  if (!name) name = "file"
+
+  // Clamp to prevent filesystem issues (255 byte limit)
+  const MAX_NAME_LEN = 200 // leave room for timestamp-rand prefix
+  if (name.length > MAX_NAME_LEN) {
+    const dotIdx = name.lastIndexOf(".")
+    const ext = dotIdx > 0 ? name.slice(dotIdx) : ""
+    name = name.slice(0, MAX_NAME_LEN - ext.length) + ext
+  }
+
+  const timestamp = Date.now()
+  const rand = randomBytes(2).toString("hex")
+  return `${timestamp}-${rand}-${name}`
+}
+
+// ── Helper: download and save file/image from Feishu ──
+
+async function handleFileOrImageMessage(
+  type: "image" | "file",
+  content: string,
+  messageId: string,
+  feishuClient: FeishuApiClient,
+  logger: Logger,
+): Promise<string> {
+  const parsed = JSON.parse(content) as Record<string, string>
+
+  const downloadDir = await resolveDownloadDir()
+
+  if (type === "image") {
+    const imageKey = parsed.image_key
+    if (!imageKey) {
+      throw new Error("Missing image_key in image message content")
+    }
+
+    const { data } = await feishuClient.downloadResource(messageId, imageKey, "image")
+    const safeName = sanitizeFilename("image.png")
+    const filepath = join(downloadDir, safeName)
+
+    // Guard against path traversal
+    if (!resolve(filepath).startsWith(resolve(downloadDir))) {
+      throw new Error("Path traversal detected in filename")
+    }
+
+    await writeFile(filepath, data, { mode: 0o600 })
+    logger.info(`Saved image to ${filepath}`)
+
+    return `User sent an image.\nSaved to: ${filepath}\nPlease look at this image.`
+  }
+
+  // type === "file"
+  const fileKey = parsed.file_key
+  const fileName = parsed.file_name ?? "unknown_file"
+  if (!fileKey) {
+    throw new Error("Missing file_key in file message content")
+  }
+
+  const { data } = await feishuClient.downloadResource(messageId, fileKey, "file")
+  const safeName = sanitizeFilename(fileName)
+  const filepath = join(downloadDir, safeName)
+
+  // Guard against path traversal
+  if (!resolve(filepath).startsWith(resolve(downloadDir))) {
+    throw new Error("Path traversal detected in filename")
+  }
+
+  await writeFile(filepath, data, { mode: 0o600 })
+  logger.info(`Saved file to ${filepath}`)
+
+  return `User sent a file: ${fileName}\nSaved to: ${filepath}\nPlease review this file.`
+}
 
 // ── Helper: extract text from Feishu post rich content ──
 
@@ -145,17 +251,45 @@ export function createMessageHandler(
       return
     }
 
-    // ── 2. Skip non-text messages ──
-    if (event.message.message_type !== "text" && event.message.message_type !== "post") {
+    // ── 2. Handle message types ──
+    const messageType = event.message.message_type
+    const supportedTypes = ["text", "post", "image", "file"]
+    if (!supportedTypes.includes(messageType)) {
       logger.info(
-        `Skipping non-text/post message: ${event.message.message_type}`,
+        `Unsupported message type: ${messageType}, only text/post/image/file are supported`,
       )
       return
     }
 
     // ── 3. Parse user text ──
     let userText: string
-    if (event.message.message_type === "post") {
+    if (messageType === "image" || messageType === "file") {
+      try {
+        userText = await handleFileOrImageMessage(
+          event.message.message_type as "image" | "file",
+          event.message.content,
+          event.message_id,
+          feishuClient,
+          logger,
+        )
+      } catch (err) {
+        logger.error(`Failed to handle ${messageType} message: ${err}`)
+        // Forward error context to opencode instead of silently skipping
+        let fileKey = "unknown"
+        try {
+          const parsedContent = JSON.parse(event.message.content) as Record<string, string>
+          fileKey = parsedContent.file_key ?? parsedContent.image_key ?? "unknown"
+        } catch {
+          // content wasn't valid JSON, use default
+        }
+        if (err instanceof FileTooLargeError) {
+          userText = `User sent file "${err.filename}" but it exceeds the 50MB size limit. Download skipped.`
+        } else {
+          const errMsg = err instanceof Error ? err.message : String(err)
+          userText = `User sent a file/image but download failed: ${errMsg}. Feishu message_id: ${event.message_id}, file_key: ${fileKey}`
+        }
+      }
+    } else if (messageType === "post") {
       userText = extractTextFromPost(event.message.content)
     } else {
       try {

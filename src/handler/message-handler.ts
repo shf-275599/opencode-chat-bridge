@@ -19,6 +19,7 @@ import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
 import type { CommandHandler } from "./command-handler.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
+import { MessageDebouncer, type BufferedMessage, type BatchContext } from "./message-debounce.js"
 import { getAttachmentsDir } from "../utils/paths.js"
 import { writeFile, mkdir, access } from "node:fs/promises"
 import { join, resolve } from "node:path"
@@ -42,6 +43,7 @@ export interface HandlerDeps {
   commandHandler?: CommandHandler
   botOpenId?: string
   outboundMedia?: OutboundMediaHandler
+  debounceMs?: number
 }
 
 // ── Constants ──
@@ -247,6 +249,11 @@ export function createMessageHandler(
   const notifiedFeishuKeys = new Set<string>()
   const signedSessions = new Set<string>()
 
+  // ── Debouncer (opt-in via debounceMs > 0) ──
+  const debouncer = deps.debounceMs && deps.debounceMs > 0
+    ? new MessageDebouncer(deps.debounceMs, handleBatchFlush, logger)
+    : null
+
   return async function handleMessage(
     event: FeishuMessageEvent,
   ): Promise<void> {
@@ -330,6 +337,62 @@ export function createMessageHandler(
     if (userText.startsWith("/") && deps.commandHandler) {
       const handled = await deps.commandHandler(feishuKey, event.chat_id, event.message_id, userText.trim())
       if (handled) return
+    }
+
+    // ── 4c. Debounce path (when enabled) ──
+    // Strategy: image/file → buffer + timer (wait for follow-up text).
+    //          text/post  → if buffer has pending media, add + immediate flush;
+    //                       if buffer is empty, skip debounce entirely.
+    if (debouncer) {
+      const debounceKey = `${event.sender.sender_id.open_id}:${event.chat_id}`
+      const isMedia = messageType === "image" || messageType === "file"
+
+      if (isMedia) {
+        // Media message: buffer it and wait for follow-up text
+        const isFirst = debouncer.add(debounceKey, {
+          userText,
+          event,
+          timestamp: Date.now(),
+        })
+
+        if (isFirst) {
+          // Send thinking indicator for first message in batch
+          const thinkMsgId = deps.streamingBridge
+            ? null
+            : await progressTracker.sendThinking(event.chat_id)
+          let firstReactionId: string | null = null
+          if (deps.streamingBridge) {
+            try {
+              const reactionResult = await feishuClient.addReaction(
+                event.message_id, "Typing",
+              )
+              firstReactionId = (reactionResult?.data?.reaction_id as string) ?? null
+            } catch (err) {
+              logger.warn(`addReaction failed: ${err}`)
+            }
+          }
+          debouncer.updateContext(debounceKey, {
+            thinkingMessageId: thinkMsgId,
+            reactionId: firstReactionId,
+          })
+        }
+
+        return // Wait for timer or follow-up text
+      }
+
+      // Text/post message: check if there's pending media in buffer
+      if (debouncer.hasPending(debounceKey)) {
+        // Buffer has media waiting — add text and flush immediately
+        debouncer.add(debounceKey, {
+          userText,
+          event,
+          timestamp: Date.now(),
+        })
+        debouncer.flush(debounceKey)
+        return
+      }
+
+      // No pending media — fall through to non-debounced path below
     }
 
     // ── 5. Send thinking indicator ──
@@ -542,6 +605,199 @@ export function createMessageHandler(
       if (ownershipListenerEd) removeListener(eventListeners, sessionId, ownershipListenerEd)
     }
     logger.info(`Response sent for session ${sessionId}`)
+  }
+
+  // ── Debounce flush handler ──
+
+  async function handleBatchFlush(
+    _debounceKey: string,
+    messages: BufferedMessage[],
+    context: BatchContext,
+  ): Promise<void> {
+    const mergedText = messages.map(m => m.userText).join("\n")
+    const event = context.firstEvent
+    const lastEvent = context.lastEvent
+    const thinkingMessageId = context.thinkingMessageId
+    const reactionId = context.reactionId
+
+    // Resolve feishuKey from first event
+    const feishuKey =
+      event.chat_type === "p2p"
+        ? event.chat_id
+        : event.root_id
+          ? `${event.chat_id}:${event.root_id}`
+          : `${event.chat_id}:${event.message_id}`
+
+    logger.info(
+      `Flushing ${messages.length} debounced message(s) for ${feishuKey}: ${mergedText.slice(0, 80)}...`,
+    )
+
+    // Get/create session
+    const sessionId = await sessionManager.getOrCreate(feishuKey)
+    ownedSessions.add(sessionId)
+
+    // First-bind notification
+    if (!notifiedFeishuKeys.has(feishuKey)) {
+      notifiedFeishuKeys.add(feishuKey)
+      await feishuClient.sendMessage(event.chat_id, {
+        msg_type: "text",
+        content: JSON.stringify({ text: "已连接 session: " + sessionId }),
+      })
+    }
+
+    // Wire observer
+    if (deps.observer) {
+      deps.observer.observe(sessionId, event.chat_id)
+    }
+
+    // Build parts from merged text
+    const parts: Array<{ type: string; text: string }> = [
+      { type: "text", text: mergedText },
+    ]
+
+    // Include quoted message context from first event only
+    if (event.parent_id) {
+      const quotedText = await fetchQuotedText(feishuClient, event.parent_id, logger)
+      if (quotedText) {
+        parts[0] = {
+          type: "text",
+          text: `> ${quotedText.split("\n").join("\n> ")}\n\n${mergedText}`,
+        }
+      }
+    }
+
+    // Add Lark context signature
+    if (parts[0]) {
+      if (!signedSessions.has(sessionId)) {
+        if (signedSessions.size > 1000) signedSessions.clear()
+        signedSessions.add(sessionId)
+        const attachDir = getAttachmentsDir()
+        parts[0] = {
+          type: "text",
+          text: parts[0].text + `\n[Lark] Save files → ${attachDir} (auto-sent to user)`,
+        }
+      } else {
+        parts[0] = {
+          type: "text",
+          text: parts[0].text + `\n[Lark]`,
+        }
+      }
+    }
+
+    // Build POST function
+    const promptUrl = `${serverUrl}/session/${sessionId}/message`
+    const postBody = JSON.stringify({ parts })
+
+    async function postToOpencode(): Promise<string> {
+      const resp = await fetch(promptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: postBody,
+      })
+      if (!resp.ok) {
+        throw new Error(`Prompt HTTP error: ${resp.status}`)
+      }
+      const rawText = await resp.text()
+      logger.info(
+        `Prompt response (${rawText.length} bytes): ${rawText.slice(0, 200)}`,
+      )
+      return rawText
+    }
+
+    // Use streaming bridge or event-driven/sync path (same as non-debounced flow)
+    if (deps.streamingBridge) {
+      if (deps.observer) deps.observer.markSessionBusy(sessionId)
+
+      let ownershipListener: ((ev: unknown) => void) | null = null
+      if (deps.observer) {
+        ownershipListener = (rawEvent: unknown): void => {
+          const props = rawEvent && typeof rawEvent === "object" ? (rawEvent as Record<string, unknown>).properties : null
+          if (!props || typeof props !== "object") return
+          const p = props as Record<string, unknown>
+          const part = p.part
+          const mid = part && typeof part === "object" ? (part as Record<string, unknown>).messageID : p.messageID
+          if (typeof mid === "string") deps.observer!.markOwned(mid)
+        }
+        addListener(eventListeners, sessionId, ownershipListener)
+      }
+
+      try {
+        await deps.streamingBridge.handleMessage(
+          event.chat_id,
+          sessionId,
+          eventListeners,
+          eventProcessor,
+          postToOpencode,
+          (_responseText: string) => {
+            if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
+            if (deps.observer) deps.observer.markSessionFree(sessionId)
+          },
+          lastEvent.message_id,
+          reactionId,
+        )
+        logger.info(`Response sent for session ${sessionId} (streaming bridge, debounced)`)
+        return
+      } catch (err) {
+        if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
+        if (deps.observer) deps.observer.markSessionFree(sessionId)
+        logger.warn(`Streaming bridge failed in debounced path, falling back to sync: ${err}`)
+        if (reactionId) {
+          await feishuClient.deleteReaction(lastEvent.message_id, reactionId).catch(() => {})
+        }
+        try {
+          const rawText = await postToOpencode()
+          await handleSyncFallback(rawText, sessionId, mergedText, event, thinkingMessageId)
+        } catch (postErr) {
+          logger.error(`Sync fallback POST also failed in debounced path: ${postErr}`)
+          const errorMessage = "处理请求时出错了。"
+          await feishuClient.replyMessage(lastEvent.message_id, {
+            msg_type: "text",
+            content: JSON.stringify({ text: errorMessage }),
+          })
+        }
+        return
+      }
+    }
+
+    // No streaming bridge — event-driven → sync fallback
+    let rawText: string
+    try {
+      rawText = await postToOpencode()
+    } catch (err) {
+      logger.error(`POST to opencode failed in debounced path: ${err}`)
+      if (thinkingMessageId) {
+        await progressTracker.updateWithError(thinkingMessageId, "处理请求时出错了。")
+      } else {
+        await feishuClient.sendMessage(event.chat_id, {
+          msg_type: "text",
+          content: JSON.stringify({ text: "抱歉，处理请求时出错了。" }),
+        })
+      }
+      return
+    }
+
+    let ownershipListenerEd: ((ev: unknown) => void) | null = null
+    if (deps.observer) {
+      ownershipListenerEd = (rawEvent: unknown): void => {
+        const props = rawEvent && typeof rawEvent === "object" ? (rawEvent as Record<string, unknown>).properties : null
+        if (!props || typeof props !== "object") return
+        const p = props as Record<string, unknown>
+        const part = p.part
+        const mid = part && typeof part === "object" ? (part as Record<string, unknown>).messageID : p.messageID
+        if (typeof mid === "string") deps.observer!.markOwned(mid)
+      }
+      addListener(eventListeners, sessionId, ownershipListenerEd)
+    }
+
+    try {
+      await waitForEventDrivenResponse(sessionId, mergedText, event, thinkingMessageId)
+    } catch (err) {
+      logger.warn(`Event-driven flow failed in debounced path, falling back to sync: ${err}`)
+      await handleSyncFallback(rawText, sessionId, mergedText, event, thinkingMessageId)
+    } finally {
+      if (ownershipListenerEd) removeListener(eventListeners, sessionId, ownershipListenerEd)
+    }
+    logger.info(`Response sent for session ${sessionId} (debounced)`)
   }
 
   // ── Event-driven flow ──

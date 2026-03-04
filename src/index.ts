@@ -210,6 +210,7 @@ async function main(): Promise<void> {
     commandHandler,
     botOpenId,
     outboundMedia,
+    debounceMs: config.messageDebounceMs,
   })
 
   // Create card action handlers

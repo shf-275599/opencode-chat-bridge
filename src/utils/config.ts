@@ -44,6 +44,7 @@ const AppConfigSchema = z.object({
   progress: ProgressConfigSchema.optional(),
   cron: CronConfigSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
+  messageDebounceMs: z.number().int().min(0).optional().default(10000),
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>

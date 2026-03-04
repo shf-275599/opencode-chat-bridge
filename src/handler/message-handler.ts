@@ -381,16 +381,21 @@ export function createMessageHandler(
       }
     }
 
-    // ── 7c. Add Lark context signature (first message per session only) ──
-    if (!signedSessions.has(sessionId)) {
-      // Prevent unbounded growth — re-signing is harmless
-      if (signedSessions.size > 1000) signedSessions.clear()
-      signedSessions.add(sessionId)
-      const attachDir = getAttachmentsDir()
-      if (parts[0]) {
+    // ── 7c. Add Lark context signature (full context on first message, lightweight tag on subsequent messages) ──
+    if (parts[0]) {
+      if (!signedSessions.has(sessionId)) {
+        // Prevent unbounded growth — re-signing is harmless
+        if (signedSessions.size > 1000) signedSessions.clear()
+        signedSessions.add(sessionId)
+        const attachDir = getAttachmentsDir()
         parts[0] = {
           type: "text",
           text: parts[0].text + `\n[Lark] Save files → ${attachDir} (auto-sent to user)`,
+        }
+      } else {
+        parts[0] = {
+          type: "text",
+          text: parts[0].text + `\n[Lark]`,
         }
       }
     }

@@ -17,6 +17,8 @@ export interface SessionManager {
   deleteMapping(feishuKey: string): boolean
   setMapping(feishuKey: string, sessionId: string, agent?: string): boolean
   cleanup(maxAgeMs?: number): number
+  /** Validate all stored mappings against the opencode server; delete stale ones. */
+  validateAndCleanupStale(): Promise<number>
 }
 
 function getWorkingDirectory(): string {
@@ -74,6 +76,20 @@ export function createSessionManager(
     "DELETE FROM feishu_sessions WHERE feishu_key = ?",
   )
 
+  /** Check whether a session ID actually exists on the opencode server.
+   *  Returns false ONLY on 404. All other errors (500, 429, network) return true (conservative). */
+  async function sessionExistsOnServer(sessionId: string): Promise<boolean> {
+    try {
+      const resp = await fetch(`${serverUrl}/session/${sessionId}`)
+      if (resp.status === 404) return false
+      // Any other status (200, 500, 429, 401, etc.) — conservatively assume exists
+      return true
+    } catch {
+      // Network error — assume session exists to avoid false cleanup
+      return true
+    }
+  }
+
   async function discoverTuiSession(): Promise<TuiSession | null> {
     const cwd = getWorkingDirectory()
     const url = `${serverUrl}/session?roots=true&limit=1&directory=${encodeURIComponent(cwd)}`
@@ -83,7 +99,17 @@ export function createSessionManager(
       if (!resp.ok) return null
 
       const sessions = (await resp.json()) as TuiSession[]
-      return sessions[0] ?? null
+      const candidate = sessions[0] ?? null
+      if (!candidate) return null
+
+      // Validate that the discovered session actually exists on the server
+      const exists = await sessionExistsOnServer(candidate.id)
+      if (!exists) {
+        logger.warn(`Discovered TUI session ${candidate.id} returned 404 — skipping`)
+        return null
+      }
+
+      return candidate
     } catch {
       return null
     }
@@ -167,5 +193,39 @@ export function createSessionManager(
       }
       return result.changes
     },
+
+    async validateAndCleanupStale() {
+      const allMappingsStmt = db.prepare("SELECT * FROM feishu_sessions")
+      const allMappings = allMappingsStmt.all() as SessionMapping[]
+      let cleaned = 0
+
+      for (const mapping of allMappings) {
+        try {
+          const exists = await sessionExistsOnServer(mapping.session_id)
+          if (!exists) {
+            deleteMappingStmt.run(mapping.feishu_key)
+            cleaned++
+            logger.info(
+              `Startup cleanup: removed stale mapping ${mapping.feishu_key} → ${mapping.session_id}`,
+            )
+          }
+        } catch (err) {
+          // Network error — skip this mapping, don't disrupt startup
+          logger.warn(
+            `Startup cleanup: failed to validate ${mapping.session_id}: ${err}`,
+          )
+        }
+      }
+
+      if (cleaned > 0) {
+        logger.info(`Startup cleanup: removed ${cleaned} stale session mapping(s)`)
+      } else if (allMappings.length > 0) {
+        logger.info(`Startup cleanup: all ${allMappings.length} session mapping(s) valid`)
+      }
+
+      return cleaned
+    },
   }
 }
+
+

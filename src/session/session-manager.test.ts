@@ -55,6 +55,10 @@ describe("session-manager", () => {
             )
           }
         }
+        // Validation GET /session/{id} — return 200 for the discovered session
+        if (url.includes(`/session/${tuiSessionId}`)) {
+          return new Response(JSON.stringify({ id: tuiSessionId }), { status: 200 })
+        }
         return new Response("Not found", { status: 404 })
       })
 
@@ -112,6 +116,10 @@ describe("session-manager", () => {
             { status: 200 },
           )
         }
+        // Validation GET /session/{id}
+        if (url.includes(`/session/${tuiSessionId}`)) {
+          return new Response(JSON.stringify({ id: tuiSessionId }), { status: 200 })
+        }
         return new Response("Not found", { status: 404 })
       })
 
@@ -133,7 +141,6 @@ describe("session-manager", () => {
         const method = init?.method ?? "GET"
 
         if (url.includes("/session") && method === "GET" && url.includes("roots=true")) {
-          // First call will discover, second key will find empty
           if (url.includes("directory=")) {
             return new Response(
               JSON.stringify([
@@ -142,6 +149,10 @@ describe("session-manager", () => {
               { status: 200 },
             )
           }
+        }
+        // Validation GET /session/ses-discovered
+        if (url.includes("/session/ses-discovered") && method === "GET") {
+          return new Response(JSON.stringify({ id: "ses-discovered" }), { status: 200 })
         }
         if (url.includes("/session") && method === "POST") {
           return new Response(JSON.stringify({ id: "ses-created" }), { status: 200 })
@@ -249,6 +260,216 @@ describe("session-manager", () => {
       // Second createSessionManager should not throw even though column exists
       sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
       expect(sm).toBeDefined()
+    })
+  })
+
+  describe("discoverTuiSession validation", () => {
+    it("skips discovered session that returns 404 from server", async () => {
+      const createdSessionId = "ses-created-after-stale"
+      mockFetch(async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+        const method = init?.method ?? "GET"
+
+        if (url.includes("/session") && method === "GET" && url.includes("roots=true")) {
+          // Return a session from TUI discovery
+          return new Response(
+            JSON.stringify([
+              { id: "ses-stale", title: "Old TUI", directory: "/test/project", time: { created: 1, updated: 2 } },
+            ]),
+            { status: 200 },
+          )
+        }
+        // GET /session/ses-stale — returns 404 (session doesn't exist anymore)
+        if (url.includes("/session/ses-stale") && method === "GET") {
+          return new Response("Not found", { status: 404 })
+        }
+        if (url.includes("/session") && method === "POST") {
+          return new Response(JSON.stringify({ id: createdSessionId }), { status: 200 })
+        }
+        return new Response("Not found", { status: 404 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      const result = await sm.getOrCreate("chat-stale-discover")
+
+      // Should have fallen through to POST (create new session)
+      expect(result).toBe(createdSessionId)
+      expect(sm.getSession("chat-stale-discover")!.is_bound).toBe(0)
+    })
+
+    it("accepts discovered session that returns 200 from server", async () => {
+      const tuiSessionId = "ses-valid-tui"
+      mockFetch(async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+        const method = init?.method ?? "GET"
+
+        if (url.includes("/session") && method === "GET" && url.includes("roots=true")) {
+          return new Response(
+            JSON.stringify([
+              { id: tuiSessionId, title: "Valid TUI", directory: "/test/project", time: { created: 1, updated: 2 } },
+            ]),
+            { status: 200 },
+          )
+        }
+        // GET /session/ses-valid-tui — 200 OK
+        if (url.includes(`/session/${tuiSessionId}`) && method === "GET") {
+          return new Response(JSON.stringify({ id: tuiSessionId }), { status: 200 })
+        }
+        return new Response("Not found", { status: 404 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      const result = await sm.getOrCreate("chat-valid-discover")
+
+      expect(result).toBe(tuiSessionId)
+      expect(sm.getSession("chat-valid-discover")!.is_bound).toBe(1)
+    })
+  })
+
+    it("accepts discovered session when server returns 500 (conservative — not 404)", async () => {
+      const tuiSessionId = "ses-500-tui"
+      mockFetch(async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+        const method = init?.method ?? "GET"
+
+        if (url.includes("/session") && method === "GET" && url.includes("roots=true")) {
+          return new Response(
+            JSON.stringify([
+              { id: tuiSessionId, title: "TUI", directory: "/test/project", time: { created: 1, updated: 2 } },
+            ]),
+            { status: 200 },
+          )
+        }
+        // GET /session/ses-500-tui — returns 500 (server error)
+        if (url.includes(`/session/${tuiSessionId}`) && method === "GET") {
+          return new Response("Internal Server Error", { status: 500 })
+        }
+        return new Response("Not found", { status: 404 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      const result = await sm.getOrCreate("chat-500-discover")
+
+      // 500 should be treated conservatively as \"exists\" — session accepted, not skipped
+      expect(result).toBe(tuiSessionId)
+      expect(sm.getSession("chat-500-discover")!.is_bound).toBe(1)
+    })
+
+  describe("validateAndCleanupStale", () => {
+    it("removes mappings whose sessions return 404", async () => {
+      mockFetch(async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+        if (url.includes("/session/ses-alive")) {
+          return new Response(JSON.stringify({ id: "ses-alive" }), { status: 200 })
+        }
+        if (url.includes("/session/ses-dead")) {
+          return new Response("Not found", { status: 404 })
+        }
+        return new Response("Not found", { status: 404 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+
+      // Manually insert mappings
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("key-alive", "ses-alive", "claude", now, now, 1)
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("key-dead", "ses-dead", "claude", now, now, 1)
+
+      const cleaned = await sm.validateAndCleanupStale()
+
+      expect(cleaned).toBe(1)
+      expect(sm.getSession("key-alive")).not.toBeNull()
+      expect(sm.getSession("key-dead")).toBeNull()
+    })
+
+    it("preserves all mappings when all sessions are valid", async () => {
+      mockFetch(async () => {
+        return new Response(JSON.stringify({ id: "ses-1" }), { status: 200 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("key-1", "ses-1", "claude", now, now, 1)
+
+      const cleaned = await sm.validateAndCleanupStale()
+      expect(cleaned).toBe(0)
+      expect(sm.getSession("key-1")).not.toBeNull()
+    })
+
+    it("returns 0 when no mappings exist", async () => {
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      const cleaned = await sm.validateAndCleanupStale()
+      expect(cleaned).toBe(0)
+    })
+
+    it("skips mappings when server is unreachable (network error)", async () => {
+      mockFetch(async () => {
+        throw new Error("Network error")
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("key-1", "ses-1", "claude", now, now, 1)
+
+      const cleaned = await sm.validateAndCleanupStale()
+      // Network errors should NOT cause cleanup — mapping preserved
+      expect(cleaned).toBe(0)
+      expect(sm.getSession("key-1")).not.toBeNull()
+    })
+
+    it("preserves mappings when server returns 500 (not treated as missing)", async () => {
+      mockFetch(async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+        if (url.includes("/session/ses-500")) {
+          return new Response("Internal Server Error", { status: 500 })
+        }
+        return new Response(JSON.stringify({ id: "ses-ok" }), { status: 200 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run("key-500", "ses-500", "claude", now, now, 1)
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run("key-ok", "ses-ok", "claude", now, now, 1)
+
+      const cleaned = await sm.validateAndCleanupStale()
+
+      // 500 should NOT be treated as "not exists" — mapping preserved
+      expect(cleaned).toBe(0)
+      expect(sm.getSession("key-500")).not.toBeNull()
+      expect(sm.getSession("key-ok")).not.toBeNull()
+    })
+
+    it("preserves mappings when server returns 429 (rate limited)", async () => {
+      mockFetch(async () => {
+        return new Response("Too Many Requests", { status: 429 })
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run("key-rl", "ses-rl", "claude", now, now, 1)
+
+      const cleaned = await sm.validateAndCleanupStale()
+
+      expect(cleaned).toBe(0)
+      expect(sm.getSession("key-rl")).not.toBeNull()
     })
   })
 })

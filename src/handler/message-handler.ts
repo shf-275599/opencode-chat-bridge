@@ -50,6 +50,14 @@ export interface HandlerDeps {
 
 const EVENT_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
+/** Thrown when POST /session/{id}/message returns 404 — session no longer exists. */
+export class SessionGoneError extends Error {
+  constructor(public readonly sessionId: string, public readonly status: number) {
+    super(`Session ${sessionId} returned HTTP ${status} — session no longer exists`)
+    this.name = "SessionGoneError"
+  }
+}
+
 // ── Helper: resolve the download directory ──
 
 let cachedDownloadDir: string | null = null
@@ -439,7 +447,7 @@ export function createMessageHandler(
     }
 
     // ── 6. Get/create session ──
-    const sessionId = await sessionManager.getOrCreate(feishuKey)
+    let sessionId = await sessionManager.getOrCreate(feishuKey)
     ownedSessions.add(sessionId)
     // ── 6a. First-bind notification ──
     if (!notifiedFeishuKeys.has(feishuKey)) {
@@ -491,15 +499,19 @@ export function createMessageHandler(
     }
 
     // ── 8. Build the POST-to-opencode function ──
-    const promptUrl = `${serverUrl}/session/${sessionId}/message`
+    let currentSessionId = sessionId
     const postBody = JSON.stringify({ parts })
 
     async function postToOpencode(): Promise<string> {
-      const resp = await fetch(promptUrl, {
+      const url = `${serverUrl}/session/${currentSessionId}/message`
+      const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: postBody,
       })
+      if (resp.status === 404) {
+        throw new SessionGoneError(currentSessionId, 404)
+      }
       if (!resp.ok) {
         throw new Error(`Prompt HTTP error: ${resp.status}`)
       }
@@ -510,52 +522,100 @@ export function createMessageHandler(
       return rawText
     }
 
+    /** Recover from 404: clear stale mapping, re-resolve session, retry POST once. */
+    async function postWithRecovery(): Promise<string> {
+      try {
+        return await postToOpencode()
+      } catch (err) {
+        if (!(err instanceof SessionGoneError)) throw err
+        logger.warn(`Session ${currentSessionId} returned 404 — clearing stale mapping and retrying`)
+        sessionManager.deleteMapping(feishuKey)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey)
+        ownedSessions.add(newSessionId)
+        logger.info(`Session self-healed: ${currentSessionId} → ${newSessionId}`)
+        currentSessionId = newSessionId
+        sessionId = newSessionId
+        // Retry once with new session
+        return await postToOpencode()
+      }
+    }
+
     // ── 9. Try streaming bridge (registers listener BEFORE POST) → sync fallback ──
     if (deps.streamingBridge) {
-      // Tell observer to skip TextDelta/SessionIdle for this session
-      if (deps.observer) deps.observer.markSessionBusy(sessionId)
+      // Helper: run streaming bridge for a given session, with proper listener lifecycle
+      const runStreamingBridge = async (sid: string): Promise<void> => {
+        if (deps.observer) deps.observer.markSessionBusy(sid)
 
-      // Register ownership listener to mark Feishu-initiated messageIds
-      let ownershipListener: ((event: unknown) => void) | null = null
-      if (deps.observer) {
-        ownershipListener = (rawEvent: unknown): void => {
-          const props = rawEvent && typeof rawEvent === "object" ? (rawEvent as Record<string, unknown>).properties : null
-          if (!props || typeof props !== "object") return
-          const p = props as Record<string, unknown>
-          const part = p.part
-          const mid = part && typeof part === "object" ? (part as Record<string, unknown>).messageID : p.messageID
-          if (typeof mid === "string") deps.observer!.markOwned(mid)
+        let ownershipListener: ((event: unknown) => void) | null = null
+        if (deps.observer) {
+          ownershipListener = (rawEvent: unknown): void => {
+            const props = rawEvent && typeof rawEvent === "object" ? (rawEvent as Record<string, unknown>).properties : null
+            if (!props || typeof props !== "object") return
+            const p = props as Record<string, unknown>
+            const part = p.part
+            const mid = part && typeof part === "object" ? (part as Record<string, unknown>).messageID : p.messageID
+            if (typeof mid === "string") deps.observer!.markOwned(mid)
+          }
+          addListener(eventListeners, sid, ownershipListener)
         }
-        addListener(eventListeners, sessionId, ownershipListener)
+
+        // Capture current session in closure for postToOpencode
+        currentSessionId = sid
+
+        try {
+          await deps.streamingBridge!.handleMessage(
+            event.chat_id,
+            sid,
+            eventListeners,
+            eventProcessor,
+            postToOpencode,
+            (_responseText: string) => {
+              if (ownershipListener) removeListener(eventListeners, sid, ownershipListener)
+              if (deps.observer) deps.observer.markSessionFree(sid)
+            },
+            event.message_id,
+            reactionId,
+          )
+        } catch (err) {
+          // Always clean up on error
+          if (ownershipListener) removeListener(eventListeners, sid, ownershipListener)
+          if (deps.observer) deps.observer.markSessionFree(sid)
+          throw err
+        }
       }
 
       try {
-        await deps.streamingBridge.handleMessage(
-          event.chat_id,
-          sessionId,
-          eventListeners,
-          eventProcessor,
-          postToOpencode,
-          (_responseText: string) => {
-            if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
-            if (deps.observer) deps.observer.markSessionFree(sessionId)
-          },
-          event.message_id,
-          reactionId,
-        )
+        await runStreamingBridge(sessionId)
         logger.info(`Response sent for session ${sessionId} (streaming bridge)`)
         return
       } catch (err) {
-        if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
-        if (deps.observer) deps.observer.markSessionFree(sessionId)
-        logger.warn(
-          `Streaming bridge failed, falling back to sync: ${err}`,
-        )
+        if (err instanceof SessionGoneError) {
+          // 404 self-healing: clear stale mapping, get new session, retry once
+          logger.warn(`Session ${sessionId} returned 404 in streaming path — clearing stale mapping and retrying`)
+          sessionManager.deleteMapping(feishuKey)
+          const newSessionId = await sessionManager.getOrCreate(feishuKey)
+          ownedSessions.add(newSessionId)
+          logger.info(`Session self-healed (streaming): ${sessionId} → ${newSessionId}`)
+          sessionId = newSessionId
+
+          try {
+            await runStreamingBridge(newSessionId)
+            logger.info(`Response sent for session ${newSessionId} (streaming bridge, after 404 recovery)`)
+            return
+          } catch (retryErr) {
+            // Retry failed — fall through to sync fallback below
+            logger.warn(`Streaming bridge retry also failed: ${retryErr}`)
+          }
+        } else {
+          logger.warn(`Streaming bridge failed, falling back to sync: ${err}`)
+        }
+
+        // Sync fallback — reaction cleanup only here (not during 404 retry)
         if (reactionId) {
           await feishuClient.deleteReaction(event.message_id, reactionId).catch(() => {})
         }
         try {
-          const rawText = await postToOpencode()
+          const rawText = await postWithRecovery()
           await handleSyncFallback(
             rawText,
             sessionId,
@@ -579,7 +639,7 @@ export function createMessageHandler(
     // No streaming bridge — direct POST then event-driven → sync fallback
     let rawText: string
     try {
-      rawText = await postToOpencode()
+      rawText = await postWithRecovery()
     } catch (err) {
       logger.error(`POST to opencode failed: ${err}`)
       if (thinkingMessageId) {
@@ -661,7 +721,7 @@ export function createMessageHandler(
     )
 
     // Get/create session
-    const sessionId = await sessionManager.getOrCreate(feishuKey)
+    let sessionId = await sessionManager.getOrCreate(feishuKey)
     ownedSessions.add(sessionId)
 
     // First-bind notification
@@ -713,15 +773,19 @@ export function createMessageHandler(
     }
 
     // Build POST function
-    const promptUrl = `${serverUrl}/session/${sessionId}/message`
+    let currentSessionId = sessionId
     const postBody = JSON.stringify({ parts })
 
     async function postToOpencode(): Promise<string> {
-      const resp = await fetch(promptUrl, {
+      const url = `${serverUrl}/session/${currentSessionId}/message`
+      const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: postBody,
       })
+      if (resp.status === 404) {
+        throw new SessionGoneError(currentSessionId, 404)
+      }
       if (!resp.ok) {
         throw new Error(`Prompt HTTP error: ${resp.status}`)
       }
@@ -732,48 +796,99 @@ export function createMessageHandler(
       return rawText
     }
 
+    /** Recover from 404: clear stale mapping, re-resolve session, retry POST once. */
+    async function postWithRecovery(): Promise<string> {
+      try {
+        return await postToOpencode()
+      } catch (err) {
+        if (!(err instanceof SessionGoneError)) throw err
+        logger.warn(`Session ${currentSessionId} returned 404 in debounced path — clearing stale mapping and retrying`)
+        sessionManager.deleteMapping(feishuKey)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey)
+        ownedSessions.add(newSessionId)
+        logger.info(`Session self-healed (debounced): ${currentSessionId} → ${newSessionId}`)
+        currentSessionId = newSessionId
+        sessionId = newSessionId
+        // Retry once with new session
+        return await postToOpencode()
+      }
+    }
+
     // Use streaming bridge or event-driven/sync path (same as non-debounced flow)
     if (deps.streamingBridge) {
-      if (deps.observer) deps.observer.markSessionBusy(sessionId)
+      const reactionMsgId = reactionMessageId ?? lastEvent.message_id
 
-      let ownershipListener: ((ev: unknown) => void) | null = null
-      if (deps.observer) {
-        ownershipListener = (rawEvent: unknown): void => {
-          const props = rawEvent && typeof rawEvent === "object" ? (rawEvent as Record<string, unknown>).properties : null
-          if (!props || typeof props !== "object") return
-          const p = props as Record<string, unknown>
-          const part = p.part
-          const mid = part && typeof part === "object" ? (part as Record<string, unknown>).messageID : p.messageID
-          if (typeof mid === "string") deps.observer!.markOwned(mid)
+      // Helper: run streaming bridge for a given session, with proper listener lifecycle
+      const runStreamingBridge = async (sid: string): Promise<void> => {
+        if (deps.observer) deps.observer.markSessionBusy(sid)
+
+        let ownershipListener: ((ev: unknown) => void) | null = null
+        if (deps.observer) {
+          ownershipListener = (rawEvent: unknown): void => {
+            const props = rawEvent && typeof rawEvent === "object" ? (rawEvent as Record<string, unknown>).properties : null
+            if (!props || typeof props !== "object") return
+            const p = props as Record<string, unknown>
+            const part = p.part
+            const mid = part && typeof part === "object" ? (part as Record<string, unknown>).messageID : p.messageID
+            if (typeof mid === "string") deps.observer!.markOwned(mid)
+          }
+          addListener(eventListeners, sid, ownershipListener)
         }
-        addListener(eventListeners, sessionId, ownershipListener)
+
+        // Capture current session in closure for postToOpencode
+        currentSessionId = sid
+
+        try {
+          await deps.streamingBridge!.handleMessage(
+            event.chat_id,
+            sid,
+            eventListeners,
+            eventProcessor,
+            postToOpencode,
+            (_responseText: string) => {
+              if (ownershipListener) removeListener(eventListeners, sid, ownershipListener)
+              if (deps.observer) deps.observer.markSessionFree(sid)
+            },
+            reactionMsgId,
+            reactionId,
+          )
+        } catch (err) {
+          if (ownershipListener) removeListener(eventListeners, sid, ownershipListener)
+          if (deps.observer) deps.observer.markSessionFree(sid)
+          throw err
+        }
       }
 
       try {
-        await deps.streamingBridge.handleMessage(
-          event.chat_id,
-          sessionId,
-          eventListeners,
-          eventProcessor,
-          postToOpencode,
-          (_responseText: string) => {
-            if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
-            if (deps.observer) deps.observer.markSessionFree(sessionId)
-          },
-          reactionMessageId ?? lastEvent.message_id,
-          reactionId,
-        )
+        await runStreamingBridge(sessionId)
         logger.info(`Response sent for session ${sessionId} (streaming bridge, debounced)`)
         return
       } catch (err) {
-        if (ownershipListener) removeListener(eventListeners, sessionId, ownershipListener)
-        if (deps.observer) deps.observer.markSessionFree(sessionId)
-        logger.warn(`Streaming bridge failed in debounced path, falling back to sync: ${err}`)
+        if (err instanceof SessionGoneError) {
+          logger.warn(`Session ${sessionId} returned 404 in debounced streaming path — clearing stale mapping and retrying`)
+          sessionManager.deleteMapping(feishuKey)
+          const newSessionId = await sessionManager.getOrCreate(feishuKey)
+          ownedSessions.add(newSessionId)
+          logger.info(`Session self-healed (debounced streaming): ${sessionId} → ${newSessionId}`)
+          sessionId = newSessionId
+
+          try {
+            await runStreamingBridge(newSessionId)
+            logger.info(`Response sent for session ${newSessionId} (streaming bridge, debounced, after 404 recovery)`)
+            return
+          } catch (retryErr) {
+            logger.warn(`Streaming bridge retry also failed in debounced path: ${retryErr}`)
+          }
+        } else {
+          logger.warn(`Streaming bridge failed in debounced path, falling back to sync: ${err}`)
+        }
+
+        // Sync fallback — reaction cleanup only here
         if (reactionId) {
-          await feishuClient.deleteReaction(reactionMessageId ?? lastEvent.message_id, reactionId).catch(() => {})
+          await feishuClient.deleteReaction(reactionMsgId, reactionId).catch(() => {})
         }
         try {
-          const rawText = await postToOpencode()
+          const rawText = await postWithRecovery()
           await handleSyncFallback(rawText, sessionId, mergedText, event, thinkingMessageId)
         } catch (postErr) {
           logger.error(`Sync fallback POST also failed in debounced path: ${postErr}`)
@@ -790,7 +905,7 @@ export function createMessageHandler(
     // No streaming bridge — event-driven → sync fallback
     let rawText: string
     try {
-      rawText = await postToOpencode()
+      rawText = await postWithRecovery()
     } catch (err) {
       logger.error(`POST to opencode failed in debounced path: ${err}`)
       if (thinkingMessageId) {

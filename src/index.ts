@@ -152,6 +152,18 @@ async function main(): Promise<void> {
     defaultAgent: config.defaultAgent,
   })
 
+  // Validate stored session mappings against the running opencode server
+  logger.info("Phase 4b: Validating stored session mappings...")
+  try {
+    const cleaned = await sessionManager.validateAndCleanupStale()
+    if (cleaned > 0) {
+      logger.info(`Phase 4b: Removed ${cleaned} stale session mapping(s)`)
+    }
+  } catch (err) {
+    logger.warn(`Phase 4b: Session mapping validation failed (non-fatal): ${err}`)
+  }
+
+
   const dedup = new MessageDedup({ db: db.sessions, ttlMs: 60_000 })
 
   const progressTracker = createProgressTracker({ feishuClient })

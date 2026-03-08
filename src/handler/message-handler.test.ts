@@ -44,8 +44,12 @@ function makeDeps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
     serverUrl: "http://127.0.0.1:4096",
     sessionManager: {
       getOrCreate: vi.fn().mockResolvedValue("ses-1"),
+      getExisting: vi.fn().mockResolvedValue(undefined),
       getSession: vi.fn().mockReturnValue(null),
+      deleteMapping: vi.fn().mockReturnValue(true),
+      setMapping: vi.fn().mockReturnValue(true),
       cleanup: vi.fn().mockReturnValue(0),
+      validateAndCleanupStale: vi.fn().mockResolvedValue(0),
     },
     dedup: {
       isDuplicate: vi.fn().mockReturnValue(false),
@@ -1118,5 +1122,257 @@ describe("createMessageHandler — debounce race condition", () => {
 
     await p2
     dispose()
+  })
+})
+
+describe("createMessageHandler — 404 session self-healing", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("recovers from 404 by clearing mapping and retrying with new session", async () => {
+    let callCount = 0
+    globalThis.fetch = vi.fn().mockImplementation(async (input: string) => {
+      if (input.includes("/message")) {
+        callCount++
+        if (callCount === 1) {
+          // First POST — 404 (stale session)
+          return { ok: false, status: 404, text: () => Promise.resolve("") }
+        }
+        // Retry POST — success
+        return { ok: true, text: () => Promise.resolve("") }
+      }
+      return { ok: true, text: () => Promise.resolve("") }
+    }) as any
+
+    const sessionManager = {
+      getOrCreate: vi.fn()
+        .mockResolvedValueOnce("ses-stale")
+        .mockResolvedValueOnce("ses-new"),
+      getExisting: vi.fn().mockResolvedValue(undefined),
+      getSession: vi.fn().mockReturnValue(null),
+      deleteMapping: vi.fn().mockReturnValue(true),
+      setMapping: vi.fn().mockReturnValue(true),
+      cleanup: vi.fn().mockReturnValue(0),
+      validateAndCleanupStale: vi.fn().mockResolvedValue(0),
+    }
+    const deps = makeDeps({ sessionManager })
+    const { handleMessage: handler } = createMessageHandler(deps)
+
+    const handlerPromise = handler(makeEvent())
+
+    await waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    // Fire SessionIdle to complete the flow
+    ;[...deps.eventListeners.entries()].forEach(([, listeners]) => {
+      [...listeners].forEach(fn => fn({
+        type: "session.status",
+        properties: { sessionID: "ses-new", status: { type: "idle" } },
+      }))
+    })
+
+    await handlerPromise
+
+    // Verify: deleteMapping was called for the stale session
+    expect(sessionManager.deleteMapping).toHaveBeenCalledWith("chat-1")
+    // Verify: getOrCreate was called twice (initial + recovery)
+    expect(sessionManager.getOrCreate).toHaveBeenCalledTimes(2)
+    // Verify: 2 POSTs to /message (original + retry)
+    const messagePosts = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
+    )
+    expect(messagePosts).toHaveLength(2)
+    // Verify: self-healing logged
+    expect(deps.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("returned 404"),
+    )
+  })
+
+  it("does not retry more than once on repeated 404s", async () => {
+    // Both POSTs return 404 — should fail after one retry
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve(""),
+    }) as any
+
+    const sessionManager = {
+      getOrCreate: vi.fn()
+        .mockResolvedValueOnce("ses-stale")
+        .mockResolvedValueOnce("ses-also-stale"),
+      getExisting: vi.fn().mockResolvedValue(undefined),
+      getSession: vi.fn().mockReturnValue(null),
+      deleteMapping: vi.fn().mockReturnValue(true),
+      setMapping: vi.fn().mockReturnValue(true),
+      cleanup: vi.fn().mockReturnValue(0),
+      validateAndCleanupStale: vi.fn().mockResolvedValue(0),
+    }
+    const deps = makeDeps({ sessionManager })
+    const { handleMessage: handler } = createMessageHandler(deps)
+
+    await handler(makeEvent())
+
+    // Should show error after retry failure
+    expect(deps.progressTracker.updateWithError).toHaveBeenCalledWith(
+      "thinking-msg-1",
+      "处理请求时出错了。",
+    )
+    // Only one retry
+    expect(sessionManager.getOrCreate).toHaveBeenCalledTimes(2)
+  })
+
+  it("non-404 errors are not treated as session-gone", async () => {
+    mockFetchError(500)
+    const deps = makeDeps()
+    const { handleMessage: handler } = createMessageHandler(deps)
+
+    await handler(makeEvent())
+
+    // Regular error handling — no deleteMapping
+    expect(deps.sessionManager.deleteMapping).not.toHaveBeenCalled()
+    expect(deps.progressTracker.updateWithError).toHaveBeenCalled()
+  })
+})
+
+describe("createMessageHandler — streaming 404 session self-healing", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("streaming branch: 404 triggers session switch with new listener on new session", async () => {
+    // Setup: first POST returns 404 (stale session), second POST succeeds on new session
+    let postCallCount = 0
+    globalThis.fetch = vi.fn().mockImplementation(async (input: string) => {
+      if (input.includes("/message")) {
+        postCallCount++
+        if (postCallCount === 1) {
+          // First POST — 404 (stale session)
+          return { ok: false, status: 404, text: () => Promise.resolve("") }
+        }
+        // Second POST — success (new session)
+        return { ok: true, text: () => Promise.resolve("") }
+      }
+      return { ok: true, text: () => Promise.resolve("") }
+    }) as any
+
+    const sessionManager = {
+      getOrCreate: vi.fn()
+        .mockResolvedValueOnce("ses-stale")
+        .mockResolvedValueOnce("ses-new"),
+      getExisting: vi.fn().mockResolvedValue(undefined),
+      getSession: vi.fn().mockReturnValue(null),
+      deleteMapping: vi.fn().mockReturnValue(true),
+      setMapping: vi.fn().mockReturnValue(true),
+      cleanup: vi.fn().mockReturnValue(0),
+      validateAndCleanupStale: vi.fn().mockResolvedValue(0),
+    }
+
+    const observer = {
+      observe: vi.fn(),
+      markOwned: vi.fn(),
+      markSessionBusy: vi.fn(),
+      markSessionFree: vi.fn(),
+      getChatForSession: vi.fn(),
+      stop: vi.fn(),
+    }
+
+    // Track which sessionId the streaming bridge was called with
+    const bridgeCalls: string[] = []
+    const streamingBridge = {
+      handleMessage: vi.fn().mockImplementation(
+        async (
+          _chatId: string, sid: string, _el: EventListenerMap,
+          _ep: unknown, sendMessage: () => Promise<string>,
+          onComplete: (text: string) => void,
+        ) => {
+          bridgeCalls.push(sid)
+          // Call sendMessage to trigger the POST (which may throw SessionGoneError)
+          await sendMessage()
+          onComplete("done")
+        },
+      ),
+    }
+
+    const feishuClient = createMockFeishuClient()
+    ;(feishuClient.addReaction as ReturnType<typeof vi.fn>).mockResolvedValue({
+      code: 0, msg: "ok", data: { reaction_id: "r-1" },
+    })
+
+    const deps = makeDeps({ sessionManager, observer, streamingBridge, feishuClient })
+    const { handleMessage: handler } = createMessageHandler(deps)
+
+    await handler(makeEvent())
+
+    // Verify: old session was cleaned up
+    expect(sessionManager.deleteMapping).toHaveBeenCalledWith("chat-1")
+    // Verify: getOrCreate called twice (initial + recovery)
+    expect(sessionManager.getOrCreate).toHaveBeenCalledTimes(2)
+    // Verify: streaming bridge called twice — first with stale, then with new
+    expect(bridgeCalls).toEqual(["ses-stale", "ses-new"])
+    // Verify: old session listener was cleaned (markSessionBusy/Free paired)
+    expect(observer.markSessionBusy).toHaveBeenCalledWith("ses-stale")
+    expect(observer.markSessionFree).toHaveBeenCalledWith("ses-stale")
+    // Verify: new session got busy/free
+    expect(observer.markSessionBusy).toHaveBeenCalledWith("ses-new")
+  })
+
+  it("streaming branch: does not retry more than once on repeated 404s", async () => {
+    // Both POSTs return 404
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve(""),
+    }) as any
+
+    const sessionManager = {
+      getOrCreate: vi.fn()
+        .mockResolvedValueOnce("ses-stale")
+        .mockResolvedValueOnce("ses-also-stale"),
+      getExisting: vi.fn().mockResolvedValue(undefined),
+      getSession: vi.fn().mockReturnValue(null),
+      deleteMapping: vi.fn().mockReturnValue(true),
+      setMapping: vi.fn().mockReturnValue(true),
+      cleanup: vi.fn().mockReturnValue(0),
+      validateAndCleanupStale: vi.fn().mockResolvedValue(0),
+    }
+
+    const streamingBridge = {
+      handleMessage: vi.fn().mockImplementation(
+        async (
+          _chatId: string, _sid: string, _el: EventListenerMap,
+          _ep: unknown, sendMessage: () => Promise<string>,
+        ) => {
+          await sendMessage() // Always throws SessionGoneError
+        },
+      ),
+    }
+
+    const feishuClient = createMockFeishuClient()
+    ;(feishuClient.addReaction as ReturnType<typeof vi.fn>).mockResolvedValue({
+      code: 0, msg: "ok", data: { reaction_id: "r-1" },
+    })
+    ;(feishuClient.deleteReaction as ReturnType<typeof vi.fn>).mockResolvedValue({ code: 0 })
+
+    const deps = makeDeps({ sessionManager, streamingBridge, feishuClient })
+    const { handleMessage: handler } = createMessageHandler(deps)
+
+    await handler(makeEvent())
+
+    // Streaming bridge called exactly twice (initial + one retry)
+    expect(streamingBridge.handleMessage).toHaveBeenCalledTimes(2)
+    // deleteMapping called: once in streaming 404 recovery, potentially again in sync fallback's postWithRecovery
+    expect(sessionManager.deleteMapping).toHaveBeenCalled()
+    // Reaction should be cleaned up in the sync fallback path
+    expect(feishuClient.deleteReaction).toHaveBeenCalled()
   })
 })

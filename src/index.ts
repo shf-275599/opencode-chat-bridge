@@ -47,6 +47,19 @@ import { needsSetup, runSetupWizard, pickConfig } from "./cli/setup-wizard.js"
 
 const logger = createLogger("opencode-lark")
 
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error(`[SILENT HOOK] Unhandled Rejection at: ${promise}, reason: ${reason}`);
+  if (reason instanceof Error && reason.stack) {
+    logger.error(reason.stack);
+  }
+});
+process.on("uncaughtException", (error) => {
+  logger.error(`[SILENT HOOK] Uncaught Exception: ${error}`);
+  if (error.stack) {
+    logger.error(error.stack);
+  }
+});
+
 async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   // Phase 0: Config Selection
@@ -68,13 +81,14 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   // Phase 1: Load Config
   // ═══════════════════════════════════════════
+  logger.info("@@@@@ opencode-lark starting PRECISE VERSION @@@@@")
   logger.info("Phase 1: Loading config...")
   const config = await loadConfig()
 
-  if (!config.feishu.appId || !config.feishu.appSecret) {
+  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret)) {
     logger.error(
-      "Feishu credentials missing. Run `opencode-lark init` to configure, " +
-      "or set FEISHU_APP_ID and FEISHU_APP_SECRET environment variables.",
+      "No valid channel credentials found (Feishu or QQ). Run `opencode-lark init` to configure, " +
+      "or set environment variables.",
     )
     process.exit(1)
   }
@@ -126,25 +140,32 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   logger.info("Phase 4: Creating shared services...")
 
-  const feishuClient = createFeishuApiClient({
-    appId: config.feishu.appId,
-    appSecret: config.feishu.appSecret,
-  })
-
-  // Fetch bot's own open_id for @mention filtering in group chats
+  let feishuClient: any = undefined
+  let cardkitClient: any = undefined
   let botOpenId: string | undefined
-  try {
-    const botInfo = await feishuClient.getBotInfo()
-    botOpenId = botInfo.open_id || undefined
-    logger.info(`Bot identity: ${botInfo.app_name} (${botInfo.open_id})`)
-  } catch (err) {
-    logger.warn(`Failed to fetch bot info — group @mention filtering disabled: ${err}`)
+
+  if (config.feishu) {
+    feishuClient = createFeishuApiClient({
+      appId: config.feishu.appId,
+      appSecret: config.feishu.appSecret,
+    })
+
+    // Fetch bot's own open_id for @mention filtering in group chats
+    try {
+      const botInfo = await feishuClient.getBotInfo()
+      botOpenId = botInfo.open_id || undefined
+      logger.info(`Feishu Bot identity: ${botInfo.app_name} (${botInfo.open_id})`)
+    } catch (err) {
+      logger.warn(`Failed to fetch Feishu bot info — group @mention filtering disabled: ${err}`)
+    }
+
+    cardkitClient = new CardKitClient({
+      appId: config.feishu.appId,
+      appSecret: config.feishu.appSecret,
+    })
   }
 
-  const cardkitClient = new CardKitClient({
-    appId: config.feishu.appId,
-    appSecret: config.feishu.appSecret,
-  })
+  const channelManager = new ChannelManager({ logger })
 
   const sessionManager = createSessionManager({
     serverUrl,
@@ -188,6 +209,7 @@ async function main(): Promise<void> {
     logger,
     seenInteractiveIds,
     outboundMedia,
+    channelManager,
   })
 
   const observer = createSessionObserver({
@@ -205,6 +227,7 @@ async function main(): Promise<void> {
     sessionManager,
     feishuClient,
     logger,
+    channelManager,
   })
 
   const { handleMessage, dispose: disposeDebouncer } = createMessageHandler({
@@ -223,6 +246,7 @@ async function main(): Promise<void> {
     botOpenId,
     outboundMedia,
     debounceMs: config.messageDebounceMs,
+    channelManager,
   })
 
   // Create card action handlers
@@ -272,65 +296,76 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   logger.info("Phase 5: Subscribing to opencode events...")
 
-  ;(async () => {
-    try {
-      const events = await client.event.subscribe()
-      logger.info("SSE event stream connected")
-      for await (const event of events.stream) {
-        const eventType = (event as Record<string, unknown>)?.type as string | undefined
-        const props = (event as Record<string, unknown>)?.properties as Record<string, unknown> | undefined
-        const sessionID = props?.sessionID ?? (props?.part && typeof props.part === "object" ? (props.part as Record<string, unknown>).sessionID : undefined)
-        if (eventType) {
-          logger.debug(`SSE: ${eventType} session=${sessionID ?? "n/a"}`)
-        }
+    ; (async () => {
+      try {
+        const events = await client.event.subscribe()
+        logger.info("SSE event stream connected")
+        for await (const event of events.stream) {
+          const eventType = (event as Record<string, unknown>)?.type as string | undefined
+          const props = (event as Record<string, unknown>)?.properties as Record<string, unknown> | undefined
+          const sessionID = props?.sessionID ?? (props?.part && typeof props.part === "object" ? (props.part as Record<string, unknown>).sessionID : undefined)
+          if (eventType) {
+            logger.debug(`SSE: ${eventType} session=${sessionID ?? "n/a"}`)
+          }
 
-        // Targeted dispatch: send only to matching session's listeners
-        if (sessionID && typeof sessionID === "string") {
-          const listeners = eventListeners.get(sessionID)
-          if (listeners) {
-            for (const listener of listeners) {
-              try {
-                listener(event)
-              } catch (err) {
-                logger.warn(`Event listener for ${sessionID} threw: ${err}`)
+          // Targeted dispatch: send only to matching session's listeners
+          if (sessionID && typeof sessionID === "string") {
+            const listeners = eventListeners.get(sessionID)
+            if (listeners) {
+              for (const listener of listeners) {
+                try {
+                  listener(event)
+                } catch (err) {
+                  logger.warn(`Event listener for ${sessionID} threw: ${err}`)
+                }
               }
             }
-          }
-        } else {
-          // No sessionID — broadcast to all (fallback for non-session events)
-          for (const [key, listeners] of eventListeners.entries()) {
-            for (const listener of listeners) {
-              try {
-                listener(event)
-              } catch (err) {
-                logger.warn(`Event listener for ${key} threw: ${err}`)
+          } else {
+            // No sessionID — broadcast to all (fallback for non-session events)
+            for (const [key, listeners] of eventListeners.entries()) {
+              for (const listener of listeners) {
+                try {
+                  listener(event)
+                } catch (err) {
+                  logger.warn(`Event listener for ${key} threw: ${err}`)
+                }
               }
             }
           }
         }
+        logger.warn("SSE event stream ended")
+      } catch (err) {
+        logger.error(`SSE subscription failed: ${err}`)
       }
-      logger.warn("SSE event stream ended")
-    } catch (err) {
-      logger.error(`SSE subscription failed: ${err}`)
-    }
-  })()
+    })()
 
   // ═══════════════════════════════════════════
-  // Phase 6: Create FeishuPlugin + ChannelManager
+  // Phase 6: Create Plugins
   // ═══════════════════════════════════════════
-  logger.info("Phase 6: Creating channel manager...")
+  logger.info("Phase 6: Initializing channel plugins...")
 
-  const feishuPlugin = new FeishuPlugin({
-    appConfig: config,
-    feishuClient,
-    cardkitClient,
-    logger,
-    onMessage: handleMessage,
-    onCardAction: handleCardAction,
-  })
+  if (config.feishu && feishuClient && cardkitClient) {
+    const feishuPlugin = new FeishuPlugin({
+      appConfig: config,
+      feishuClient,
+      cardkitClient,
+      logger,
+      onMessage: handleMessage,
+      onCardAction: handleCardAction,
+    })
+    channelManager.register(feishuPlugin)
+  }
 
-  const channelManager = new ChannelManager({ logger })
-  channelManager.register(feishuPlugin)
+  if (config.qq) {
+    // QQPlugin imported asynchronously to avoid top-level require if not used
+    const { QQPlugin } = await import("./channel/qq/index.js") as any
+    const qqPlugin = new QQPlugin({
+      appConfig: config,
+      logger,
+      onMessage: handleMessage,
+    })
+    channelManager.register(qqPlugin)
+  }
 
   // ═══════════════════════════════════════════
   // Phase 7: Start Channels + Webhook Server
@@ -340,17 +375,20 @@ async function main(): Promise<void> {
   const abortController = new AbortController()
   await channelManager.startAll(abortController.signal)
 
-  // Start webhook server for card action callbacks
-  logger.info("Phase 7b: Starting webhook server for card actions...")
-  const webhookPort = parseInt(process.env.FEISHU_WEBHOOK_PORT ?? "3001", 10)
-  const webhookServer = await createFeishuGateway({
-    port: webhookPort,
-    verificationToken: config.feishu.verificationToken ?? "",
-    onMessage: handleMessage,
-    onCardAction: handleCardAction,
-    dedup,
-  })
-  logger.info(`Webhook server started on port ${webhookPort}`)
+  let webhookServer: any = undefined
+  if (config.feishu) {
+    // Start webhook server for card action callbacks
+    logger.info("Phase 7b: Starting webhook server for card actions...")
+    const webhookPort = parseInt(process.env.FEISHU_WEBHOOK_PORT ?? config.feishu.webhookPort.toString(), 10)
+    webhookServer = await createFeishuGateway({
+      port: webhookPort,
+      verificationToken: config.feishu.verificationToken ?? "",
+      onMessage: handleMessage,
+      onCardAction: handleCardAction,
+      dedup,
+    })
+    logger.info(`Webhook server started on port ${webhookPort}`)
+  }
 
   // ═══════════════════════════════════════════
   // Phase 8: Optional Services (Cron + Heartbeat)
@@ -390,7 +428,7 @@ async function main(): Promise<void> {
       logger.info(`${signal} received, shutting down...`)
       abortController.abort()
       await channelManager.stopAll()
-      await webhookServer.close()
+      if (webhookServer) await webhookServer.close()
       cronService?.stop()
       heartbeatService?.stop()
       interactivePoller.stop()

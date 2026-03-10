@@ -40,12 +40,9 @@ export async function needsSetup(): Promise<boolean> {
   }
 
   // 3. Env vars already provide credentials → no setup needed
-  if (
-    process.env.FEISHU_APP_ID &&
-    process.env.FEISHU_APP_ID.length > 0 &&
-    process.env.FEISHU_APP_SECRET &&
-    process.env.FEISHU_APP_SECRET.length > 0
-  ) {
+  const hasFeishu = !!(process.env.FEISHU_APP_ID && process.env.FEISHU_APP_SECRET)
+  const hasQq = !!(process.env.QQ_APP_ID && process.env.QQ_SECRET)
+  if (hasFeishu || hasQq) {
     return false
   }
 
@@ -170,32 +167,55 @@ export async function runSetupWizard(): Promise<void> {
   try {
     // ── Welcome ──
     process.stdout.write(
-      `\n${bold("🚀 Welcome to opencode-lark!")}\n\nNo configuration found. Let's set things up.\n\n`,
+      `\n${bold("🚀 Welcome to opencode-lark (Cross-platform Edition)!")}\n\nNo configuration found. Let's set things up.\n\n`,
     )
 
-    // ── Step 1/3: Feishu Credentials ──
-    process.stdout.write(dim("Step 1/3: Feishu Credentials") + "\n")
+    // ── Step 1/3: Channel Selection & Credentials ──
+    process.stdout.write(dim("Step 1/3: Channel Credentials") + "\n")
 
-    let appId = ""
-    while (!appId) {
-      appId = (await rl.question("  Enter your Feishu App ID: ")).trim()
-      if (!appId) {
-        process.stdout.write(red("  App ID cannot be empty.") + "\n")
-      }
+    let setupFeishu = false
+    let setupQq = false
+    while (!setupFeishu && !setupQq) {
+      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, both]: ")).trim().toLowerCase()
+      if (choice === "feishu" || choice === "both") setupFeishu = true
+      if (choice === "qq" || choice === "both") setupQq = true
+      if (!setupFeishu && !setupQq) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
     }
 
-    // Close rl temporarily so we can use raw mode for secret input
-    rl.close()
-
-    let appSecret = ""
-    while (!appSecret) {
-      appSecret = (await readSecret("  Enter your Feishu App Secret: ")).trim()
-      if (!appSecret) {
-        process.stdout.write(red("  App Secret cannot be empty.") + "\n")
+    let feishuAppId = "", feishuAppSecret = ""
+    if (setupFeishu) {
+      process.stdout.write("\n" + dim("--- Feishu Configuration ---") + "\n")
+      while (!feishuAppId) {
+        feishuAppId = (await rl.question("  Enter your Feishu App ID: ")).trim()
       }
+      // Close rl temporarily so we can use raw mode for secret input
+      rl.close()
+      while (!feishuAppSecret) {
+        feishuAppSecret = (await readSecret("  Enter your Feishu App Secret: ")).trim()
+      }
+      process.stdout.write("\n")
     }
 
-    process.stdout.write("\n")
+    let qqAppId = "", qqSecret = ""
+    let qqSandbox = false
+    if (setupQq) {
+      // If rl was closed by feishu secret input, reopen it or adjust approach
+      // Wait, readSecret works without readline interface
+      const rlQq = setupFeishu ? readline.createInterface({ input: process.stdin, output: process.stdout }) : rl
+      process.stdout.write("\n" + dim("--- QQ Bot Configuration ---") + "\n")
+      while (!qqAppId) {
+        qqAppId = (await rlQq.question("  Enter your QQ App ID: ")).trim()
+      }
+      if (setupFeishu) rlQq.close()
+      else rl.close()
+
+      while (!qqSecret) {
+        qqSecret = (await readSecret("  Enter your QQ App Secret: ")).trim()
+      }
+      process.stdout.write("\n")
+    } else if (!setupFeishu) {
+      rl.close()
+    }
 
     // Re-create rl for the remaining prompts
     const rl2 = readline.createInterface({
@@ -223,10 +243,10 @@ export async function runSetupWizard(): Promise<void> {
         } catch {
           process.stdout.write(
             red(`  ✗ Cannot reach opencode server at ${serverUrl}`) +
-              "\n\n" +
-              "  Please start it in another terminal:\n" +
-              dim("    OPENCODE_SERVER_PORT=4096 opencode serve") +
-              "\n\n",
+            "\n\n" +
+            "  Please start it in another terminal:\n" +
+            dim("    OPENCODE_SERVER_PORT=4096 opencode serve") +
+            "\n\n",
           )
           await rl2.question("  Press Enter to retry...")
         }
@@ -236,13 +256,21 @@ export async function runSetupWizard(): Promise<void> {
       process.stdout.write(dim("Step 3/3: Save Configuration") + "\n")
 
       ensureConfigDir()
-      const envPath = path.join(CONFIG_DIR, `.env.${appId}`)
+      const mainId = feishuAppId || qqAppId
+      const envPath = path.join(CONFIG_DIR, `.env.${mainId}`)
 
       // Build .env content
-      const lines: string[] = [
-        `FEISHU_APP_ID=${appId}`,
-        `FEISHU_APP_SECRET=${appSecret}`,
-      ]
+      const lines: string[] = []
+      if (setupFeishu) {
+        lines.push(`FEISHU_APP_ID=${feishuAppId}`)
+        lines.push(`FEISHU_APP_SECRET=${feishuAppSecret}`)
+      }
+      if (setupQq) {
+        lines.push(`QQ_APP_ID=${qqAppId}`)
+        lines.push(`QQ_SECRET=${qqSecret}`)
+        lines.push(`QQ_SANDBOX=false`)
+      }
+
       if (serverUrl !== DEFAULT_URL) {
         lines.push(`OPENCODE_SERVER_URL=${serverUrl}`)
       }
@@ -251,8 +279,14 @@ export async function runSetupWizard(): Promise<void> {
       process.stdout.write(green(`  ✓ Configuration saved to ${envPath}`) + "\n")
 
       // Set on process.env so loadConfig() picks them up immediately
-      process.env.FEISHU_APP_ID = appId
-      process.env.FEISHU_APP_SECRET = appSecret
+      if (setupFeishu) {
+        process.env.FEISHU_APP_ID = feishuAppId
+        process.env.FEISHU_APP_SECRET = feishuAppSecret
+      }
+      if (setupQq) {
+        process.env.QQ_APP_ID = qqAppId
+        process.env.QQ_SECRET = qqSecret
+      }
       if (serverUrl !== DEFAULT_URL) {
         process.env.OPENCODE_SERVER_URL = serverUrl
       }

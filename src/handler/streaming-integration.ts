@@ -19,6 +19,7 @@ export interface StreamingBridgeDeps {
   logger: Logger
   seenInteractiveIds: Set<string>
   outboundMedia?: OutboundMediaHandler
+  channelManager?: any // ChannelManager
 }
 
 export interface StreamingBridge {
@@ -31,6 +32,7 @@ export interface StreamingBridge {
     onComplete: (text: string) => void,
     messageId: string,
     reactionId: string | null,
+    channelId?: string,
   ): Promise<void>
 }
 
@@ -44,7 +46,7 @@ const FIRST_EVENT_TIMEOUT_MS = 5 * 60 * 1_000 // 5 minutes — long tasks may ta
 export function createStreamingBridge(
   deps: StreamingBridgeDeps,
 ): StreamingBridge {
-  const { cardkitClient, feishuClient, subAgentTracker, logger, seenInteractiveIds } = deps
+  const { cardkitClient, feishuClient, subAgentTracker, logger, seenInteractiveIds, channelManager } = deps
 
   return {
     async handleMessage(
@@ -56,11 +58,17 @@ export function createStreamingBridge(
       onComplete: (text: string) => void,
       messageId: string,
       reactionId: string | null,
+      channelId: string = "feishu",
     ): Promise<void> {
       let card: StreamingCardSession | null = null
       let cardStartPromise: Promise<void> | null = null
 
+      const plugin = channelManager?.getChannel(channelId)
+      logger.info(`@@@@@ STREAMING BRIDGE V2 @@@@@ channelId=${channelId} plugin=${!!plugin}`)
+      logger.info(`StreamingBridge handleMessage: sessionId=${sessionId}, channelId=${channelId}, pluginFound=${!!plugin}, outboundFound=${!!plugin?.outbound}`)
+
       const ensureCard = (): void => {
+        if (channelId !== "feishu") return // Only Feishu supports streaming cards currently
         if (card || cardStartPromise) return
         card = new StreamingCardSession({
           cardkitClient,
@@ -81,11 +89,17 @@ export function createStreamingBridge(
         let syncResponseBody = ""
         // Helper: send text reply and clean up reaction
         const sendFinalResponse = async (text: string): Promise<void> => {
-          await feishuClient.replyMessage(messageId, {
-            msg_type: "text",
-            content: JSON.stringify({ text }),
-          })
-          if (reactionId) {
+          if (plugin?.outbound) {
+            await plugin.outbound.sendText({ address: chatId }, text)
+          } else if (feishuClient) {
+            await feishuClient.replyMessage(messageId, {
+              msg_type: "text",
+              content: JSON.stringify({ text }),
+            })
+          } else {
+            logger.warn(`No plugin outbound and no feishuClient available to send response for channel ${channelId}`)
+          }
+          if (reactionId && channelId === "feishu" && feishuClient) {
             try {
               await feishuClient.deleteReaction(messageId, reactionId)
             } catch (err) {
@@ -135,7 +149,7 @@ export function createStreamingBridge(
             case "SubtaskDiscovered": {
               subAgentTracker
                 .onSubtaskDiscovered(action)
-                .then((tracked) => {
+                .then(async (tracked) => {
                   const childSessionId = tracked.childSessionId ?? action.sessionId
                   // Build and send a separate card for this sub-agent
                   const cardData = buildSubAgentNotificationCard(
@@ -143,10 +157,14 @@ export function createStreamingBridge(
                     action.agent ?? "sub-agent",
                     childSessionId,
                   )
-                  return feishuClient.sendMessage(chatId, {
-                    msg_type: "interactive",
-                    content: JSON.stringify(cardData),
-                  })
+                  if (plugin?.outbound) {
+                    await plugin.outbound.sendText({ address: chatId }, `[Subtask] ${action.description} (${action.agent})`)
+                  } else {
+                    await feishuClient.sendMessage(chatId, {
+                      msg_type: "interactive",
+                      content: JSON.stringify(cardData),
+                    })
+                  }
                 })
                 .catch((err) => {
                   logger.warn(`SubtaskDiscovered handling failed: ${err}`)
@@ -158,13 +176,20 @@ export function createStreamingBridge(
               if (seenInteractiveIds.has(action.requestId)) break
               seenInteractiveIds.add(action.requestId)
               logger.info(`Question event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
-              const questionCard = buildQuestionCard(action)
-              feishuClient.sendMessage(chatId, {
-                msg_type: "interactive",
-                content: JSON.stringify(questionCard),
-              }).catch((err) => {
-                logger.warn(`Question card send failed: ${err}`)
-              })
+              if (plugin?.outbound) {
+                const options = action.questions[0]?.options.map(o => o.label).join(", ")
+                plugin.outbound.sendText({ address: chatId }, `[Question] ${action.questions[0]?.question}\nOptions: ${options}`).catch((err: any) => {
+                  logger.warn(`Question text send failed: ${err}`)
+                })
+              } else {
+                const questionCard = buildQuestionCard(action)
+                feishuClient.sendMessage(chatId, {
+                  msg_type: "interactive",
+                  content: JSON.stringify(questionCard),
+                }).catch((err) => {
+                  logger.warn(`Question card send failed: ${err}`)
+                })
+              }
               break
             }
 
@@ -172,13 +197,19 @@ export function createStreamingBridge(
               if (seenInteractiveIds.has(action.requestId)) break
               seenInteractiveIds.add(action.requestId)
               logger.info(`Permission event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
-              const permissionCard = buildPermissionCard(action)
-              feishuClient.sendMessage(chatId, {
-                msg_type: "interactive",
-                content: JSON.stringify(permissionCard),
-              }).catch((err) => {
-                logger.warn(`Permission card send failed: ${err}`)
-              })
+              if (plugin?.outbound) {
+                plugin.outbound.sendText({ address: chatId }, `[Permission Requested] ${action.title}\nID: ${action.requestId}\nPlease reply with allow/deny (Manual handling needed for QQ)`).catch((err: any) => {
+                  logger.warn(`Permission text send failed: ${err}`)
+                })
+              } else {
+                const permissionCard = buildPermissionCard(action)
+                feishuClient.sendMessage(chatId, {
+                  msg_type: "interactive",
+                  content: JSON.stringify(permissionCard),
+                }).catch((err) => {
+                  logger.warn(`Permission card send failed: ${err}`)
+                })
+              }
               break
             }
 
@@ -285,7 +316,7 @@ export function createStreamingBridge(
             settled = true
             clearTimeout(firstEventTimer)
             removeListener(eventListeners, sessionId, myListener)
-            if (card) card.close().catch(() => {})
+            if (card) card.close().catch(() => { })
             reject(err)
           })
       })

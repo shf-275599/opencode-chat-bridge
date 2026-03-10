@@ -15,6 +15,12 @@ const FeishuConfigSchema = z.object({
   encryptKey: z.string().optional(),
 })
 
+const QqConfigSchema = z.object({
+  appId: z.string().min(1),
+  secret: z.string().min(1),
+  sandbox: z.boolean().optional().default(false),
+})
+
 const ProgressConfigSchema = z.object({
   debounceMs: z.number().int().positive().default(500),
   maxDebounceMs: z.number().int().positive().default(3000),
@@ -38,13 +44,16 @@ const HeartbeatConfigSchema = z.object({
 })
 
 const AppConfigSchema = z.object({
-  feishu: FeishuConfigSchema,
+  feishu: FeishuConfigSchema.optional(),
+  qq: QqConfigSchema.optional(),
   defaultAgent: z.string().default("build"),
   dataDir: z.string().default("./data"),
   progress: ProgressConfigSchema.optional(),
   cron: CronConfigSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   messageDebounceMs: z.number().int().min(0).optional().default(10000),
+}).refine(data => data.feishu || data.qq, {
+  message: "At least one channel (feishu or qq) must be configured."
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>
@@ -70,11 +79,11 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
   const searchPaths = configPath
     ? [configPath]
     : [
-        path.resolve("opencode-lark.jsonc"),
-        path.resolve("opencode-lark.json"),
-        path.resolve("opencode-feishu.jsonc"),
-        path.resolve("opencode-feishu.json"),
-      ]
+      path.resolve("opencode-lark.jsonc"),
+      path.resolve("opencode-lark.json"),
+      path.resolve("opencode-feishu.jsonc"),
+      path.resolve("opencode-feishu.json"),
+    ]
 
   let rawText: string | undefined
   for (const p of searchPaths) {
@@ -87,13 +96,18 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
   // Fall back to pure env vars if no config file
   if (!rawText) {
     rawText = JSON.stringify({
-      feishu: {
-        appId: process.env["FEISHU_APP_ID"] ?? "",
+      feishu: process.env["FEISHU_APP_ID"] ? {
+        appId: process.env["FEISHU_APP_ID"],
         appSecret: process.env["FEISHU_APP_SECRET"] ?? "",
         verificationToken: process.env["FEISHU_VERIFICATION_TOKEN"] ?? "",
         webhookPort: Number(process.env["OPENCODE_FEISHU_PORT"] ?? "3000"),
         encryptKey: process.env["FEISHU_ENCRYPT_KEY"],
-      },
+      } : undefined,
+      qq: process.env["QQ_APP_ID"] ? {
+        appId: process.env["QQ_APP_ID"],
+        secret: process.env["QQ_SECRET"] ?? "",
+        sandbox: String(process.env["QQ_SANDBOX"]) === "true",
+      } : undefined,
       defaultAgent: "build",
       dataDir: "./data",
     })

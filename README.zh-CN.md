@@ -1,6 +1,6 @@
 [English](README.md)
 
-# opencode-lark
+# opencode-im-bridge
 
 > 将飞书群聊与 opencode TUI session 打通，实现双向实时消息转发。
 
@@ -13,29 +13,44 @@
 ## 功能特性
 
 - **实时桥接** — 飞书消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回飞书。
-- **交互式卡片** — agent 的提问和权限请求以可点击的飞书卡片呈现，直接在聊天中回答或审批，无需切换到 TUI。
-- **WebSocket 长连接** — 采用飞书 WebSocket 长连接模式，无需公网 IP，无需轮询。
+- **多渠道支持** — 现在支持通过官方 Node SDK 桥接 QQ 消息 (支持私信及文本交互)。
+- **交互式卡片** — agent 的提问和权限请求以可点击的飞书卡片呈现，直接在聊天中回答或审批，无需切换到 TUI。(目前主要在飞书端支持)
+- **WebSocket 长连接** — 采用飞书 / QQ 的 WebSocket 长连接模式，无需公网 IP，无需轮询。
 - **SSE 流式输出** — 订阅 opencode SSE 事件流，防抖处理卡片更新，避免触发频率限制。
 - **对话记忆** — SQLite 存储每个会话的对话历史，每次消息自动携带上下文。
 - **Session 自动发现** — 自动发现并绑定当前目录的最新 TUI session，重启后映射关系持久保存。
 - **优雅重连** — 启动时指数退避重连 opencode server，最多重试 10 次，无需手动等待 server 就绪。
-- **可扩展渠道层** — `ChannelPlugin` 接口设计，可扩展接入 Slack、Discord 等其他平台，无需修改核心逻辑。
+- **可扩展渠道层** — `ChannelPlugin` 接口设计，可扩展接入 Slack、Discord、QQ 等其他平台，无需修改核心逻辑。
 - **文件与图片支持** — 支持飞书图片和文件消息（不限于文字）。附件下载保存至 `${OPENCODE_CWD}/.opencode-lark/attachments/`，并将本地路径传给 opencode 供其读取分析。支持流式下载，50 MB 大小限制，文件名安全处理。
 
 ---
 
 ## 架构概览
 
-```
-Feishu client
-    ↕  WebSocket
-Feishu Open Platform
-    ↕  WebSocket
-opencode-lark  (本项目)
-    ↕  HTTP API + SSE
-opencode server  (localhost:4096)
-    ↕  stdin/stdout
-opencode TUI
+```mermaid
+graph TD;
+    subgraph "IM 平台 (Client & Platform)"
+        Feishu[飞书 群聊/私信]
+        QQ[QQ 官方机器人平台]
+    end
+
+    subgraph "opencode-lark (Bridge Middleware)"
+        FeishuPlugin[Feishu Plugin]
+        QQPlugin[QQ Plugin]
+        
+        FeishuPlugin <--> ChannelManager
+        QQPlugin <--> ChannelManager
+
+        ChannelManager <--> SessionManager[(SQLite 对话记忆 / Session映射)]
+    end
+    
+    subgraph "opencode Server"
+        Agent[opencode Agent Server / TUI]
+    end
+
+    Feishu <--> |Webhook/WebSocket| FeishuPlugin
+    QQ <--> |WebSocket| QQPlugin
+    ChannelManager <--> |HTTP POST + SSE 流式通信| Agent
 ```
 
 > `opencode serve` 运行 HTTP server，在另一个终端用 `opencode attach` 查看 TUI 会话。
@@ -113,9 +128,10 @@ opencode-lark
 ```
 
 首次运行无配置时，交互式向导将引导你完成：
-- 输入飞书 App ID 和 App Secret（密码遮蔽输入）
+- 选择渠道（飞书、QQ 或 两者皆选）
+- 输入飞书/QQ的 App ID、App Secret/Token（密码遮蔽输入）
 - 验证 opencode server 连通性
-- 保存凭证到 `.env` 文件
+- 保存凭证到对应的 `.env.{appId}` 文件
 
 配置完成后服务自动启动。
 
@@ -260,8 +276,10 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 
 | 变量 | 必需 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `FEISHU_APP_ID` | 是 | | 飞书应用 App ID |
-| `FEISHU_APP_SECRET` | 是 | | 飞书应用 App Secret |
+| `FEISHU_APP_ID` | 否 | | 飞书应用 App ID |
+| `FEISHU_APP_SECRET` | 否 | | 飞书应用 App Secret |
+| `QQ_APP_ID` | 否 | | QQ 应用 App ID |
+| `QQ_SECRET` | 否 | | QQ 应用 App Secret |
 | `OPENCODE_SERVER_URL` | 否 | `http://localhost:4096` | opencode server 地址 |
 | `FEISHU_WEBHOOK_PORT` | 否 | `3001` | HTTP webhook 回退端口（仅在不使用 WebSocket 接收卡片回调时需要） |
 | `OPENCODE_CWD` | 否 | `process.cwd()` | 覆盖 session 发现目录 |
@@ -276,12 +294,20 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 ```jsonc
 // opencode-lark.jsonc
 {
+  // 可选：启用飞书
   "feishu": {
     "appId": "${FEISHU_APP_ID}",
     "appSecret": "${FEISHU_APP_SECRET}",
     "verificationToken": "${FEISHU_VERIFICATION_TOKEN}",
     "webhookPort": 3001,
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
+  },
+  // 可选：启用 QQ
+  "qq": {
+    "appId": "${QQ_APP_ID}",
+    "token": "${QQ_TOKEN}",
+    "secret": "${QQ_SECRET}",
+    "sandbox": false
   },
   // 默认 opencode agent 名称，需与 opencode 配置中的 agent 匹配。
   // 常见值："build"、"claude"、"code" — 请查看你的 opencode 配置。

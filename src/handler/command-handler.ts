@@ -10,6 +10,8 @@ import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 
+import type { ChannelManager } from "../channel/manager.js"
+
 // ── Dependency injection interface ──
 
 export interface CommandHandlerDeps {
@@ -17,6 +19,7 @@ export interface CommandHandlerDeps {
   sessionManager: SessionManager
   feishuClient: FeishuApiClient
   logger: Logger
+  channelManager?: ChannelManager
 }
 
 // ── Types ──
@@ -26,6 +29,7 @@ export type CommandHandler = (
   chatId: string,
   messageId: string,
   commandText: string,
+  channelId?: string,
 ) => Promise<boolean>
 
 interface Session {
@@ -130,20 +134,27 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   const { serverUrl, sessionManager, feishuClient, logger } = deps
 
   async function replyText(
-    _chatId: string,
+    chatId: string,
     messageId: string,
     text: string,
+    channelId: string = "feishu",
   ): Promise<void> {
-    await feishuClient.replyMessage(messageId, {
-      msg_type: "text",
-      content: JSON.stringify({ text }),
-    })
+    const plugin = deps.channelManager?.getChannel(channelId as any)
+    if (plugin?.outbound) {
+      await plugin.outbound.sendText({ address: chatId }, text)
+    } else {
+      await feishuClient.replyMessage(messageId, {
+        msg_type: "text",
+        content: JSON.stringify({ text }),
+      })
+    }
   }
 
   async function handleNew(
     feishuKey: string,
     chatId: string,
     messageId: string,
+    channelId: string,
   ): Promise<void> {
     const resp = await fetch(`${serverUrl}/session`, {
       method: "POST",
@@ -158,17 +169,18 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const data = (await resp.json()) as { id: string }
     sessionManager.deleteMapping(feishuKey)
     logger.info(`/new: created session ${data.id}, unbound ${feishuKey}`)
-    await replyText(chatId, messageId, `已创建新会话: ${data.id}`)
+    await replyText(chatId, messageId, `已创建新会话: ${data.id}`, channelId)
   }
 
   async function handleAbort(
     feishuKey: string,
     chatId: string,
     messageId: string,
+    channelId: string,
   ): Promise<void> {
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。")
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
       return
     }
 
@@ -182,13 +194,14 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/abort: aborted session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `已中止会话: ${mapping.session_id}`)
+    await replyText(chatId, messageId, `已中止会话: ${mapping.session_id}`, channelId)
   }
 
   async function handleSessions(
     feishuKey: string,
     chatId: string,
     messageId: string,
+    channelId: string,
   ): Promise<void> {
     const resp = await fetch(`${serverUrl}/session`)
     if (!resp.ok) {
@@ -197,7 +210,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     let sessions = (await resp.json()) as Session[]
     if (sessions.length === 0) {
-      await replyText(chatId, messageId, "暂无会话。")
+      await replyText(chatId, messageId, "暂无会话。", channelId)
       return
     }
 
@@ -219,6 +232,13 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       }
     }
 
+    if (channelId !== "feishu") {
+      // Text fallback for non-feishu channels
+      const sessionList = sessions.slice(0, 10).map(s => `- ${s.title || s.id} (${s.id})`).join("\n")
+      await replyText(chatId, messageId, `最近会话列表：\n${sessionList}\n\n使用 /connect {id} 进行连接。`, channelId)
+      return
+    }
+
     const card = buildSessionsCard(sessions, currentSessionId)
     await feishuClient.replyMessage(messageId, {
       msg_type: "interactive",
@@ -231,11 +251,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     chatId: string,
     messageId: string,
     targetSessionId: string,
+    channelId: string,
   ): Promise<void> {
     // Validate session exists
     const checkResp = await fetch(`${serverUrl}/session/${targetSessionId}`)
     if (!checkResp.ok) {
-      await replyText(chatId, messageId, "会话不存在。")
+      await replyText(chatId, messageId, "会话不存在。", channelId)
       return
     }
 
@@ -246,7 +267,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const success = sessionManager.setMapping(feishuKey, targetSessionId)
     if (success) {
       logger.info(`/connect: bound ${feishuKey} to session ${targetSessionId}`)
-      await replyText(chatId, messageId, `已连接到会话: ${targetSessionId}`)
+      await replyText(chatId, messageId, `已连接到会话: ${targetSessionId}`, channelId)
     } else {
       throw new Error("Failed to set session mapping")
     }
@@ -257,10 +278,11 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     chatId: string,
     messageId: string,
     command: string,
+    channelId: string,
   ): Promise<void> {
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。")
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
       return
     }
 
@@ -282,13 +304,27 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       chatId,
       messageId,
       `已执行 /${command} (会话: ${mapping.session_id})`,
+      channelId,
     )
   }
 
   async function handleHelp(
-    _chatId: string,
+    chatId: string,
     messageId: string,
+    channelId: string,
   ): Promise<void> {
+    if (channelId !== "feishu") {
+      const helpText = `⚡ 命令菜单：
+- /new: 新建会话
+- /sessions: 连接会话
+- /compact: 压缩历史
+- /share: 分享会话
+- /abort: 中止任务
+- /help: 显示此帮助`
+      await replyText(chatId, messageId, helpText, channelId)
+      return
+    }
+
     const card = buildHelpCard()
     await feishuClient.replyMessage(messageId, {
       msg_type: "interactive",
@@ -301,6 +337,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     chatId: string,
     messageId: string,
     commandText: string,
+    channelId: string = "feishu",
   ): Promise<boolean> {
     const trimmed = commandText.trim()
     const parts = trimmed.split(/\s+/)
@@ -308,43 +345,43 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (!cmd || !cmd.startsWith("/")) return false
 
-    logger.info(`Slash command: ${cmd} from ${feishuKey}`)
+    logger.info(`Slash command: ${cmd} from ${feishuKey} (channel: ${channelId})`)
 
     try {
       switch (cmd) {
         case "/new":
-          await handleNew(feishuKey, chatId, messageId)
+          await handleNew(feishuKey, chatId, messageId, channelId)
           return true
 
         case "/abort":
-          await handleAbort(feishuKey, chatId, messageId)
+          await handleAbort(feishuKey, chatId, messageId, channelId)
           return true
 
         case "/sessions":
-          await handleSessions(feishuKey, chatId, messageId)
+          await handleSessions(feishuKey, chatId, messageId, channelId)
           return true
 
         case "/connect": {
           const targetSessionId = parts[1]
           if (!targetSessionId) {
-            await replyText(chatId, messageId, "用法: /connect {session_id}")
+            await replyText(chatId, messageId, "用法: /connect {session_id}", channelId)
             return true
           }
-          await handleConnect(feishuKey, chatId, messageId, targetSessionId)
+          await handleConnect(feishuKey, chatId, messageId, targetSessionId, channelId)
           return true
         }
 
         case "/compact":
-          await handleSessionCommand(feishuKey, chatId, messageId, "session.compact")
+          await handleSessionCommand(feishuKey, chatId, messageId, "session.compact", channelId)
           return true
 
         case "/share":
-          await handleSessionCommand(feishuKey, chatId, messageId, "session.share")
+          await handleSessionCommand(feishuKey, chatId, messageId, "session.share", channelId)
           return true
 
         case "/":
         case "/help":
-          await handleHelp(chatId, messageId)
+          await handleHelp(chatId, messageId, channelId)
           return true
 
         default:
@@ -353,7 +390,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     } catch (err) {
       logger.error(`Command ${cmd} failed: ${err}`)
       try {
-        await replyText(chatId, messageId, `命令执行失败: ${err}`)
+        await replyText(chatId, messageId, `命令执行失败: ${err}`, channelId)
       } catch (replyErr) {
         logger.error(`Failed to send error reply: ${replyErr}`)
       }

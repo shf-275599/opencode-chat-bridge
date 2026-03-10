@@ -82,6 +82,9 @@ export class FeishuPlugin extends BaseChannelPlugin {
     // 2. Gateway adapter
     this.gateway = {
       startAccount: async (_accountId: string, _signal: AbortSignal): Promise<void> => {
+        if (!this.appConfig.feishu) {
+          throw new Error("Feishu config missing but FeishuPlugin was started")
+        }
         const gw = createFeishuWSGateway({
           appId: this.appConfig.feishu.appId,
           appSecret: this.appConfig.feishu.appSecret,

@@ -44,6 +44,7 @@ export interface HandlerDeps {
   botOpenId?: string
   outboundMedia?: OutboundMediaHandler
   debounceMs?: number
+  channelManager?: any // ChannelManager type
 }
 
 // ── Constants ──
@@ -164,12 +165,12 @@ async function handleFileOrImageMessage(
 function extractTextFromPost(content: string): string {
   try {
     const parsed = JSON.parse(content) as Record<string, unknown>
-    
+
     // Determine the post data structure:
     // Format 1 (flat, from WebSocket): { title?: string, content: [[...]] }
     // Format 2 (locale-wrapped, from REST API): { zh_cn: { title?: string, content: [[...]] } }
     let postData: { title?: string; content?: Array<Array<{ tag: string; text?: string }>> }
-    
+
     if (Array.isArray(parsed.content)) {
       // Flat format — content is directly on the object
       postData = parsed as typeof postData
@@ -179,12 +180,12 @@ function extractTextFromPost(content: string): string {
       if (!locale || typeof locale !== "object") return ""
       postData = locale as typeof postData
     }
-    
+
     if (!postData?.content) return ""
-    
+
     const lines: string[] = []
     if (postData.title) lines.push(postData.title)
-    
+
     for (const paragraph of postData.content) {
       const lineText = paragraph
         .filter((el) => (el.tag === "text" || el.tag === "a") && el.text)
@@ -192,7 +193,7 @@ function extractTextFromPost(content: string): string {
         .join("")
       if (lineText) lines.push(lineText)
     }
-    
+
     return lines.join("\n")
   } catch {
     return ""
@@ -276,6 +277,11 @@ export function createMessageHandler(
       return
     }
 
+    // ── 0. Channel detection ──
+    const channelId = (event as any)._channelId || "feishu"
+    const plugin = deps.channelManager?.getChannel(channelId)
+    logger.info(`MessageHandler handleMessage: channelId detected as ${channelId} (raw _channelId: ${(event as any)._channelId})`)
+
     // ── 1b. Skip group messages that don't @mention the bot ──
     if (event.chat_type === "group") {
       if (!deps.botOpenId) {
@@ -349,7 +355,7 @@ export function createMessageHandler(
 
     // ── 4b. Check for slash command ──
     if (userText.startsWith("/") && deps.commandHandler) {
-      const handled = await deps.commandHandler(feishuKey, event.chat_id, event.message_id, userText.trim())
+      const handled = await deps.commandHandler(feishuKey, event.chat_id, event.message_id, userText.trim(), channelId)
       if (handled) return
     }
 
@@ -433,11 +439,11 @@ export function createMessageHandler(
     // ── 5. Send thinking indicator ──
     // With streaming bridge: add emoji reaction to user message.
     // Without streaming bridge: send thinking card via sendMessage.
-    const thinkingMessageId = deps.streamingBridge
+    const thinkingMessageId = deps.streamingBridge || channelId !== "feishu"
       ? null
       : await progressTracker.sendThinking(event.chat_id)
     let reactionId: string | null = null
-    if (deps.streamingBridge) {
+    if (deps.streamingBridge && channelId === "feishu") {
       try {
         const reactionResult = await feishuClient.addReaction(event.message_id, "Typing")
         reactionId = (reactionResult?.data?.reaction_id as string) ?? null
@@ -452,10 +458,15 @@ export function createMessageHandler(
     // ── 6a. First-bind notification ──
     if (!notifiedFeishuKeys.has(feishuKey)) {
       notifiedFeishuKeys.add(feishuKey)
-      await feishuClient.sendMessage(event.chat_id, {
-        msg_type: "text",
-        content: JSON.stringify({ text: "已连接 session: " + sessionId }),
-      })
+      const bindText = "已连接 session: " + sessionId
+      if (plugin?.outbound) {
+        await plugin.outbound.sendText({ address: event.chat_id }, bindText)
+      } else {
+        await feishuClient.sendMessage(event.chat_id, {
+          msg_type: "text",
+          content: JSON.stringify({ text: bindText }),
+        })
+      }
     }
 
     // ── 6b. Wire observer ──
@@ -563,6 +574,7 @@ export function createMessageHandler(
         currentSessionId = sid
 
         try {
+          const channelId = (event as any)._channelId || "feishu"
           await deps.streamingBridge!.handleMessage(
             event.chat_id,
             sid,
@@ -575,6 +587,7 @@ export function createMessageHandler(
             },
             event.message_id,
             reactionId,
+            channelId,
           )
         } catch (err) {
           // Always clean up on error
@@ -612,7 +625,7 @@ export function createMessageHandler(
 
         // Sync fallback — reaction cleanup only here (not during 404 retry)
         if (reactionId) {
-          await feishuClient.deleteReaction(event.message_id, reactionId).catch(() => {})
+          await feishuClient.deleteReaction(event.message_id, reactionId).catch(() => { })
         }
         try {
           const rawText = await postWithRecovery()
@@ -626,10 +639,14 @@ export function createMessageHandler(
         } catch (postErr) {
           logger.error(`Sync fallback POST also failed: ${postErr}`)
           const errorMessage = "处理请求时出错了。"
-          await feishuClient.replyMessage(event.message_id, {
-            msg_type: "text",
-            content: JSON.stringify({ text: errorMessage }),
-          })
+          if (plugin?.outbound) {
+            await plugin.outbound.sendText({ address: event.chat_id }, errorMessage)
+          } else {
+            await feishuClient.replyMessage(event.message_id, {
+              msg_type: "text",
+              content: JSON.stringify({ text: errorMessage }),
+            })
+          }
         }
         logger.info(`Response sent for session ${sessionId} (sync fallback)`)
         return
@@ -648,10 +665,15 @@ export function createMessageHandler(
           "处理请求时出错了。",
         )
       } else {
-        await feishuClient.sendMessage(event.chat_id, {
-          msg_type: "text",
-          content: JSON.stringify({ text: "抱歉，处理请求时出错了。" }),
-        })
+        const errorMsg = "抱歉，处理请求时出错了。"
+        if (plugin?.outbound) {
+          await plugin.outbound.sendText({ address: event.chat_id }, errorMsg)
+        } else {
+          await feishuClient.sendMessage(event.chat_id, {
+            msg_type: "text",
+            content: JSON.stringify({ text: errorMsg }),
+          })
+        }
       }
       return
     }
@@ -727,10 +749,19 @@ export function createMessageHandler(
     // First-bind notification
     if (!notifiedFeishuKeys.has(feishuKey)) {
       notifiedFeishuKeys.add(feishuKey)
-      await feishuClient.sendMessage(event.chat_id, {
-        msg_type: "text",
-        content: JSON.stringify({ text: "已连接 session: " + sessionId }),
-      })
+      const bindMsg = "已连接 session: " + sessionId
+      const qqPlugin = deps.channelManager?.getChannel("qq")
+      const feishuPlugin = deps.channelManager?.getChannel("feishu")
+      const plugin = (event as any)._channelId === "qq" ? qqPlugin : feishuPlugin
+
+      if (plugin?.outbound) {
+        await plugin.outbound.sendText({ address: event.chat_id }, bindMsg)
+      } else {
+        await feishuClient.sendMessage(event.chat_id, {
+          msg_type: "text",
+          content: JSON.stringify({ text: bindMsg }),
+        })
+      }
     }
 
     // Wire observer
@@ -839,6 +870,7 @@ export function createMessageHandler(
         currentSessionId = sid
 
         try {
+          const channelId = (event as any)._channelId || "feishu"
           await deps.streamingBridge!.handleMessage(
             event.chat_id,
             sid,
@@ -851,6 +883,7 @@ export function createMessageHandler(
             },
             reactionMsgId,
             reactionId,
+            channelId,
           )
         } catch (err) {
           if (ownershipListener) removeListener(eventListeners, sid, ownershipListener)
@@ -885,7 +918,7 @@ export function createMessageHandler(
 
         // Sync fallback — reaction cleanup only here
         if (reactionId) {
-          await feishuClient.deleteReaction(reactionMsgId, reactionId).catch(() => {})
+          await feishuClient.deleteReaction(reactionMsgId, reactionId).catch(() => { })
         }
         try {
           const rawText = await postWithRecovery()
@@ -893,10 +926,16 @@ export function createMessageHandler(
         } catch (postErr) {
           logger.error(`Sync fallback POST also failed in debounced path: ${postErr}`)
           const errorMessage = "处理请求时出错了。"
-          await feishuClient.replyMessage(lastEvent.message_id, {
-            msg_type: "text",
-            content: JSON.stringify({ text: errorMessage }),
-          })
+          const channelId = (lastEvent as any)._channelId || "feishu"
+          const plugin = deps.channelManager?.getChannel(channelId)
+          if (plugin?.outbound) {
+            await plugin.outbound.sendText({ address: lastEvent.chat_id }, errorMessage)
+          } else {
+            await feishuClient.replyMessage(lastEvent.message_id, {
+              msg_type: "text",
+              content: JSON.stringify({ text: errorMessage }),
+            })
+          }
         }
         return
       }
@@ -1079,8 +1118,13 @@ export function createMessageHandler(
     event: FeishuMessageEvent,
     thinkingMessageId: string | null,
   ): Promise<void> {
+    const channelId = (event as any)._channelId || "feishu"
+    const plugin = deps.channelManager?.getChannel(channelId)
+
     if (thinkingMessageId) {
       await progressTracker.updateWithResponse(thinkingMessageId, responseText)
+    } else if (plugin?.outbound) {
+      await plugin.outbound.sendText({ address: event.chat_id }, responseText)
     } else if (event.chat_type === "p2p") {
       const truncated =
         responseText.length > 4000

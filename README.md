@@ -4,8 +4,8 @@
 
 > Bridge Feishu\QQ group chats to opencode TUI sessions with real-time two-way messaging.
 
-![CI](https://github.com/guazi04/opencode-lark/actions/workflows/ci.yml/badge.svg)
-![npm](https://img.shields.io/npm/v/opencode-lark.svg)
+![CI](https://github.com/ET06731/opencode-im-bridge/actions/workflows/ci.yml/badge.svg)
+![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ---
@@ -55,9 +55,9 @@ graph TD;
 
 > `opencode serve` runs the HTTP server. Use `opencode attach` in a separate terminal to view the session in TUI.
 
-**Inbound (Feishu → TUI):** Feishu sends a message over WebSocket. opencode-lark normalizes it, resolves the bound session, prepends conversation history, then POSTs to the opencode API. The TUI sees the message immediately.
+**Inbound (Feishu → TUI):** Feishu sends a message over WebSocket. opencode-im-bridge normalizes it, resolves the bound session, prepends conversation history, then POSTs to the opencode API. The TUI sees the message immediately.
 
-**Outbound (TUI → Feishu):** opencode-lark subscribes to the opencode SSE stream. As the agent produces text, `TextDelta` events accumulate and a debounced card update fires. Once `SessionIdle` arrives, the final card is flushed to Feishu.
+**Outbound (TUI → Feishu):** opencode-im-bridge subscribes to the opencode SSE stream. As the agent produces text, `TextDelta` events accumulate and a debounced card update fires. Once `SessionIdle` arrives, the final card is flushed to Feishu.
 
 ### Supported Message Types
 
@@ -151,7 +151,7 @@ After that, Feishu and the TUI share a live two-way channel. To attach the TUI:
 ```bash
 opencode attach http://127.0.0.1:4096 --session {session_id}
 ```
-The `session_id` is shown in opencode-lark's startup logs (e.g. `Bound to TUI session: ... → ses_xxxxx`).
+The `session_id` is shown in opencode-im-bridge's startup logs (e.g. `Bound to TUI session: ... → ses_xxxxx`).
 
 ---
 
@@ -174,7 +174,7 @@ Navigate to **Credentials & Basic Info** to find:
 - **App ID** → set as `FEISHU_APP_ID`
 - **App Secret** → set as `FEISHU_APP_SECRET`
 
-You'll need these in Step 6 to configure opencode-lark.
+You'll need these in Step 6 to configure opencode-im-bridge.
 
 ### 4. Configure Permissions
 
@@ -276,7 +276,7 @@ This section covers how to create and connect a QQ Official Bot.
 
 ### 1. Create a Bot
 1. Visit [QQ Open Platform](https://q.qq.com/bot/#/home).
-2. Create a "Bot" type application.
+2. Create a "QQ Bot".
 3. In **Development Settings**, obtain:
    - **App ID** (mapped to `QQ_APP_ID`)
    - **App Secret** (mapped to `QQ_SECRET`)
@@ -287,7 +287,7 @@ In the dashboard, ensure you've enabled:
 - Text/Image message receiving mechanisms.
 
 ### 3. Configure opencode-im-bridge
-Run `opencode-lark init` and select the `qq` channel, or fill in `QQ_APP_ID` and `QQ_SECRET` in your `.env`.
+Run `opencode-im-bridge init` and select the `qq` channel, or fill in `QQ_APP_ID` and `QQ_SECRET` in your `.env`.
 
 ---
 
@@ -344,7 +344,7 @@ Supports `${ENV_VAR}` interpolation and JSONC comments. If no config file is fou
 
 ## Lark MCP Tools
 
-opencode-lark pairs with [lark-openapi-mcp](https://github.com/larksuite/lark-openapi-mcp) to give the opencode agent direct access to Feishu's cloud document ecosystem — read/write docs, upload files, query Bitable tables, and search the wiki, all from within a single conversation.
+opencode-im-bridge pairs with [lark-openapi-mcp](https://github.com/larksuite/lark-openapi-mcp) to give the opencode agent direct access to Feishu's cloud document ecosystem — read/write docs, upload files, query Bitable tables, and search the wiki, all from within a single conversation.
 
 ### Supported Capabilities
 

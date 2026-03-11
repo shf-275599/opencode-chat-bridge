@@ -4,8 +4,8 @@
 
 > 将飞书\QQ群聊与 opencode TUI session 打通，实现双向实时消息转发。
 
-![CI](https://github.com/guazi04/opencode-lark/actions/workflows/ci.yml/badge.svg)
-![npm](https://img.shields.io/npm/v/opencode-lark.svg)
+![CI](https://github.com/ET06731/opencode-im-bridge/actions/workflows/ci.yml/badge.svg)
+![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ---
@@ -34,7 +34,7 @@ graph TD;
         QQ[QQ 官方机器人平台]
     end
 
-    subgraph "opencode-lark (Bridge Middleware)"
+    subgraph "opencode-im-bridge (Bridge Middleware)"
         FeishuPlugin[Feishu Plugin]
         QQPlugin[QQ Plugin]
         
@@ -55,9 +55,9 @@ graph TD;
 
 > `opencode serve` 运行 HTTP server，在另一个终端用 `opencode attach` 查看 TUI 会话。
 
-**入站（飞书 → TUI）：** 飞书通过 WebSocket 发送消息，opencode-lark 标准化处理后找到绑定的 session，拼接对话历史，POST 到 opencode API。TUI 即时收到消息。
+**入站（飞书 → TUI）：** 飞书通过 WebSocket 发送消息，opencode-im-bridge 标准化处理后找到绑定的 session，拼接对话历史，POST 到 opencode API。TUI 即时收到消息。
 
-**出站（TUI → 飞书）：** opencode-lark 订阅 opencode SSE 流。agent 输出文字时，`TextDelta` 事件累积并触发防抖卡片更新。`SessionIdle` 到达后，最终卡片推送到飞书。
+**出站（TUI → 飞书）：** opencode-im-bridge 订阅 opencode SSE 流。agent 输出文字时，`TextDelta` 事件累积并触发防抖卡片更新。`SessionIdle` 到达后，最终卡片推送到飞书。
 
 ### 支持的消息类型
 
@@ -176,7 +176,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 - **App ID** → 设为 `FEISHU_APP_ID`
 - **App Secret** → 设为 `FEISHU_APP_SECRET`
 
-步骤 6 配置 opencode-lark 时需要这些凭证。
+步骤 6 配置 opencode-im-bridge 时需要这些凭证。
 
 ### 4. 配置权限
 
@@ -289,7 +289,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 - 文本/图片消息接收机制。
 
 ### 3. 配置 opencode-im-bridge
-运行 `opencode-lark init` 时选择 `qq` 渠道，或直接在 `.env` 中填写 `QQ_APP_ID` 和 `QQ_SECRET`。
+运行 `opencode-im-bridge init` 时选择 `qq` 渠道，或直接在 `.env` 中填写 `QQ_APP_ID` 和 `QQ_SECRET`。
 
 ---
 

@@ -1,4 +1,4 @@
-# Contributing to opencode-lark
+# Contributing to opencode-im-bridge
 
 Thanks for your interest in contributing. This guide covers everything you need to get started.
 
@@ -15,8 +15,8 @@ For architecture details, see [AGENTS.md](./AGENTS.md).
 
 ```bash
 # Clone and install
-git clone <repo-url> opencode-lark
-cd opencode-lark
+git clone <repo-url> opencode-im-bridge
+cd opencode-im-bridge
 bun install
 
 # Configure environment
@@ -24,7 +24,7 @@ cp .env.example .env
 # Fill in FEISHU_APP_ID and FEISHU_APP_SECRET
 
 # Configure the app (optional, auto-derived from .env if absent)
-cp opencode-lark.example.jsonc opencode-lark.jsonc
+cp opencode-im-bridge.example.jsonc opencode-im-bridge.jsonc
 # Customize as needed
 ```
 

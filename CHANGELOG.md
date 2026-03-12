@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.1.23 (2026-03-12)
+
+### Features
+
+- **Multi-channel Architecture**: Refactored core to be channel-agnostic via `ChannelManager`.
+- **QQ Bot Support**: Added official QQ Bot API support (`QQPlugin`).
+- **Telegram Bot Support**: Added Telegram bot integration via polling.
+- **Slash Commands**: Added `/new`, `/sessions`, `/connect`, `/compact`, `/share`, `/abort`, and `/help` commands directly in the IM chats (with text-based fallback for QQ/Telegram).
+- **Project Renaming**: Officially renamed package and GitHub repository from `opencode-lark` to `opencode-im-bridge`.
+- **Logger Prefix**: Standardized runtime logs to use `[opencode-im]`.
+
+### Bug Fixes
+
+- **CLI Setup Wizard**: Updated prompt to support selecting `all` channels instead of just `both`.
+- **CLI Global Binary**: Fixed `package.json` to properly map `opencode-im-bridge` global command.
+
 ## 0.1.21 (2026-03-04)
 
 ### Improvements

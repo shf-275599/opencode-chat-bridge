@@ -178,9 +178,9 @@ export async function runSetupWizard(): Promise<void> {
     let setupQq = false
     let setupTelegram = false
     while (!setupFeishu && !setupQq && !setupTelegram) {
-      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, telegram, both]: ")).trim().toLowerCase()
-      if (choice === "feishu" || choice === "both") setupFeishu = true
-      if (choice === "qq" || choice === "both") setupQq = true
+      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, telegram, all]: ")).trim().toLowerCase()
+      if (choice === "feishu" || choice === "all") setupFeishu = true
+      if (choice === "qq" || choice === "all") setupQq = true
       if (choice === "telegram") setupTelegram = true
       if (!setupFeishu && !setupQq && !setupTelegram) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
     }

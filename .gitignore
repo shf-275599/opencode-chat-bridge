@@ -13,3 +13,5 @@ opencode-lark.jsonc
 
 .opencode-lark/
 bin/
+temp-claude-to-im/
+video-intro/

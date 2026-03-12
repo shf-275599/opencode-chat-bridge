@@ -43,6 +43,7 @@
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "@opencode-ai/sdk": "^1.1.19",
+    "discord.js": "^14.25.1",
     "express": "^4.21.0",
     "qq-official-bot": "^1.0.12",
     "zod": "^3.24.0"

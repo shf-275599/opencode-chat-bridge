@@ -145,10 +145,12 @@ opencode SSE stream
 | `QQ_SECRET` | yes* | | QQ Bot Secret |
 | `TELEGRAM_BOT_TOKEN` | yes* | | Telegram Bot Token (from @BotFather) |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | no | (all) | Comma-separated Chat IDs allowed to use the bot |
+| `DISCORD_BOT_TOKEN` | yes* | | Discord Bot Token (from Discord Developer Portal) |
+| `DISCORD_ALLOWED_CHANNEL_IDS` | no | (all) | Comma-separated Channel IDs allowed to use the bot |
 | `OPENCODE_SERVER_URL` | no | `http://localhost:4096` | opencode server URL |
 | `FEISHU_WEBHOOK_PORT` | no | `3001` | Card action callback port |
 | `OPENCODE_CWD` | no | `process.cwd()` | Override session discovery directory |
 
-\* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`TELEGRAM_BOT_TOKEN`) must be configured.
+\* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`TELEGRAM_BOT_TOKEN`/`DISCORD_BOT_TOKEN`) must be configured.
 
 See `.env.example` and `opencode-lark.example.jsonc` for full reference.

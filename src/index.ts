@@ -85,9 +85,9 @@ async function main(): Promise<void> {
   logger.info("Phase 1: Loading config...")
   const config = await loadConfig()
 
-  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.telegram?.botToken) {
+  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.telegram?.botToken && !config.discord?.botToken) {
     logger.error(
-      "No valid channel credentials found (Feishu, QQ, or Telegram). Run `opencode-im-bridge init` to configure, " +
+      "No valid channel credentials found (Feishu, QQ, Telegram, or Discord). Run `opencode-im-bridge init` to configure, " +
       "or set environment variables.",
     )
     process.exit(1)
@@ -385,6 +385,16 @@ async function main(): Promise<void> {
       onMessage: handleMessage,
     })
     channelManager.register(telegramPlugin)
+  }
+
+  if (config.discord) {
+    const { DiscordPlugin } = await import("./channel/discord/index.js") as any
+    const discordPlugin = new DiscordPlugin({
+      appConfig: config,
+      logger,
+      onMessage: handleMessage,
+    })
+    channelManager.register(discordPlugin)
   }
 
   // ═══════════════════════════════════════════

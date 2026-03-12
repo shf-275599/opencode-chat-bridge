@@ -13,7 +13,7 @@
 ## Features
 
 - **Real-time bridging** — Messages sent in Feishu arrive in your opencode TUI instantly, and agent replies stream back as live-updating cards.
-- **Multi-channel support** — Now supports bridging QQ messages via the official Node SDK (C2C/Group text interaction).
+- **Multi-channel support** — Now supports bridging QQ, Telegram, and Discord messages via their official platform APIs.
 - **Interactive cards** — Agent questions and permission requests appear as clickable Feishu cards. Answer or approve directly from the chat — no need to switch to the TUI. (Currently supported primarily for Feishu)
 - **WebSocket connection** — Uses Feishu's long-lived WebSocket mode. No webhook polling, no public IP required.
 - **SSE streaming** — Consumes the opencode SSE event stream and debounces card updates to stay within rate limits.
@@ -168,7 +168,7 @@ The `session_id` is shown in opencode-im-bridge's startup logs (e.g. `Bound to T
 
 ## Bot Configuration
 
-We support multiple platforms including Feishu, QQ, Telegram, and Discord. Detailed configuration tutorials for each platform have been moved to a separate document to keep this README concise.
+We support multiple platforms including Feishu, QQ, Telegram, and Discord.
 
 👉 **[Read the Bot Configuration Guide](CONFIGURATION.md)**
 
@@ -310,7 +310,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on issues, pull requests, 
 
 ## Acknowledgements
 
-The early development and inspiration for this project were made possible by the contributions of the following open-source projects. We express our sincere gratitude to:
+The development for this project were made reference to the following open-source projects:
 
 - [guazi04/opencode-lark](https://github.com/guazi04/opencode-lark)
 - [op7418/Claude-to-IM-skill](https://github.com/op7418/Claude-to-IM-skill)

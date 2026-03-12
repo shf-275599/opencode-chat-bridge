@@ -13,7 +13,7 @@
 ## 功能特性
 
 - **实时桥接** — 飞书消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回飞书。
-- **多渠道支持** — 现在支持通过官方 Node SDK 桥接 QQ 消息 (支持私信及文本交互)。
+- **多渠道支持** — 现在支持通过官方 Node SDK 桥接 QQ、Telegram 和 Discord 消息。
 - **交互式卡片** — agent 的提问和权限请求以可点击的飞书卡片呈现，直接在聊天中回答或审批，无需切换到 TUI。(目前主要在飞书端支持)
 - **WebSocket 长连接** — 采用飞书 / QQ 的 WebSocket 长连接模式，无需公网 IP，无需轮询。
 - **SSE 流式输出** — 订阅 opencode SSE 事件流，防抖处理卡片更新，避免触发频率限制。
@@ -168,7 +168,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 
 ## 机器人应用配置
 
-我们支持飞书、QQ、Telegram、Discord 等多个平台的机器人接入。为了保持本文档简洁，各平台的详细配置教程已移至独立文档。
+本项目支持飞书、QQ、Telegram、Discord 等多个平台的机器人接入。
 
 👉 **[查看《机器人配置指南》](CONFIGURATION.zh-CN.md)**
 
@@ -267,7 +267,7 @@ bun run build        # 编译到 dist/
 
 ## 致谢
 
-本项目的早期开发与灵感离不开以下开源项目的贡献，在此表示诚挚的感谢：
+本项目的开发参考了以下开源项目：
 
 - [guazi04/opencode-lark](https://github.com/guazi04/opencode-lark)
 - [op7418/Claude-to-IM-skill](https://github.com/op7418/Claude-to-IM-skill)

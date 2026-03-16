@@ -8,6 +8,7 @@
 
 export function buildThinkingCard(): Record<string, unknown> {
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: {
@@ -16,15 +17,17 @@ export function buildThinkingCard(): Record<string, unknown> {
       },
       template: "blue",
     },
-    elements: [
-      {
-        tag: "div",
-        text: {
-          tag: "lark_md",
-          content: "正在处理你的消息，请稍候...",
+    body: {
+      elements: [
+        {
+          tag: "div",
+          text: {
+            tag: "lark_md",
+            content: "正在处理你的消息，请稍候...",
+          },
         },
-      },
-    ],
+      ],
+    },
   }
 }
 
@@ -37,6 +40,7 @@ export function buildResponseCard(text: string): Record<string, unknown> {
       : text
 
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: {
@@ -45,21 +49,21 @@ export function buildResponseCard(text: string): Record<string, unknown> {
       },
       template: "green",
     },
-    elements: [
-      {
-        tag: "div",
-        text: {
-          tag: "lark_md",
+    body: {
+      elements: [
+        {
+          tag: "markdown",
           content: truncated,
         },
-      },
-    ],
+      ],
+    },
   }
 }
 
 
 export function buildErrorCard(msg: string): Record<string, unknown> {
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: {
@@ -68,14 +72,16 @@ export function buildErrorCard(msg: string): Record<string, unknown> {
       },
       template: "red",
     },
-    elements: [
-      {
-        tag: "div",
-        text: {
-          tag: "lark_md",
-          content: msg || "处理请求时发生错误，请稍后重试。",
+    body: {
+      elements: [
+        {
+          tag: "div",
+          text: {
+            tag: "lark_md",
+            content: msg || "处理请求时发生错误，请稍后重试。",
+          },
         },
-      },
-    ],
+      ],
+    },
   }
 }

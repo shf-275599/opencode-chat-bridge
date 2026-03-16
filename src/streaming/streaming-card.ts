@@ -110,6 +110,16 @@ export class StreamingCardSession {
     await this.enqueueUpdate(fullContent)
   }
 
+  async updateText(text: string): Promise<void> {
+    if (!this.state || this.closed) {
+      return
+    }
+
+    this.state.currentText = text
+    const fullContent = this.buildFullContent()
+    await this.enqueueUpdate(fullContent)
+  }
+
   async addSubtaskButton(label: string, actionValue: string): Promise<void> {
     if (!this.state || this.closed) {
       return
@@ -195,8 +205,9 @@ export class StreamingCardSession {
   }
 
   private buildFullContent(): string {
+    const mainText = this.state?.currentText || ""
     const toolText = this.buildToolStatusText()
     const buttonText = this.buildButtonsText()
-    return toolText + buttonText || "🛠️ Processing..."
+    return (mainText + toolText + buttonText).trim() || "🛠️ Processing..."
   }
 }

@@ -24,6 +24,7 @@ function makeConfig(): AppConfig {
     },
     defaultAgent: "sisyphus",
     dataDir: "./data",
+    messageDebounceMs: 500,
   }
 }
 
@@ -178,7 +179,7 @@ describe("FeishuPlugin", () => {
 
       expect(feishuClient.sendMessage).toHaveBeenCalledWith(
         "chat_001",
-        expect.objectContaining({ msg_type: "text" }),
+        expect.objectContaining({ msg_type: "interactive" }),
       )
     })
 

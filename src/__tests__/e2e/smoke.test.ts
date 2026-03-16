@@ -64,8 +64,12 @@ function createMockSessionManager(sessionId = "ses-e2e-1"): SessionManager {
   return {
     getOrCreate: vi.fn().mockResolvedValue(sessionId),
     getSession: vi.fn().mockReturnValue(null),
+    getExisting: vi.fn().mockReturnValue(null),
+    deleteMapping: vi.fn(),
+    setMapping: vi.fn(),
+    validateAndCleanupStale: vi.fn().mockResolvedValue(0),
     cleanup: vi.fn().mockReturnValue(0),
-  }
+  } as any
 }
 
 function createMockProgressTracker(): ProgressTracker {
@@ -144,6 +148,7 @@ describe("E2E Smoke Tests", () => {
       feishuClient,
       subAgentTracker,
       logger,
+      seenInteractiveIds: new Set(),
     })
 
     const { handleMessage } = createMessageHandler({
@@ -208,7 +213,7 @@ describe("E2E Smoke Tests", () => {
     // Instead, verify that replyMessage was called with the text response.
     expect(feishuClient.replyMessage).toHaveBeenCalledWith(
       "msg-e2e-1",
-      expect.objectContaining({ msg_type: "text" }),
+      expect.objectContaining({ msg_type: "interactive" }),
     )
 
     // With lazy card creation, card was never created (no tool events), so no close needed
@@ -260,6 +265,7 @@ describe("E2E Smoke Tests", () => {
       feishuClient,
       subAgentTracker,
       logger,
+      seenInteractiveIds: new Set(),
     })
 
     const { handleMessage } = createMessageHandler({
@@ -363,7 +369,6 @@ describe("E2E Smoke Tests", () => {
       serverUrl: "http://127.0.0.1:4096",
       sessionManager: createMockSessionManager(sessionId),
       dedup: { isDuplicate: vi.fn().mockReturnValue(false), close: vi.fn() } as any,
-      dedup: { isDuplicate: vi.fn().mockReturnValue(false), close: vi.fn() } as any,
       eventProcessor,
       feishuClient,
       progressTracker,
@@ -451,12 +456,12 @@ describe("session sharing", () => {
         if (set) { set.delete(fn); if (set.size === 0) eventListeners.delete(sid) }
       },
       logger,
+      seenInteractiveIds: new Set(),
     })
 
     const { handleMessage } = createMessageHandler({
       serverUrl: "http://127.0.0.1:4096",
       sessionManager: createMockSessionManager(sessionId),
-      dedup: { isDuplicate: vi.fn().mockReturnValue(false), close: vi.fn() } as any,
       dedup: { isDuplicate: vi.fn().mockReturnValue(false), close: vi.fn() } as any,
       eventProcessor,
       feishuClient,
@@ -542,6 +547,7 @@ describe("session sharing", () => {
         if (set) { set.delete(fn); if (set.size === 0) eventListeners.delete(sid) }
       },
       logger,
+      seenInteractiveIds: new Set(),
     })
 
     const { handleMessage } = createMessageHandler({
@@ -630,6 +636,7 @@ describe("session sharing", () => {
         if (set) { set.delete(fn); if (set.size === 0) eventListeners.delete(sid) }
       },
       logger,
+      seenInteractiveIds: new Set(),
     })
 
     const { handleMessage } = createMessageHandler({
@@ -730,6 +737,7 @@ describe("session sharing", () => {
         if (set) { set.delete(fn); if (set.size === 0) eventListeners.delete(sid) }
       },
       logger,
+      seenInteractiveIds: new Set(),
     })
 
     const { handleMessage } = createMessageHandler({

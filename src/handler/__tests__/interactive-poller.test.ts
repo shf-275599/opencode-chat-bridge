@@ -345,8 +345,8 @@ describe("interactive-poller", () => {
       const calls = (deps.feishuClient.sendMessage as ReturnType<typeof vi.fn>).mock.calls
       expect(calls.length).toBe(1)
       const card = JSON.parse(calls[0][1].content)
-      // Real buildPermissionCard puts action.title in elements[0].text.content
-      expect(card.elements[0].text.content).toBe("/src/a.ts, /src/b.ts")
+      // Real buildPermissionCard puts action.title in body.elements[0].content
+      expect(card.body.elements[0].content).toBe("/src/a.ts, /src/b.ts")
     })
 
     it("falls back to permission type when patterns empty", async () => {
@@ -360,7 +360,7 @@ describe("interactive-poller", () => {
       const calls = (deps.feishuClient.sendMessage as ReturnType<typeof vi.fn>).mock.calls
       expect(calls.length).toBe(1)
       const card = JSON.parse(calls[0][1].content)
-      expect(card.elements[0].text.content).toBe("file_edit")
+      expect(card.body.elements[0].content).toBe("file_edit")
     })
 
     it("logs warning when sendMessage fails for permission", async () => {

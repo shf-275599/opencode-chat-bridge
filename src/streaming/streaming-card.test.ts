@@ -276,8 +276,8 @@ describe("StreamingCardSession", () => {
       const content = lastCall[2] as string
       expect(content).toContain("✅ read_file · Read config")
       expect(content).toContain("✅ bash · Run tests")
-      // Content should be ONLY tool status lines (starts with separator)
-      expect(content).toMatch(/^\n\n---\n/)
+      // Content should be ONLY tool status lines
+      expect(content).toMatch(/^---\n/)
     })
 
     it("card content is tool-only (no free-form text)", async () => {

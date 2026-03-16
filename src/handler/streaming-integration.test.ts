@@ -36,6 +36,7 @@ function makeDeps(overrides: Partial<StreamingBridgeDeps> = {}): StreamingBridge
     feishuClient: createMockFeishuClient(),
     subAgentTracker: createMockSubAgentTracker(),
     logger: createMockLogger(),
+    seenInteractiveIds: new Set(),
     ...overrides,
   }
 }
@@ -89,9 +90,9 @@ describe("createStreamingBridge", () => {
 
     await handlePromise
 
-    expect(deps.feishuClient.replyMessage).toHaveBeenCalledWith(
+    expect(deps.feishuClient!.replyMessage).toHaveBeenCalledWith(
       "msg_original",
-      expect.objectContaining({ msg_type: "text" }),
+      expect.objectContaining({ msg_type: "interactive" }),
     )
     expect(onComplete).toHaveBeenCalledWith("（无回复）")
   })
@@ -266,7 +267,7 @@ describe("createStreamingBridge", () => {
       }),
     )
 
-    const sendCalls = (deps.feishuClient.sendMessage as any).mock.calls
+    const sendCalls = (deps.feishuClient!.sendMessage as any).mock.calls
     const subtaskCardCall = sendCalls.find(
       (call: unknown[]) =>
         call[0] === "chat-1" &&
@@ -619,8 +620,8 @@ describe("createStreamingBridge", () => {
     await handlePromise
 
     expect(mockFeishu.replyMessage).toHaveBeenCalledWith("msg_original", {
-      msg_type: "text",
-      content: JSON.stringify({ text: "Hello World" }),
+      msg_type: "interactive",
+      content: expect.stringContaining("Hello World"),
     })
     expect(onComplete).toHaveBeenCalledWith("Hello World")
   })
@@ -691,8 +692,9 @@ describe("createStreamingBridge", () => {
     expect(body.msg_type).toBe("interactive")
     const parsed = JSON.parse(body.content)
     expect(parsed.header.template).toBe("indigo")
-    expect(parsed.elements[1].actions[0].text.content).toBe("🔍 View Details")
-    expect(parsed.elements[1].actions[0].value.childSessionId).toBe("child-ses-1")
+    const elements = parsed.body.elements
+    expect(elements[1].actions[0].text.content).toBe("🔍 View Details")
+    expect(elements[1].actions[0].value.childSessionId).toBe("child-ses-1")
   })
 
   it("text buffer truncates at 100KB", async () => {
@@ -744,8 +746,9 @@ describe("createStreamingBridge", () => {
     const replyCall = mockFeishu.replyMessage.mock.calls[0]!
     expect(replyCall[0]).toBe("msg_original")
     const replyContent = JSON.parse((replyCall[1] as { content: string }).content)
-    expect(replyContent.text).toContain("…(内容过长，已截断)")
-    expect(replyContent.text.length).toBeLessThan(110_000)
+    const text = replyContent.body.elements[0].content
+    expect(text).toContain("...(内容过长，已截断)")
+    expect(text.length).toBeLessThan(110_000)
   })
 
   it("sends text as reply and calls deleteReaction when reactionId present", async () => {
@@ -804,8 +807,8 @@ describe("createStreamingBridge", () => {
 
     // Text should be sent as reply
     expect(mockFeishu.replyMessage).toHaveBeenCalledWith("msg_original", {
-      msg_type: "text",
-      content: JSON.stringify({ text: "Hello World" }),
+      msg_type: "interactive",
+      content: expect.stringContaining("Hello World"),
     })
     // deleteReaction called with correct args
     expect(mockFeishu.deleteReaction).toHaveBeenCalledWith("msg_original", "reaction_123")
@@ -858,8 +861,8 @@ describe("createStreamingBridge", () => {
 
     // Text sent as reply
     expect(mockFeishu.replyMessage).toHaveBeenCalledWith("msg_original", {
-      msg_type: "text",
-      content: JSON.stringify({ text: "Hello World" }),
+      msg_type: "interactive",
+      content: expect.stringContaining("Hello World"),
     })
     // deleteReaction called
     expect(mockFeishu.deleteReaction).toHaveBeenCalledWith("msg_original", "reaction_123")

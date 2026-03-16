@@ -140,8 +140,8 @@ export class FeishuPlugin extends BaseChannelPlugin {
     this.outbound = {
       sendText: async (target: OutboundTarget, text: string): Promise<void> => {
         await this.feishuClient.sendMessage(target.address, {
-          msg_type: "text",
-          content: JSON.stringify({ text }),
+          msg_type: "interactive",
+          content: JSON.stringify(buildResponseCard(text)),
         })
       },
 

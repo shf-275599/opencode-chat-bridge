@@ -8,13 +8,14 @@ import type { QuestionAsked, PermissionRequested } from "../streaming/event-proc
 import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
 import { StreamingCardSession } from "../streaming/streaming-card.js"
+import { buildResponseCard } from "../feishu/card-builder.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
 
 // ── Types ──
 
 export interface StreamingBridgeDeps {
-  cardkitClient: CardKitClient
-  feishuClient: FeishuApiClient
+  cardkitClient?: CardKitClient
+  feishuClient?: FeishuApiClient
   subAgentTracker: SubAgentTracker
   logger: Logger
   seenInteractiveIds: Set<string>
@@ -70,6 +71,10 @@ export function createStreamingBridge(
       const ensureCard = (): void => {
         if (channelId !== "feishu") return // Only Feishu supports streaming cards currently
         if (card || cardStartPromise) return
+        if (!cardkitClient || !feishuClient) {
+          logger.warn(`Cannot start streaming card for session ${sessionId}: missing cardkitClient or feishuClient`)
+          return
+        }
         card = new StreamingCardSession({
           cardkitClient,
           feishuClient,
@@ -89,13 +94,17 @@ export function createStreamingBridge(
         let syncResponseBody = ""
         // Helper: send text reply and clean up reaction
         const sendFinalResponse = async (text: string): Promise<void> => {
-          if (plugin?.outbound) {
+          if (plugin?.outbound?.sendText) {
+            logger.info(`[StreamingBridge] Sending final response via plugin ${channelId} to ${chatId}`)
             await plugin.outbound.sendText({ address: chatId }, text)
+            logger.info(`[StreamingBridge] Final response sent via plugin ${channelId}`)
           } else if (feishuClient) {
+            logger.info(`[StreamingBridge] Sending final response via Feishu API fallback to ${chatId}`)
             await feishuClient.replyMessage(messageId, {
-              msg_type: "text",
-              content: JSON.stringify({ text }),
+              msg_type: "interactive",
+              content: JSON.stringify(buildResponseCard(text)),
             })
+            logger.info(`[StreamingBridge] Final response sent via Feishu API fallback`)
           } else {
             logger.warn(`No plugin outbound and no feishuClient available to send response for channel ${channelId}`)
           }
@@ -120,7 +129,12 @@ export function createStreamingBridge(
             case "TextDelta": {
               textBuffer += action.text
               if (textBuffer.length > 102_400) {
-                textBuffer = textBuffer.slice(0, 102_400) + "\n\n…(内容过长，已截断)"
+                textBuffer = textBuffer.slice(0, 102_400) + "\n\n...(内容过长，已截断)"
+              }
+              if (card) {
+                card.updateText(textBuffer).catch((err) => {
+                  logger.warn(`card.updateText failed: ${err}`)
+                })
               }
               break
             }
@@ -159,11 +173,13 @@ export function createStreamingBridge(
                   )
                   if (plugin?.outbound) {
                     await plugin.outbound.sendText({ address: chatId }, `[Subtask] ${action.description} (${action.agent})`)
-                  } else {
+                  } else if (feishuClient) {
                     await feishuClient.sendMessage(chatId, {
                       msg_type: "interactive",
                       content: JSON.stringify(cardData),
                     })
+                  } else {
+                    logger.warn(`No feishuClient or plugin outbound to send SubtaskDiscovered notification`)
                   }
                 })
                 .catch((err) => {
@@ -181,7 +197,7 @@ export function createStreamingBridge(
                 plugin.outbound.sendText({ address: chatId }, `[Question] ${action.questions[0]?.question}\nOptions: ${options}`).catch((err: any) => {
                   logger.warn(`Question text send failed: ${err}`)
                 })
-              } else {
+              } else if (feishuClient) {
                 const questionCard = buildQuestionCard(action)
                 feishuClient.sendMessage(chatId, {
                   msg_type: "interactive",
@@ -189,6 +205,8 @@ export function createStreamingBridge(
                 }).catch((err) => {
                   logger.warn(`Question card send failed: ${err}`)
                 })
+              } else {
+                logger.warn(`No feishuClient or plugin outbound to send QuestionAsked`)
               }
               break
             }
@@ -201,7 +219,7 @@ export function createStreamingBridge(
                 plugin.outbound.sendText({ address: chatId }, `[Permission Requested] ${action.title}\nID: ${action.requestId}\nPlease reply with allow/deny (Manual handling needed for QQ)`).catch((err: any) => {
                   logger.warn(`Permission text send failed: ${err}`)
                 })
-              } else {
+              } else if (feishuClient) {
                 const permissionCard = buildPermissionCard(action)
                 feishuClient.sendMessage(chatId, {
                   msg_type: "interactive",
@@ -209,6 +227,8 @@ export function createStreamingBridge(
                 }).catch((err) => {
                   logger.warn(`Permission card send failed: ${err}`)
                 })
+              } else {
+                logger.warn(`No feishuClient or plugin outbound to send PermissionRequested`)
               }
               break
             }
@@ -351,28 +371,31 @@ function buildSubAgentNotificationCard(
   childSessionId: string,
 ): Record<string, unknown> {
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: { tag: "plain_text", content: `🤖 ${agent}` },
       template: "indigo",
     },
-    elements: [
-      {
-        tag: "div",
-        text: { tag: "lark_md", content: description },
-      },
-      {
-        tag: "action",
-        actions: [
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "🔍 View Details" },
-            type: "primary",
-            value: { action: "view_subagent", childSessionId },
-          },
-        ],
-      },
-    ],
+    body: {
+      elements: [
+        {
+          tag: "markdown",
+          content: description,
+        },
+        {
+          tag: "action",
+          actions: [
+            {
+              tag: "button",
+              text: { tag: "plain_text", content: "🔍 View Details" },
+              type: "primary",
+              value: { action: "view_subagent", childSessionId },
+            },
+          ],
+        },
+      ],
+    },
   }
 }
 
@@ -388,8 +411,8 @@ export function buildQuestionCard(
       elements.push({ tag: "hr" })
     }
     elements.push({
-      tag: "div",
-      text: { tag: "lark_md", content: question.question },
+      tag: "markdown",
+      content: question.question,
     })
     elements.push({
       tag: "action",
@@ -409,12 +432,15 @@ export function buildQuestionCard(
   const header = action.questions[0]?.header ?? "Question"
 
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: { tag: "plain_text", content: `❓ ${header}` },
       template: "orange",
     },
-    elements,
+    body: {
+      elements,
+    },
   }
 }
 
@@ -422,39 +448,42 @@ export function buildPermissionCard(
   action: PermissionRequested,
 ): Record<string, unknown> {
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: { tag: "plain_text", content: `🔐 Permission: ${action.permissionType}` },
       template: "yellow",
     },
-    elements: [
-      {
-        tag: "div",
-        text: { tag: "lark_md", content: action.title },
-      },
-      {
-        tag: "action",
-        actions: [
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "✅ Allow Once" },
-            type: "primary",
-            value: { action: "permission_reply", requestId: action.requestId, reply: "once" },
-          },
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "✅ Always Allow" },
-            type: "default",
-            value: { action: "permission_reply", requestId: action.requestId, reply: "always" },
-          },
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "❌ Reject" },
-            type: "danger",
-            value: { action: "permission_reply", requestId: action.requestId, reply: "reject" },
-          },
-        ],
-      },
-    ],
+    body: {
+      elements: [
+        {
+          tag: "markdown",
+          content: action.title,
+        },
+        {
+          tag: "action",
+          actions: [
+            {
+              tag: "button",
+              text: { tag: "plain_text", content: "✅ Allow Once" },
+              type: "primary",
+              value: { action: "permission_reply", requestId: action.requestId, reply: "once" },
+            },
+            {
+              tag: "button",
+              text: { tag: "plain_text", content: "✅ Always Allow" },
+              type: "default",
+              value: { action: "permission_reply", requestId: action.requestId, reply: "always" },
+            },
+            {
+              tag: "button",
+              text: { tag: "plain_text", content: "❌ Reject" },
+              type: "danger",
+              value: { action: "permission_reply", requestId: action.requestId, reply: "reject" },
+            },
+          ],
+        },
+      ],
+    },
   }
 }

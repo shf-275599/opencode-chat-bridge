@@ -14,7 +14,7 @@ import { buildQuestionCard, buildPermissionCard } from "../handler/streaming-int
 // ---------------------------------------------------------------------------
 
 export interface SessionObserverDeps {
-  feishuClient: Pick<FeishuApiClient, "sendMessage">
+  feishuClient?: Pick<FeishuApiClient, "sendMessage">
   eventProcessor: EventProcessor
   addListener: (sessionId: string, fn: (event: unknown) => void) => void
   removeListener: (sessionId: string, fn: (event: unknown) => void) => void
@@ -77,14 +77,18 @@ export function createSessionObserver(
   function flushBuffers(chatId: string): void {
     for (const [messageId, text] of textBuffers) {
       if (text.trim().length === 0) continue
-      feishuClient
-        .sendMessage(chatId, {
-          msg_type: "text",
-          content: JSON.stringify({ text }),
-        })
-        .catch((err) => {
-          logger.error(`Failed to send TUI message for ${messageId}: ${err}`)
-        })
+      if (feishuClient) {
+        feishuClient
+          .sendMessage(chatId, {
+            msg_type: "text",
+            content: JSON.stringify({ text }),
+          })
+          .catch((err) => {
+            logger.error(`Failed to send TUI message for ${messageId}: ${err}`)
+          })
+      } else {
+        logger.info(`SessionObserver: missing feishuClient, dropping TUI message for ${chatId}: ${text}`)
+      }
     }
     textBuffers.clear()
   }
@@ -119,30 +123,34 @@ export function createSessionObserver(
             if (seenInteractiveIds.has(action.requestId)) break
             seenInteractiveIds.add(action.requestId)
             logger.info(`Question event received in observer for chat ${chatId}, requestId=${action.requestId}`)
-            const questionCard = buildQuestionCard(action)
-            feishuClient
-              .sendMessage(chatId, {
-                msg_type: "interactive",
-                content: JSON.stringify(questionCard),
-              })
-              .catch((err) => {
-                logger.warn(`Question card send failed (observer): ${err}`)
-              })
+            if (feishuClient) {
+              const questionCard = buildQuestionCard(action)
+              feishuClient
+                .sendMessage(chatId, {
+                  msg_type: "interactive",
+                  content: JSON.stringify(questionCard),
+                })
+                .catch((err) => {
+                  logger.warn(`Question card send failed (observer): ${err}`)
+                })
+            }
             break
           }
           case "PermissionRequested": {
             if (seenInteractiveIds.has(action.requestId)) break
             seenInteractiveIds.add(action.requestId)
             logger.info(`Permission event received in observer for chat ${chatId}, requestId=${action.requestId}`)
-            const permissionCard = buildPermissionCard(action)
-            feishuClient
-              .sendMessage(chatId, {
-                msg_type: "interactive",
-                content: JSON.stringify(permissionCard),
-              })
-              .catch((err) => {
-                logger.warn(`Permission card send failed (observer): ${err}`)
-              })
+            if (feishuClient) {
+              const permissionCard = buildPermissionCard(action)
+              feishuClient
+                .sendMessage(chatId, {
+                  msg_type: "interactive",
+                  content: JSON.stringify(permissionCard),
+                })
+                .catch((err) => {
+                  logger.warn(`Permission card send failed (observer): ${err}`)
+                })
+            }
             break
           }
           default:

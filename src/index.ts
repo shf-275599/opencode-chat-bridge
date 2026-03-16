@@ -201,28 +201,24 @@ async function main(): Promise<void> {
     ? createOutboundMediaHandler({ feishuClient, logger })
     : undefined
 
-  const streamingBridge = config.feishu
-    ? createStreamingBridge({
-      cardkitClient,
-      feishuClient,
-      subAgentTracker,
-      logger,
-      seenInteractiveIds,
-      outboundMedia,
-      channelManager,
-    })
-    : undefined
+  const streamingBridge = createStreamingBridge({
+    cardkitClient,
+    feishuClient,
+    subAgentTracker,
+    logger,
+    seenInteractiveIds,
+    outboundMedia,
+    channelManager,
+  })
 
-  const observer = config.feishu
-    ? createSessionObserver({
-      feishuClient,
-      eventProcessor,
-      addListener: (sessionId, fn) => addListener(eventListeners, sessionId, fn),
-      removeListener: (sessionId, fn) => removeListener(eventListeners, sessionId, fn),
-      logger,
-      seenInteractiveIds,
-    })
-    : undefined
+  const observer = createSessionObserver({
+    feishuClient,
+    eventProcessor,
+    addListener: (sessionId, fn) => addListener(eventListeners, sessionId, fn),
+    removeListener: (sessionId, fn) => removeListener(eventListeners, sessionId, fn),
+    logger,
+    seenInteractiveIds,
+  })
 
   const subAgentCardHandler = config.feishu
     ? createSubAgentCardHandler({ subAgentTracker, feishuClient, logger })

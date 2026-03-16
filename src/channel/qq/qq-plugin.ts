@@ -17,7 +17,7 @@ import type {
 } from "../types.js"
 import type { AppConfig } from "../../utils/config.js"
 import type { Logger } from "../../utils/logger.js"
-import { Bot, ReceiverMode } from "qq-official-bot"
+import { Bot, ReceiverMode, segment } from "qq-official-bot"
 
 export interface QQPluginDeps {
     appConfig: AppConfig
@@ -135,13 +135,16 @@ export class QQPlugin extends BaseChannelPlugin {
 
         // 4. Outbound adapter
         this.outbound = {
-            sendText: async (target: OutboundTarget, text: string): Promise<void> => {
-                try {
-                    await this.qqBot.sendPrivateMessage(target.address, text)
-                } catch (e) {
-                    this.logger.error(`Failed to send QQ message: ${e}`)
-                }
-            },
+      sendText: async (target: OutboundTarget, text: string): Promise<void> => {
+        this.logger.info(`[QQPlugin] Attempting to send message to ${target.address}`)
+        try {
+          const res = await this.qqBot.messageService.sendPrivateMessage(target.address, [segment.markdown(text)])
+          this.logger.info(`[QQPlugin] Message sent successfully. Response: ${JSON.stringify(res)}`)
+        } catch (err) {
+          this.logger.error(`[QQPlugin] Failed to send message to ${target.address}: ${err}`)
+          throw err
+        }
+      },
         }
 
         // 5. Streaming adapter

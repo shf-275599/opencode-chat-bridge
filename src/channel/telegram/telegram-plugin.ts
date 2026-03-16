@@ -149,10 +149,20 @@ export class TelegramPlugin extends BaseChannelPlugin {
             sendText: async (target: OutboundTarget, text: string): Promise<void> => {
                 const chunks = splitMessage(text, TELEGRAM_MAX_MESSAGE_LENGTH)
                 for (const chunk of chunks) {
-                    await this.callApi("sendMessage", {
-                        chat_id: target.address,
-                        text: chunk,
-                    })
+                    const html = mdToHtml(chunk)
+                    try {
+                        await this.callApi("sendMessage", {
+                            chat_id: target.address,
+                            text: html,
+                            parse_mode: "HTML",
+                        })
+                    } catch (err: any) {
+                        this.logger.warn(`[TelegramPlugin] HTML send failed, falling back to plain text: ${err.message}`)
+                        await this.callApi("sendMessage", {
+                            chat_id: target.address,
+                            text: chunk,
+                        })
+                    }
                 }
             },
         }
@@ -196,15 +206,24 @@ export class TelegramPlugin extends BaseChannelPlugin {
     private async callApi(method: string, params: Record<string, unknown>): Promise<unknown> {
         const token = this.telegramConfig.botToken
         const url = `${TELEGRAM_API_BASE}/bot${token}/${method}`
+        this.logger.debug(`[TelegramPlugin] API Request: ${method} to ${params.chat_id}`, { params })
+        
         const res = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(params),
         })
-        const data = (await res.json()) as { ok: boolean; description?: string }
+        const data = (await res.json()) as { ok: boolean; result?: any; description?: string; error_code?: number }
+        
         if (!data.ok) {
+            this.logger.error(`[TelegramPlugin] API Error (${method}): ${data.description}`, { 
+                error_code: data.error_code,
+                params 
+            })
             throw new Error(`Telegram API error (${method}): ${data.description ?? "unknown"}`)
         }
+        
+        this.logger.debug(`[TelegramPlugin] API Success (${method})`)
         return data
     }
 
@@ -232,9 +251,10 @@ export class TelegramPlugin extends BaseChannelPlugin {
                     signal: this.abortController.signal,
                 })
 
-                const data = (await res.json()) as { ok: boolean; result: TelegramUpdate[] }
+                const data = (await res.json()) as { ok: boolean; result: TelegramUpdate[]; description?: string; error_code?: number }
                 if (!data.ok || !Array.isArray(data.result)) {
-                    this.logger.warn("[TelegramPlugin] getUpdates returned non-ok response")
+                    this.logger.warn(`[TelegramPlugin] getUpdates failed: ${data.description ?? "unknown"} (code: ${data.error_code})`)
+                    await sleep(2000) // Avoid tight loop on failure
                     continue
                 }
 
@@ -317,6 +337,34 @@ function splitMessage(text: string, maxLen: number): string[] {
         pos += maxLen
     }
     return chunks
+}
+
+/** 
+ * 为 Telegram HTML 转义并做简单的 MD 转换
+ */
+function mdToHtml(text: string): string {
+    // 1. Escape basic HTML entities
+    let html = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+
+    // 2. Simple Markdown to HTML translations
+    // Bold: **text** or __text__
+    html = html.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+    html = html.replace(/__(.*?)__/g, "<b>$1</b>")
+
+    // Italic: *text* or _text_
+    html = html.replace(/\*(.*?)\*/g, "<i>$1</i>")
+    html = html.replace(/_(.*?)_/g, "<i>$1</i>")
+
+    // Inline Code: `text`
+    html = html.replace(/`(.*?)`/g, "<code>$1</code>")
+
+    // Code Blocks: ```code```
+    html = html.replace(/```([\s\S]*?)```/g, "<pre>$1</pre>")
+
+    return html
 }
 
 function sleep(ms: number): Promise<void> {

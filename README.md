@@ -21,7 +21,7 @@
 - **Session auto-discovery** — Finds and binds to the latest opencode TUI session for a working directory. Survives restarts.
 - **Graceful recovery** — Reconnects to the opencode server with exponential backoff (up to 10 attempts) on startup.
 - **Extensible channel layer** — `ChannelPlugin` interface lets you add Slack, Discord, or any other platform without touching core logic.
-- **File and image support** — Handles image and file messages from Feishu (not just text). Downloads attachments to `${OPENCODE_CWD}/.opencode-lark/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
+- **File and image support** — Handles image and file messages from Feishu (not just text). Downloads attachments to `${OPENCODE_CWD}/.opencode-im-bridge/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
 
 ---
 

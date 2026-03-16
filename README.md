@@ -12,8 +12,8 @@
 
 ## Features
 
-- **Real-time bridging** — Messages sent in Feishu arrive in your opencode TUI instantly, and agent replies stream back as live-updating cards.
-- **Multi-channel support** — Now supports bridging QQ, Telegram, and Discord messages via their official platform APIs.
+- **Real-time bridging** — Messages sent in Feishu arrive in your opencode TUI instantly. Agent replies stream back as live-updating cards with **Markdown rendering support** (headings, lists, code blocks, etc.).
+- **Multi-channel support** — Now supports bridging QQ, Telegram, and Discord messages via their official platform APIs. QQ channel also supports Markdown rendering.
 - **Interactive cards** — Agent questions and permission requests appear as clickable Feishu cards. Answer or approve directly from the chat — no need to switch to the TUI. (Currently supported primarily for Feishu)
 - **WebSocket connection** — Uses Feishu's long-lived WebSocket mode. No webhook polling, no public IP required.
 - **SSE streaming** — Consumes the opencode SSE event stream and debounces card updates to stay within rate limits.
@@ -63,7 +63,7 @@ graph TD;
 
 | Message Type | Supported | Notes |
 |---|---|---|
-| `text` | ✅ | Plain text messages |
+| `text` | ✅ | Plain text messages, supports Markdown rendering |
 | `post` | ✅ | Rich text / multi-paragraph messages |
 | `image` | ✅ | Photos and screenshots — downloaded and saved locally |
 | `file` | ✅ | Documents, code files, etc. — downloaded and saved locally |

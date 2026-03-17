@@ -9,6 +9,7 @@
 import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
+import { buildResponseCard, buildProjectSelectorCard, buildHelpCard } from "../feishu/card-builder.js"
 
 import type { ChannelManager } from "../channel/manager.js"
 
@@ -37,96 +38,7 @@ interface Session {
   title?: string
 }
 
-// ── Card builders ──
-
-function buildSessionsCard(sessions: Session[], currentSessionId?: string): Record<string, unknown> {
-  const recentSessions = sessions.slice(0, 10)
-  return {
-    config: { wide_screen_mode: true },
-    header: {
-      title: {
-        tag: "plain_text",
-        content: "📋 选择会话",
-      },
-      template: "blue",
-    },
-    elements: [
-      {
-        tag: "markdown",
-        content: "**点击连接到对应会话：**",
-      },
-      ...recentSessions.map((s) => {
-        const isCurrentSession = s.id === currentSessionId
-        return {
-          tag: "action",
-          actions: [
-            {
-              tag: "button",
-              text: {
-                tag: "plain_text",
-                content: `${isCurrentSession ? "▶ " : ""}${s.title ? s.title + " — " : ""}${s.id}`,
-              },
-              value: { action: "command_execute", command: `/connect ${s.id}` },
-            },
-          ],
-        }
-      }),
-    ],
-  }
-}
-
-// ── Help card builder ──
-
-function buildHelpCard(): Record<string, unknown> {
-  return {
-    config: { wide_screen_mode: true },
-    header: {
-      title: {
-        tag: "plain_text",
-        content: "⚡ 命令菜单",
-      },
-      template: "blue",
-    },
-    elements: [
-      {
-        tag: "markdown",
-        content: "**选择要执行的命令：**",
-      },
-      {
-        tag: "action",
-        actions: [
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "🆕 新建会话" },
-            type: "primary",
-            value: { action: "command_execute", command: "/new" },
-          },
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "🔌 连接会话" },
-            value: { action: "command_execute", command: "/sessions" },
-          },
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "📦 压缩历史" },
-            value: { action: "command_execute", command: "/compact" },
-          },
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "🔗 分享会话" },
-            value: { action: "command_execute", command: "/share" },
-          },
-          {
-            tag: "button",
-            text: { tag: "plain_text", content: "🛑 中止任务" },
-            type: "danger",
-            value: { action: "command_execute", command: "/abort" },
-          },
-        ],
-      },
-    ],
-  }
-}
+// Card builders removed - used centralized card-builder.ts instead
 
 // ── Factory ──
 
@@ -239,7 +151,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const card = buildSessionsCard(sessions, currentSessionId)
+    const card = buildProjectSelectorCard(sessions, currentSessionId)
     await feishuClient.replyMessage(messageId, {
       msg_type: "interactive",
       content: JSON.stringify(card),

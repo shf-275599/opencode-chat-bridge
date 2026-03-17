@@ -4,7 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## 0.1.23 (2026-03-12)
+## 0.36.0 (2026-03-17)
+
+### Features
+
+- **Feishu V2 Card Standardization**: Fully updated all interactive cards to the Feishu V2 schema, resolving rendering issues and removing deprecated `tag: action`.
+- **Streaming Card Output**: Enhanced real-time message streaming with improved buffering and smoother updates.
+- **Tool Calling Progress**: Added visual progress indicators (Running/Completed/Error) for tool invocations within streaming cards.
+- **Project Quick Switch**: Added a "Switch Project" button and a dedicated project selector card for easy session switching.
+- **Enhanced Thinking Status**: Support for Feishu Typing indicators and `THINKING` reaction status for better feedback during processing.
+- **Permission Approval**: Interactive cards for tool permissions (bash, file edit, etc.) with Allow/Reject buttons.
+- **Code Optimization**: Centralized all card building logic into `src/feishu/card-builder.ts` and removed legacy V1-style code.
+
+## 0.1.25 (2026-03-17)
 
 ### Features
 

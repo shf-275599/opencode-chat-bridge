@@ -139,14 +139,17 @@ function buildCallbackResponse(action: FeishuCardAction): Record<string, unknown
       card: {
         type: "raw",
         data: {
+          schema: "2.0",
           config: { wide_screen_mode: true },
           header: {
             title: { tag: "plain_text", content: "✅ Question Answered" },
             template: "green",
           },
-          elements: [
-            { tag: "div", text: { tag: "lark_md", content: `**Answer:** ${answerLabel}` } },
-          ],
+          body: {
+            elements: [
+              { tag: "div", text: { tag: "lark_md", content: `**Answer:** ${answerLabel}` } },
+            ],
+          },
         },
       },
     }
@@ -162,14 +165,17 @@ function buildCallbackResponse(action: FeishuCardAction): Record<string, unknown
       card: {
         type: "raw",
         data: {
+          schema: "2.0",
           config: { wide_screen_mode: true },
           header: {
             title: { tag: "plain_text", content: `${isRejected ? "❌" : "✅"} Permission: ${label}` },
             template: isRejected ? "red" : "green",
           },
-          elements: [
-            { tag: "div", text: { tag: "lark_md", content: `**Decision:** ${label}` } },
-          ],
+          body: {
+            elements: [
+              { tag: "div", text: { tag: "lark_md", content: `**Decision:** ${label}` } },
+            ],
+          },
         },
       },
     }

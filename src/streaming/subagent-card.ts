@@ -117,6 +117,7 @@ export function buildSubAgentCard(
   content: string,
 ): Record<string, unknown> {
   return {
+    schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
       title: {
@@ -125,14 +126,16 @@ export function buildSubAgentCard(
       },
       template: "blue",
     },
-    elements: [
-      {
-        tag: "div",
-        text: {
-          tag: "lark_md",
-          content,
+    body: {
+      elements: [
+        {
+          tag: "div",
+          text: {
+            tag: "lark_md",
+            content,
+          },
         },
-      },
-    ],
+      ],
+    },
   }
 }

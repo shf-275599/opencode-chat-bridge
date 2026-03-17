@@ -443,12 +443,15 @@ export function createMessageHandler(
       ? null
       : await progressTracker.sendThinking(event.chat_id)
     let reactionId: string | null = null
-    if (deps.streamingBridge && channelId === "feishu") {
+    if (channelId === "feishu") {
       try {
-        const reactionResult = await feishuClient.addReaction(event.message_id, "Typing")
+        // Use a more appropriate reaction for thinking
+        const reactionResult = await feishuClient.addReaction(event.message_id, "THINKING")
         reactionId = (reactionResult?.data?.reaction_id as string) ?? null
+        // Send real-time typing indicator
+        await feishuClient.sendTypingIndicator(event.chat_id)
       } catch (err) {
-        logger.warn(`addReaction failed: ${err}`)
+        logger.warn(`addReaction/typingIndicator failed: ${err}`)
       }
     }
 

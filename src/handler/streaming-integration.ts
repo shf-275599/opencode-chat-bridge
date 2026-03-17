@@ -384,15 +384,10 @@ function buildSubAgentNotificationCard(
           content: description,
         },
         {
-          tag: "action",
-          actions: [
-            {
-              tag: "button",
-              text: { tag: "plain_text", content: "🔍 View Details" },
-              type: "primary",
-              value: { action: "view_subagent", childSessionId },
-            },
-          ],
+          tag: "button",
+          text: { tag: "plain_text", content: "🔍 View Details" },
+          type: "primary",
+          value: { action: "view_subagent", childSessionId },
         },
       ],
     },
@@ -415,18 +410,29 @@ export function buildQuestionCard(
       content: question.question,
     })
     elements.push({
-      tag: "action",
-      actions: question.options.map((opt, idx) => ({
+      tag: "button",
+      text: { tag: "plain_text", content: question.options[0]?.label ?? "Yes" },
+      type: "primary",
+      value: {
+        action: "question_answer",
+        requestId: action.requestId,
+        answers: JSON.stringify([[question.options[0]?.label]]),
+      },
+    })
+    // Add other options if any, for simplicity in V2 just append them
+    for (let i = 1; i < question.options.length; i++) {
+      const opt = question.options[i]!
+      elements.push({
         tag: "button",
         text: { tag: "plain_text", content: opt.label },
-        type: idx === 0 ? "primary" : "default",
+        type: "default",
         value: {
           action: "question_answer",
           requestId: action.requestId,
           answers: JSON.stringify([[opt.label]]),
         },
-      })),
-    })
+      })
+    }
   }
 
   const header = action.questions[0]?.header ?? "Question"
@@ -461,27 +467,22 @@ export function buildPermissionCard(
           content: action.title,
         },
         {
-          tag: "action",
-          actions: [
-            {
-              tag: "button",
-              text: { tag: "plain_text", content: "✅ Allow Once" },
-              type: "primary",
-              value: { action: "permission_reply", requestId: action.requestId, reply: "once" },
-            },
-            {
-              tag: "button",
-              text: { tag: "plain_text", content: "✅ Always Allow" },
-              type: "default",
-              value: { action: "permission_reply", requestId: action.requestId, reply: "always" },
-            },
-            {
-              tag: "button",
-              text: { tag: "plain_text", content: "❌ Reject" },
-              type: "danger",
-              value: { action: "permission_reply", requestId: action.requestId, reply: "reject" },
-            },
-          ],
+          tag: "button",
+          text: { tag: "plain_text", content: "✅ Allow Once" },
+          type: "primary",
+          value: { action: "permission_reply", requestId: action.requestId, reply: "once" },
+        },
+        {
+          tag: "button",
+          text: { tag: "plain_text", content: "✅ Always Allow" },
+          type: "default",
+          value: { action: "permission_reply", requestId: action.requestId, reply: "always" },
+        },
+        {
+          tag: "button",
+          text: { tag: "plain_text", content: "❌ Reject" },
+          type: "danger",
+          value: { action: "permission_reply", requestId: action.requestId, reply: "reject" },
         },
       ],
     },

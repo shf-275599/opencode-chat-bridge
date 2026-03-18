@@ -34,6 +34,23 @@ Navigate to **Development Config → Permissions & Scopes** and add the followin
 | 获取与上传图片或文件资源 | `im:resource` | Handle message attachments | ✅ |
 | 创建并发布卡片 | `cardkit:card:write` | Render interactive cards (questions, permissions) | ✅ |
 
+> **Tip**: You can copy the JSON below and use the **Batch Import/Export** -> **Import** feature in the Feishu **Permissions & Scopes** page to quickly add all required permissions:
+> ```json
+> {
+>   "scopes": {
+>     "tenant": [
+>       "im:message",
+>       "im:message.p2p_msg:readonly",
+>       "im:message.group_msg",
+>       "im:message.group_at_msg:readonly",
+>       "im:resource",
+>       "cardkit:card:write"
+>     ]
+>   }
+> }
+> ```
+
+
 ### 5. Publish the App
 
 Navigate to **App Release → Version Management & Release**, create a version and submit for review. After approval, add the bot to your workspace.

@@ -127,7 +127,11 @@ bun add -g opencode-im-bridge
 **2. Start opencode server**
 
 ```bash
+# macOS / Linux
 OPENCODE_SERVER_PORT=4096 opencode serve
+
+# Windows (PowerShell)
+$env:OPENCODE_SERVER_PORT=4096; opencode serve
 ```
 
 **3. Start opencode-im-bridge**
@@ -171,6 +175,35 @@ The `session_id` is shown in opencode-im-bridge's startup logs (e.g. `Bound to T
 We support multiple platforms including Feishu, QQ, Telegram, and Discord.
 
 👉 **[Read the Bot Configuration Guide](CONFIGURATION.md)**
+
+### Feishu Permission Scopes
+
+For the Feishu bot to work correctly, enable the following permissions in the Feishu Open Platform console. You can copy the JSON below to use the **Batch Import** feature in **Development Config → Permissions & Scopes**:
+
+| Permission | Scope Identifier | Purpose | Required |
+|---|---|---|---|
+| 获取与发送单聊、群组消息 | `im:message` | Send messages & update cards | ✅ |
+| 获取用户发给机器人的单聊消息 | `im:message.p2p_msg:readonly` | Receive direct messages | ✅ |
+| 获取群组中所有消息 | `im:message.group_msg` | Receive all group messages | ✅ |
+| 获取群组中 @机器人的消息 | `im:message.group_at_msg:readonly` | Receive group messages that @mention the bot | ✅ |
+| 获取与上传图片或文件资源 | `im:resource` | Handle message attachments | ✅ |
+| 创建并发布卡片 | `cardkit:card:write` | Render interactive cards (questions, permissions) | ✅ |
+
+```json
+{
+  "scopes": {
+    "tenant": [
+      "im:message",
+      "im:message.p2p_msg:readonly",
+      "im:message.group_msg",
+      "im:message.group_at_msg:readonly",
+      "im:resource",
+      "cardkit:card:write"
+    ]
+  }
+}
+```
+
 
 ---
 ---

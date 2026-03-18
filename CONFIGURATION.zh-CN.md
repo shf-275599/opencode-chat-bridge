@@ -36,6 +36,23 @@
 | 获取与上传图片或文件资源 | `im:resource` | 处理消息附件 | ✅ |
 | 创建并发布卡片 | `cardkit:card:write` | 渲染交互式卡片（提问、权限审批） | ✅ |
 
+> **提示**：你可以复制下面的 JSON，在飞书开放平台 **权限管理** 页面点击 **批量导入/导出** -> **导入**，直接导入所需权限：
+> ```json
+> {
+>   "scopes": {
+>     "tenant": [
+>       "im:message",
+>       "im:message.p2p_msg:readonly",
+>       "im:message.group_msg",
+>       "im:message.group_at_msg:readonly",
+>       "im:resource",
+>       "cardkit:card:write"
+>     ]
+>   }
+> }
+> ```
+
+
 ### 5. 发布应用
 
 进入**应用发布 → 版本管理与发布**，创建版本并提交审核。审核通过后，将机器人添加到工作区。
@@ -59,8 +76,12 @@
 
 2. 在一个终端启动 opencode server：
    ```bash
-   OPENCODE_SERVER_PORT=4096 opencode serve
-   ```
+# macOS / Linux
+OPENCODE_SERVER_PORT=4096 opencode serve
+
+# Windows (PowerShell)
+$env:OPENCODE_SERVER_PORT=4096; opencode serve
+```
 
 3. 在另一个终端启动 opencode-im-bridge：
    ```bash

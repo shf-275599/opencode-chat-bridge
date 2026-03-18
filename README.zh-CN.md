@@ -92,7 +92,7 @@ graph TD;
 
 - **[Bun](https://bun.sh)**（必需运行时，本项目使用 `bun:sqlite`，仅 Bun 支持）
 - **[opencode](https://opencode.ai)** 已安装在本地
-- 已配置凭证的飞书开放平台应用 或 QQ 官方机器人（参见[《机器人配置指南》](CONFIGURATION.zh-CN.md)）
+- 已配置凭证的飞书开放平台应用 或 QQ、Telegram、Discord 等平台机器人（👉参见[《机器人配置指南》](CONFIGURATION.zh-CN.md)）
 
 ### 步骤
 
@@ -158,14 +158,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 
 ---
 
-## 机器人应用配置
-
-本项目支持飞书、QQ、Telegram、Discord 等多个平台的机器人接入。
-
-👉 **[查看《机器人配置指南》](CONFIGURATION.zh-CN.md)**
----
-
-## 手动配置说明
+## 手动配置说明（面向开发者）
 
 ### 环境变量
 

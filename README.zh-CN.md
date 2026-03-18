@@ -2,7 +2,7 @@
 
 # opencode-im-bridge
 
-> 将飞书\QQ群聊与 opencode TUI session 打通，实现双向实时消息转发。
+> 将飞书\QQ\Telegram\Discord机器人与 opencode TUI session 打通，实现双向实时消息转发。
 
 ![CI](https://github.com/ET06731/opencode-im-bridge/actions/workflows/ci.yml/badge.svg)
 ![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
@@ -84,27 +84,6 @@ graph TD;
 
 ---
 
-## 安装
-
-> **注意**：[Bun](https://bun.sh) 是必需的运行时，本项目使用 `bun:sqlite`，仅 Bun 支持。
-
-```bash
-# 全局安装
-npm install -g opencode-im-bridge
-# 或
-bun add -g opencode-im-bridge
-```
-
-或从源码运行：
-
-```bash
-git clone https://github.com/ET06731/opencode-im-bridge.git
-cd opencode-im-bridge
-bun install
-```
-
----
-
 ## 快速开始
 
 5 分钟即可上手。
@@ -120,8 +99,18 @@ bun install
 **1. 安装**
 
 ```bash
+# 全局安装
+npm install -g opencode-im-bridge
+# 或
 bun add -g opencode-im-bridge
-# 或：npm install -g opencode-im-bridge
+```
+
+或从源码运行：
+
+```bash
+git clone https://github.com/ET06731/opencode-im-bridge.git
+cd opencode-im-bridge
+bun install
 ```
 
 **2. 启动 opencode server**
@@ -174,40 +163,9 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 本项目支持飞书、QQ、Telegram、Discord 等多个平台的机器人接入。
 
 👉 **[查看《机器人配置指南》](CONFIGURATION.zh-CN.md)**
-
-### 飞书权限列表
-
-为确保飞书机器人正常运行，需要在飞书开放平台控制台开通以下权限。你可以复制下面的 JSON 并在 **权限管理** 页面中使用 **批量导入** 功能方便地添加：
-
-| 权限 | 权限标识 | 用途 | 必需 |
-|---|---|---|---|
-| 获取与发送单聊、群组消息 | `im:message` | 发送消息、更新卡片 | ✅ |
-| 获取用户发给机器人的单聊消息 | `im:message.p2p_msg:readonly` | 接收私聊消息 | ✅ |
-| 获取群组中所有消息 | `im:message.group_msg` | 接收群聊中的所有消息 | ✅ |
-| 获取群组中 @机器人的消息 | `im:message.group_at_msg:readonly` | 接收群聊中 @机器人的消息 | ✅ |
-| 获取与上传图片或文件资源 | `im:resource` | 处理消息附件 | ✅ |
-| 创建并发布卡片 | `cardkit:card:write` | 渲染交互式卡片（提问、权限审批） | ✅ |
-
-```json
-{
-  "scopes": {
-    "tenant": [
-      "im:message",
-      "im:message.p2p_msg:readonly",
-      "im:message.group_msg",
-      "im:message.group_at_msg:readonly",
-      "im:resource",
-      "cardkit:card:write"
-    ]
-  }
-}
-```
-
-
----
 ---
 
-## 配置说明
+## 手动配置说明
 
 ### 环境变量
 

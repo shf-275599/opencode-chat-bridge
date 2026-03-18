@@ -146,7 +146,6 @@ opencode-im-bridge
 - 选择渠道（飞书、QQ 或 两者皆选）
 - 输入飞书/QQ的 App ID、App Secret/Token（密码遮蔽输入）
 - 验证 opencode server 连通性
-- 保存凭证到对应的 `.env.{appId}` 文件
 
 配置完成后服务自动启动。
 
@@ -158,11 +157,11 @@ opencode-im-bridge
 
 **4. 发送测试消息**
 
-向飞书机器人发送任意消息。首次联系时自动发现最新 TUI session 并回复：
+向机器人发送任意消息。首次联系时自动发现最新 TUI session 并回复：
 
 > Connected to session: ses_xxxxx
 
-首次消息后飞书收到 session 绑定通知，之后双向消息互通。要在 TUI 中查看：
+首次消息后机器人收到 session 绑定通知，之后双向消息互通。要在 TUI 中查看该会话：
 ```bash
 opencode attach http://127.0.0.1:4096 --session {session_id}
 ```
@@ -226,8 +225,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 
 ### JSONC 配置文件
 
-`opencode-im-bridge.jsonc`（已加入 .gitignore，从 `opencode-im-bridge.example.jsonc` 复制）：
-（同时支持 `opencode-lark.jsonc` 和 `opencode-feishu.jsonc` 以兼容旧版）
+`opencode-im-bridge.jsonc`（从 `opencode-im-bridge.example.jsonc` 复制）：
 
 ```jsonc
 // opencode-im-bridge.jsonc
@@ -300,7 +298,7 @@ bun run build        # 编译到 dist/
 
 ## 致谢
 
-本项目的开发参考了以下开源项目：
+感谢以下开源项目的贡献：
 
 - [guazi04/opencode-lark](https://github.com/guazi04/opencode-lark)
 - [op7418/Claude-to-IM-skill](https://github.com/op7418/Claude-to-IM-skill)

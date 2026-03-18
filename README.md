@@ -143,7 +143,7 @@ opencode-im-bridge
 ```
 
 On first run with no configuration, an interactive setup wizard guides you through:
-- Selecting channels (Feishu, QQ, or both)
+- Selecting channels (Feishu, QQ, TTelegram, Discord or all)
 - Entering your Feishu/QQ App ID and App Secret/Token (masked input)
 - Validating the opencode server connection
 - Saving credentials to corresponding `.env.{appId}` files
@@ -153,8 +153,9 @@ The service starts automatically after setup completes.
 > **Tip**: To re-run the wizard later, use `opencode-im-bridge init`.
 >
 > To configure manually instead, create a `.env` file with relevant credentials before starting:
-> - Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
+> - Feishu: `FEISHU_APP_ID`, ``
 > - QQ: `QQ_APP_ID`, `QQ_SECRET`
+> - Telegram: `TELEGRAM_BOT_TOKEN`
 
 **4. Send a test message**
 
@@ -176,36 +177,6 @@ We support multiple platforms including Feishu, QQ, Telegram, and Discord.
 
 👉 **[Read the Bot Configuration Guide](CONFIGURATION.md)**
 
-### Feishu Permission Scopes
-
-For the Feishu bot to work correctly, enable the following permissions in the Feishu Open Platform console. You can copy the JSON below to use the **Batch Import** feature in **Development Config → Permissions & Scopes**:
-
-| Permission | Scope Identifier | Purpose | Required |
-|---|---|---|---|
-| 获取与发送单聊、群组消息 | `im:message` | Send messages & update cards | ✅ |
-| 获取用户发给机器人的单聊消息 | `im:message.p2p_msg:readonly` | Receive direct messages | ✅ |
-| 获取群组中所有消息 | `im:message.group_msg` | Receive all group messages | ✅ |
-| 获取群组中 @机器人的消息 | `im:message.group_at_msg:readonly` | Receive group messages that @mention the bot | ✅ |
-| 获取与上传图片或文件资源 | `im:resource` | Handle message attachments | ✅ |
-| 创建并发布卡片 | `cardkit:card:write` | Render interactive cards (questions, permissions) | ✅ |
-
-```json
-{
-  "scopes": {
-    "tenant": [
-      "im:message",
-      "im:message.p2p_msg:readonly",
-      "im:message.group_msg",
-      "im:message.group_at_msg:readonly",
-      "im:resource",
-      "cardkit:card:write"
-    ]
-  }
-}
-```
-
-
----
 ---
 
 ## Configuration

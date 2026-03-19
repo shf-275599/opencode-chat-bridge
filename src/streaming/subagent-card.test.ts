@@ -99,7 +99,7 @@ describe("subagent-card", () => {
       const card = buildSubAgentCard("test desc", "test content")
       expect(card.config).toEqual({ wide_screen_mode: true })
       expect((card.header as Record<string, unknown>)?.template).toBe("blue")
-      expect(card.elements).toBeDefined()
+      expect((card.body as any)?.elements).toBeDefined()
     })
 
     it("includes description in header title", () => {
@@ -115,7 +115,7 @@ describe("subagent-card", () => {
     it("includes content in lark_md element", () => {
       const testContent = "test markdown"
       const card = buildSubAgentCard("desc", testContent)
-      const elements = card.elements as Array<Record<string, unknown>>
+      const elements = (card.body as any)?.elements as Array<Record<string, unknown>>
       const firstElement = elements?.[0]
       const text = firstElement?.text as Record<string, unknown>
       expect(text?.content).toBe(testContent)

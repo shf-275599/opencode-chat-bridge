@@ -150,10 +150,11 @@ describe("createCommandHandler", () => {
       const content = JSON.parse(callArgs?.[1]?.content as string)
       expect(content).toHaveProperty("config")
       expect(content).toHaveProperty("header")
-      expect(content).toHaveProperty("elements")
-      expect(content.header?.title?.content).toContain("选择会话")
+      expect(content).toHaveProperty("body")
+      expect(content.body).toHaveProperty("elements")
+      expect(content.header?.title?.content).toContain("选择项目会话")
       // Verify buttons are created for each session
-      const actionElements = content.elements?.filter((e: any) => e.tag === "action")
+      const actionElements = content.body.elements?.filter((e: any) => e.tag === "button")
       // 2 from API + 1 current session (ses-123) not in API list → prepended
       expect(actionElements).toHaveLength(3)
     })
@@ -300,7 +301,8 @@ describe("createCommandHandler", () => {
       const content = JSON.parse(callArgs?.[1]?.content as string)
       expect(content).toHaveProperty("config")
       expect(content).toHaveProperty("header")
-      expect(content).toHaveProperty("elements")
+      expect(content).toHaveProperty("body")
+      expect(content.body).toHaveProperty("elements")
       expect(content.header?.title?.content).toContain("命令菜单")
     })
 
@@ -320,7 +322,8 @@ describe("createCommandHandler", () => {
       const content = JSON.parse(callArgs?.[1]?.content as string)
       expect(content).toHaveProperty("config")
       expect(content).toHaveProperty("header")
-      expect(content).toHaveProperty("elements")
+      expect(content).toHaveProperty("body")
+      expect(content.body).toHaveProperty("elements")
     })
   })
 

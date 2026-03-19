@@ -384,15 +384,21 @@ function buildSubAgentNotificationCard(
           content: description,
         },
         {
-          tag: "button",
-          text: { tag: "plain_text", content: "🔍 View Details" },
-          type: "primary",
-          value: { action: "view_subagent", childSessionId },
+          tag: "actions",
+          actions: [
+            {
+              tag: "button",
+              text: { tag: "plain_text", content: "🔍 View Details" },
+              type: "primary",
+              value: { action: "view_subagent", childSessionId },
+            },
+          ],
         },
       ],
     },
   }
 }
+
 
 export function buildQuestionCard(
   action: QuestionAsked,

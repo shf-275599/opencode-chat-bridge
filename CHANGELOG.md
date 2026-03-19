@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.36.1 (2026-03-19)
+
+### Features
+
+- **Telegram Slash Commands**: Auto-register Bot API commands (`/new`, `/sessions`, `/abort`, `/compact`, `/share`, `/help`) on startup to provide an interactive menu in Telegram chats.
+
+### Bug Fixes
+
+- **SSE Reconnection**: Fixed TDZ crash on startup and added an exponential backoff auto-reconnect loop (1s to 30s) to prevent persistent 5-minute timeout errors when the event stream is disconnected.
+- **Telegram Polling**: Improved long polling loop stability with reinforced abort boundary checks to prevent race conditions during graceful shutdown, and switched static retries to exponential backoff.
+- **Test Integrity**: Updated legacy test assertions for Feishu V1 `elements` fields to match the correct `body.elements` structure defined by the V2 schema migration.
+
+
 ## 0.36.0 (2026-03-17)
 
 ### Features

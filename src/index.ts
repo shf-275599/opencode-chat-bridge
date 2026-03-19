@@ -301,48 +301,62 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   logger.info("Phase 5: Subscribing to opencode events...")
 
-    ; (async () => {
+  /**
+   * Dispatch a single SSE event to all matching listeners.
+   */
+  function dispatchSseEvent(event: unknown): void {
+    const props = (event as Record<string, unknown>)?.properties as Record<string, unknown> | undefined
+    const eventType = (event as Record<string, unknown>)?.type as string | undefined
+    const sessionID = props?.sessionID ?? (props?.part && typeof props.part === "object" ? (props.part as Record<string, unknown>).sessionID : undefined)
+    if (eventType) {
+      logger.debug(`SSE: ${eventType} session=${sessionID ?? "n/a"}`)
+    }
+    if (sessionID && typeof sessionID === "string") {
+      const listeners = eventListeners.get(sessionID)
+      if (listeners) {
+        for (const listener of listeners) {
+          try { listener(event) } catch (err) { logger.warn(`Event listener for ${sessionID} threw: ${err}`) }
+        }
+      }
+    } else {
+      // No sessionID — broadcast to all (fallback for non-session events)
+      for (const [key, listeners] of eventListeners.entries()) {
+        for (const listener of listeners) {
+          try { listener(event) } catch (err) { logger.warn(`Event listener for ${key} threw: ${err}`) }
+        }
+      }
+    }
+  }
+
+  /**
+   * SSE subscription loop with exponential-backoff reconnect.
+   * Must be started AFTER abortController is created.
+   */
+  async function startSseLoop(signal: AbortSignal): Promise<void> {
+    let delay = 1_000
+    while (!signal.aborted) {
       try {
         const events = await client.event.subscribe()
         logger.info("SSE event stream connected")
+        delay = 1_000  // reset backoff on successful connect
         for await (const event of events.stream) {
-          const eventType = (event as Record<string, unknown>)?.type as string | undefined
-          const props = (event as Record<string, unknown>)?.properties as Record<string, unknown> | undefined
-          const sessionID = props?.sessionID ?? (props?.part && typeof props.part === "object" ? (props.part as Record<string, unknown>).sessionID : undefined)
-          if (eventType) {
-            logger.debug(`SSE: ${eventType} session=${sessionID ?? "n/a"}`)
-          }
-
-          // Targeted dispatch: send only to matching session's listeners
-          if (sessionID && typeof sessionID === "string") {
-            const listeners = eventListeners.get(sessionID)
-            if (listeners) {
-              for (const listener of listeners) {
-                try {
-                  listener(event)
-                } catch (err) {
-                  logger.warn(`Event listener for ${sessionID} threw: ${err}`)
-                }
-              }
-            }
-          } else {
-            // No sessionID — broadcast to all (fallback for non-session events)
-            for (const [key, listeners] of eventListeners.entries()) {
-              for (const listener of listeners) {
-                try {
-                  listener(event)
-                } catch (err) {
-                  logger.warn(`Event listener for ${key} threw: ${err}`)
-                }
-              }
-            }
-          }
+          if (signal.aborted) break
+          dispatchSseEvent(event)
         }
-        logger.warn("SSE event stream ended")
+        if (!signal.aborted) {
+          logger.warn("SSE event stream ended, reconnecting...")
+        }
       } catch (err) {
-        logger.error(`SSE subscription failed: ${err}`)
+        if (signal.aborted) break
+        logger.warn(`SSE subscription error: ${err}. Retrying in ${delay}ms...`)
       }
-    })()
+      if (!signal.aborted) {
+        await new Promise((r) => setTimeout(r, delay))
+        delay = Math.min(delay * 2, 30_000)
+      }
+    }
+    logger.info("SSE reconnect loop stopped (shutdown)")
+  }
 
   // ═══════════════════════════════════════════
   // Phase 6: Create Plugins
@@ -400,6 +414,11 @@ async function main(): Promise<void> {
 
   const abortController = new AbortController()
   await channelManager.startAll(abortController.signal)
+
+  // Start SSE reconnect loop NOW that abortController is available
+  startSseLoop(abortController.signal).catch((err) => {
+    logger.error(`SSE loop crashed unexpectedly: ${err}`)
+  })
 
   let webhookServer: any = undefined
   if (config.feishu) {

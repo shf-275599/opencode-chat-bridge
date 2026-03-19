@@ -110,6 +110,11 @@ export class TelegramPlugin extends BaseChannelPlugin {
                     this.logger.error(`[TelegramPlugin] Poll loop crashed: ${err}`)
                 })
 
+                // 注册指令菜单（静默失败）
+                this.registerCommands().catch((err) => {
+                    this.logger.warn(`[TelegramPlugin] Failed to register commands: ${err}`)
+                })
+
                 this.logger.info("[TelegramPlugin] Gateway started (long polling)")
             },
 
@@ -228,11 +233,29 @@ export class TelegramPlugin extends BaseChannelPlugin {
     }
 
     /**
+     * 注册 Bot 斜杠命令菜单。
+     * 用户在 Telegram 中输入 "/" 后会弹出可选命令列表。
+     */
+    private async registerCommands(): Promise<void> {
+        const commands = [
+            { command: "new", description: "新建会话" },
+            { command: "sessions", description: "查看/切换会话" },
+            { command: "abort", description: "中止当前任务" },
+            { command: "compact", description: "压缩历史记录" },
+            { command: "share", description: "分享会话链接" },
+            { command: "help", description: "显示帮助" },
+        ]
+        await this.callApi("setMyCommands", { commands })
+        this.logger.info("[TelegramPlugin] Bot commands registered successfully")
+    }
+
+    /**
      * 长轮询主循环。
      * 使用 AbortController 支持优雅关闭。
      */
     private async startPolling(onMessage?: (event: unknown) => Promise<void>): Promise<void> {
         let offset = 0
+        let connectAttempt = 0
         this.logger.info("[TelegramPlugin] Long polling started")
 
         while (this.abortController && !this.abortController.signal.aborted) {
@@ -284,7 +307,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
 
                     if (onMessage) {
                         try {
-                            // 包装为与 Feishu‑compatible syntheticEvent（handleMessage 依赖此结构）
+                            // 包装为与 Feishu-compatible syntheticEvent（handleMessage 依赖此结构）
                             const syntheticEvent = {
                                 event_id: String(update.update_id),
                                 event_type: "message",
@@ -309,14 +332,19 @@ export class TelegramPlugin extends BaseChannelPlugin {
                     }
                 }
             } catch (err) {
+                const controller = this.abortController
                 if (
-                    err instanceof Error &&
-                    (err.name === "AbortError" || err.message.includes("aborted"))
+                    !controller ||
+                    controller.signal.aborted ||
+                    (err instanceof Error &&
+                        (err.name === "AbortError" || err.message.includes("aborted")))
                 ) {
                     break
                 }
-                this.logger.warn(`[TelegramPlugin] Polling error: ${err}. Retrying in 5s...`)
-                await sleep(5000)
+                connectAttempt++
+                const retryDelay = Math.min(1_000 * Math.pow(2, connectAttempt - 1), 30_000)
+                this.logger.warn(`[TelegramPlugin] Polling error (attempt ${connectAttempt}): ${err}. Retrying in ${retryDelay}ms...`)
+                await sleep(retryDelay)
             }
         }
 

@@ -76,12 +76,12 @@
 
 2. 在一个终端启动 opencode server：
    ```bash
-# macOS / Linux
-OPENCODE_SERVER_PORT=4096 opencode serve
-
-# Windows (PowerShell)
-$env:OPENCODE_SERVER_PORT=4096; opencode serve
-```
+   # macOS / Linux
+   OPENCODE_SERVER_PORT=4096 opencode serve
+   
+   # Windows (PowerShell)
+   $env:OPENCODE_SERVER_PORT=4096; opencode serve
+   ```
 
 3. 在另一个终端启动 opencode-im-bridge：
    ```bash

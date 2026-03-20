@@ -197,7 +197,7 @@ describe("createCommandHandler", () => {
       expect(mockFetch).toHaveBeenCalledWith("http://test:4096/agent")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
-        content: expect.stringContaining("Agent"),
+        content: expect.stringContaining("agent"),
       })
     })
 

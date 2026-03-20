@@ -253,7 +253,7 @@ export function createStreamingBridge(
                   }
                   if (deps.outboundMedia) {
                     try {
-                      await deps.outboundMedia.sendDetectedFiles(chatId, responseText)
+                      await deps.outboundMedia.sendDetectedFiles({ address: chatId }, responseText, plugin?.outbound)
                     } catch (err) {
                       logger.warn(`outboundMedia.sendDetectedFiles failed: ${err}`)
                     }
@@ -270,7 +270,7 @@ export function createStreamingBridge(
                   }
                   if (deps.outboundMedia) {
                     try {
-                      await deps.outboundMedia.sendDetectedFiles(chatId, responseText)
+                      await deps.outboundMedia.sendDetectedFiles({ address: chatId }, responseText, plugin?.outbound)
                     } catch (mediaErr) {
                       logger.warn(`outboundMedia.sendDetectedFiles failed: ${mediaErr}`)
                     }
@@ -307,7 +307,7 @@ export function createStreamingBridge(
           }
           if (deps.outboundMedia) {
             try {
-              await deps.outboundMedia.sendDetectedFiles(chatId, fallbackText)
+              await deps.outboundMedia.sendDetectedFiles({ address: chatId }, fallbackText, plugin?.outbound)
             } catch (mediaErr) {
               logger.warn(`outboundMedia.sendDetectedFiles in timeout fallback failed: ${mediaErr}`)
             }

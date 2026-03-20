@@ -33,7 +33,7 @@ export interface OutboundMediaDeps {
 }
 
 export interface OutboundMediaHandler {
-  sendDetectedFiles(target: OutboundTarget, text: string): Promise<void>
+  sendDetectedFiles(target: OutboundTarget, text: string, outboundAdapter?: ChannelOutboundAdapter): Promise<void>
 }
 
 // ── Constants ──
@@ -146,9 +146,10 @@ export function createOutboundMediaHandler(
   const allowlist = buildAllowlist(deps.allowedUploadDirs)
 
   return {
-    async sendDetectedFiles(target: OutboundTarget, text: string): Promise<void> {
+    async sendDetectedFiles(target: OutboundTarget, text: string, outboundAdapter?: ChannelOutboundAdapter): Promise<void> {
+      const adapter = outboundAdapter ?? outbound
       // Skip entirely if no outbound adapter or it doesn't support sendImage
-      if (!outbound?.sendImage) {
+      if (!adapter?.sendImage) {
         logger.debug("Channel plugin not provided or does not implement sendImage, skipping media detection")
         return
       }
@@ -189,7 +190,7 @@ export function createOutboundMediaHandler(
           }
 
           // Delegate to channel plugin — it owns the upload/send implementation
-          await outbound.sendImage(target, realPath)
+          await adapter.sendImage(target, realPath)
           logger.info(`Sent image via channel plugin: ${realPath}`)
         } catch (err) {
           logger.warn(`Failed to send image ${filePath}: ${err}`)

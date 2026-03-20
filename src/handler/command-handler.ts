@@ -12,6 +12,7 @@ import type { Logger } from "../utils/logger.js"
 import { buildResponseCard, buildProjectSelectorCard, buildHelpCard } from "../feishu/card-builder.js"
 
 import type { ChannelManager } from "../channel/manager.js"
+import type { CronService } from "../cron/cron-service.js"
 
 // ── Dependency injection interface ──
 
@@ -21,6 +22,7 @@ export interface CommandHandlerDeps {
   feishuClient: FeishuApiClient
   logger: Logger
   channelManager?: ChannelManager
+  cronService?: CronService
 }
 
 // ── Types ──
@@ -232,6 +234,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 - /compact: 压缩历史
 - /share: 分享会话
 - /abort: 中止任务
+- /cron: 计划任务管理
 - /help: 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
       return
@@ -242,6 +245,55 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       msg_type: "interactive",
       content: JSON.stringify(card),
     })
+  }
+
+  async function handleCron(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    args: string[]
+  ): Promise<void> {
+    const cron = deps.cronService
+    if (!cron) {
+      await replyText(chatId, messageId, "Cron 服务未启用", channelId)
+      return
+    }
+
+    const sub = args[0]?.toLowerCase()
+    
+    if (sub === "list") {
+      const jobs = cron.getJobs()
+      if (jobs.length === 0) {
+        await replyText(chatId, messageId, "当前没有任何定时任务。", channelId)
+        return
+      }
+      
+      const lines = jobs.map(j => {
+        const status = j.enabled !== false ? "[启用]" : "[停用]"
+        return `${status} ${j.id || j.name} | ${j.schedule}\n  text: ${j.prompt}\n  chat: ${j.chatId}`
+      })
+      
+      await replyText(chatId, messageId, `🕒 运行时 Cron 任务列表：\n\n${lines.join('\n\n')}`, channelId)
+      return
+    }
+    
+    if (sub === "remove") {
+      const jobId = args[1]
+      if (!jobId) {
+        await replyText(chatId, messageId, "用法：/cron remove <jobId>", channelId)
+        return
+      }
+      const success = await cron.removeJob(jobId)
+      if (success) {
+        await replyText(chatId, messageId, `已成功移除任务: ${jobId}`, channelId)
+      } else {
+        await replyText(chatId, messageId, `找不到任务: ${jobId}`, channelId)
+      }
+      return
+    }
+
+    await replyText(chatId, messageId, "目前支持的子命令：/cron list, /cron remove <id>。复杂的自然语言创建暂未实装。", channelId)
   }
 
   return async function handleCommand(
@@ -280,6 +332,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
             return true
           }
           await handleConnect(feishuKey, chatId, messageId, targetSessionId, channelId)
+          return true
+        }
+
+        case "/cron": {
+          const args = parts.slice(1)
+          await handleCron(feishuKey, chatId, messageId, channelId, args)
           return true
         }
 

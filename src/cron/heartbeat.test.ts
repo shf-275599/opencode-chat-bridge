@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { HeartbeatService } from "../cron/heartbeat.js"
 import type { HeartbeatOptions } from "../cron/heartbeat.js"
 import { createMockLogger, createMockFeishuClient } from "../__tests__/setup.js"
+import type { SessionManager } from "../session/session-manager.js"
+import type { HeartbeatConfig } from "../utils/config.js"
+
+vi.mock("node:fs/promises", () => {
+  return {
+    readFile: vi.fn().mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" })),
+  }
+})
 
 const advanceTimers = async (ms: number) => {
   if (typeof vi.advanceTimersByTimeAsync === "function") {
@@ -12,10 +20,30 @@ const advanceTimers = async (ms: number) => {
   }
 }
 
+function createMockSessionManager(): SessionManager {
+  return {
+    getOrCreate: vi.fn().mockResolvedValue("heartbeat-session"),
+    getSession: vi.fn().mockReturnValue(null),
+    cleanup: vi.fn().mockReturnValue(0),
+  }
+}
+
+function makeConfig(overrides: Partial<HeartbeatConfig> = {}): HeartbeatConfig {
+  return {
+    proactiveEnabled: true,
+    intervalMs: 1000,
+    statusChatId: undefined,
+    alertChats: [],
+    agent: "build",
+    ...overrides,
+  }
+}
+
 function makeOptions(overrides: Partial<HeartbeatOptions> = {}): HeartbeatOptions {
   return {
-    intervalMs: 1000,
+    config: makeConfig(),
     serverUrl: "http://127.0.0.1:4096",
+    sessionManager: createMockSessionManager(),
     logger: createMockLogger(),
     ...overrides,
   }
@@ -32,10 +60,11 @@ describe("HeartbeatService", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it("start() begins interval with configured intervalMs", () => {
-    const options = makeOptions()
+    const options = makeOptions({ config: makeConfig({ intervalMs: 1000 }) })
     const service = new HeartbeatService(options)
 
     service.start()
@@ -75,59 +104,93 @@ describe("HeartbeatService", () => {
     expect(stopCalls).toHaveLength(1)
   })
 
-  it("tick() logs success on healthy server response", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+  it("tick() logs success on HEARTBEAT_OK", async () => {
+    const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (url.includes("/session/") && url.endsWith("/message") && init?.method === "POST") {
+        return { ok: true }
+      }
+      if (url.includes("/session/") && !url.includes("/message")) {
+        return { ok: true, json: async () => ({ status: { type: "idle" } }) }
+      }
+      if (url.includes("/message?limit=1")) {
+        return { ok: true, json: async () => [{ role: "assistant", text: "HEARTBEAT_OK" }] }
+      }
+      return { ok: false, status: 404 }
+    })
     globalThis.fetch = mockFetch
 
-    const options = makeOptions({ intervalMs: 100 })
+    const options = makeOptions({ config: makeConfig({ intervalMs: 10_000 }) })
     const service = new HeartbeatService(options)
 
     service.start()
-    vi.advanceTimersByTime(100)
-    await advanceTimers(10)
+    vi.advanceTimersByTime(10_000)
+    await advanceTimers(2_100)
 
-    expect(mockFetch).toHaveBeenCalledWith("http://127.0.0.1:4096/session/status")
-    expect(options.logger.info).toHaveBeenCalledWith("Server healthy")
+    expect(options.logger.info).toHaveBeenCalledWith("Server healthy (Heartbeat OK)")
 
     service.stop()
   })
 
   it("tick() logs error and does not alert when feishuClient is undefined", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (url.includes("/session/") && url.endsWith("/message") && init?.method === "POST") {
+        return { ok: true }
+      }
+      if (url.includes("/session/") && !url.includes("/message")) {
+        return { ok: true, json: async () => ({ status: { type: "idle" } }) }
+      }
+      if (url.includes("/message?limit=1")) {
+        return { ok: true, json: async () => [{ role: "assistant", text: "ERROR" }] }
+      }
+      return { ok: false, status: 404 }
+    })
     globalThis.fetch = mockFetch
 
-    const options = makeOptions({ intervalMs: 100, feishuClient: undefined })
+    const options = makeOptions({ config: makeConfig({ intervalMs: 100 }), feishuClient: undefined })
     const service = new HeartbeatService(options)
 
     service.start()
-    vi.advanceTimersByTime(100)
-    await advanceTimers(10)
+    vi.advanceTimersByTime(10_000)
+    await advanceTimers(2_100)
 
     expect(options.logger.error).toHaveBeenCalledWith(
-      "Server health check failed with HTTP 500",
+      expect.stringContaining("Heartbeat agent returned failure: ERROR"),
     )
 
     service.stop()
   })
 
-  it("tick() logs error and sends alert on failed response with statusChatId", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 502 })
+  it("tick() logs error and sends alert on agent failure with statusChatId", async () => {
+    const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (url.includes("/session/") && url.endsWith("/message") && init?.method === "POST") {
+        return { ok: true }
+      }
+      if (url.includes("/session/") && !url.includes("/message")) {
+        return { ok: true, json: async () => ({ status: { type: "idle" } }) }
+      }
+      if (url.includes("/message?limit=1")) {
+        return { ok: true, json: async () => [{ role: "assistant", text: "Disk full" }] }
+      }
+      return { ok: false, status: 404 }
+    })
     globalThis.fetch = mockFetch
 
     const feishuClient = createMockFeishuClient()
     const options = makeOptions({
-      intervalMs: 100,
+      config: makeConfig({ intervalMs: 100, statusChatId: "chat-123" }),
       feishuClient,
-      statusChatId: "chat-123",
     })
     const service = new HeartbeatService(options)
 
     service.start()
     vi.advanceTimersByTime(100)
-    await advanceTimers(10)
+    await advanceTimers(2_100)
 
     expect(options.logger.error).toHaveBeenCalledWith(
-      "Server health check failed with HTTP 502",
+      expect.stringContaining("Heartbeat agent returned failure: Disk full"),
     )
     expect(feishuClient.sendMessage).toHaveBeenCalledWith(
       "chat-123",
@@ -143,7 +206,7 @@ describe("HeartbeatService", () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error("Network timeout"))
     globalThis.fetch = mockFetch
 
-    const options = makeOptions({ intervalMs: 100 })
+    const options = makeOptions({ config: makeConfig({ intervalMs: 100 }) })
     const service = new HeartbeatService(options)
 
     service.start()
@@ -151,7 +214,7 @@ describe("HeartbeatService", () => {
     await advanceTimers(10)
 
     expect(options.logger.error).toHaveBeenCalledWith(
-      expect.stringContaining("Server health check failed: Network timeout"),
+      expect.stringContaining("Heartbeat check failed to execute: Network timeout"),
     )
 
     service.stop()
@@ -163,9 +226,8 @@ describe("HeartbeatService", () => {
 
     const feishuClient = createMockFeishuClient()
     const options = makeOptions({
-      intervalMs: 100,
+      config: makeConfig({ intervalMs: 100, statusChatId: "chat-456" }),
       feishuClient,
-      statusChatId: "chat-456",
     })
     const service = new HeartbeatService(options)
 
@@ -184,24 +246,50 @@ describe("HeartbeatService", () => {
   })
 
   it("getStats() returns successCount and failCount", async () => {
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, status: 500 })
+    const mockFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (url.includes("/session/") && url.endsWith("/message") && init?.method === "POST") {
+        return { ok: true }
+      }
+      if (url.includes("/session/") && !url.includes("/message")) {
+        return { ok: true, json: async () => ({ status: { type: "idle" } }) }
+      }
+      if (url.includes("/message?limit=1")) {
+        return { ok: true, json: async () => [{ role: "assistant", text: "HEARTBEAT_OK" }] }
+      }
+      return { ok: false, status: 404 }
+    })
     globalThis.fetch = mockFetch
 
-    const options = makeOptions({ intervalMs: 100 })
+    const options = makeOptions({ config: makeConfig({ intervalMs: 100 }) })
     const service = new HeartbeatService(options)
 
-    service.start()
-    vi.advanceTimersByTime(100)
-    await advanceTimers(10)
+    const tick1 = (service as any).tick()
+    await advanceTimers(2_100)
+    await tick1
 
     let stats = service.getStats()
     expect(stats.successCount).toBe(1)
     expect(stats.failCount).toBe(0)
 
-    vi.advanceTimersByTime(100)
-    await advanceTimers(10)
+    // Second run returns failure text
+    const mockFetch2 = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (url.includes("/session/") && url.endsWith("/message") && init?.method === "POST") {
+        return { ok: true }
+      }
+      if (url.includes("/session/") && !url.includes("/message")) {
+        return { ok: true, json: async () => ({ status: { type: "idle" } }) }
+      }
+      if (url.includes("/message?limit=1")) {
+        return { ok: true, json: async () => [{ role: "assistant", text: "FAIL" }] }
+      }
+      return { ok: false, status: 404 }
+    })
+    globalThis.fetch = mockFetch2
+    const tick2 = (service as any).tick()
+    await advanceTimers(2_100)
+    await tick2
 
     stats = service.getStats()
     expect(stats.successCount).toBe(1)

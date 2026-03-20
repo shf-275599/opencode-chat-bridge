@@ -175,7 +175,7 @@ The `session_id` is shown in opencode-im-bridge's startup logs (e.g. `Bound to T
 
 We support multiple platforms including Feishu, QQ, Telegram, and Discord.
 
-👉 **[Read the Bot Configuration Guide](CONFIGURATION.md)**
+👉 **[Read the Bot Configuration Guide](docs/CONFIGURATION.md)**
 
 ---
 
@@ -308,7 +308,7 @@ bun run build        # Compile TypeScript to dist/
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on issues, pull requests, and code style.
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines on issues, pull requests, and code style.
 
 ---
 

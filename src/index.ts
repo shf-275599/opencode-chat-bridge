@@ -224,12 +224,26 @@ async function main(): Promise<void> {
     ? createSubAgentCardHandler({ subAgentTracker, feishuClient, logger })
     : undefined
 
+  let cronService: CronService | undefined
+  if (config.cron) {
+    logger.info("Initializing cron service...")
+    cronService = new CronService({
+      config: config.cron,
+      sessionManager,
+      feishuClient,
+      channelManager,
+      serverUrl,
+      logger,
+    })
+  }
+
   const commandHandler = createCommandHandler({
     serverUrl,
     sessionManager,
     feishuClient,
     logger,
     channelManager,
+    cronService,
   })
 
   const { handleMessage, dispose: disposeDebouncer } = createMessageHandler({
@@ -438,28 +452,21 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   // Phase 8: Optional Services (Cron + Heartbeat)
   // ═══════════════════════════════════════════
-  let cronService: CronService | undefined
   let heartbeatService: HeartbeatService | undefined
 
-  if (config.cron) {
-    logger.info("Starting cron service...")
-    cronService = new CronService({
-      config: config.cron,
-      sessionManager,
-      feishuClient,
-      serverUrl,
-      logger,
+  if (cronService) {
+    cronService.start().catch((err: any) => {
+      logger.error(`Failed to start CronService: ${err}`)
     })
-    cronService.start()
   }
 
   if (config.heartbeat) {
     logger.info("Starting heartbeat service...")
     heartbeatService = new HeartbeatService({
-      intervalMs: config.heartbeat.intervalMs,
+      config: config.heartbeat,
+      sessionManager,
       serverUrl,
       feishuClient,
-      statusChatId: config.heartbeat.statusChatId,
       logger,
     })
     heartbeatService.start()

@@ -92,7 +92,7 @@ graph TD;
 
 - **[Bun](https://bun.sh)**（必需运行时，本项目使用 `bun:sqlite`，仅 Bun 支持）
 - **[opencode](https://opencode.ai)** 已安装在本地
-- 已配置凭证的飞书开放平台应用 或 QQ、Telegram、Discord 等平台机器人（👉参见[《机器人配置指南》](CONFIGURATION.zh-CN.md)）
+- 已配置凭证的飞书开放平台应用 或 QQ、Telegram、Discord 等平台机器人（👉参见[《机器人配置指南》](docs/CONFIGURATION.zh-CN.md)）
 
 ### 步骤
 
@@ -243,7 +243,7 @@ bun run build        # 编译到 dist/
 
 ## 参与贡献
 
-请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 了解提 issue、提 PR 和代码风格的规范。
+请参阅 [CONTRIBUTING.md](docs/CONTRIBUTING.md) 了解提 issue、提 PR 和代码风格的规范。
 
 ---
 

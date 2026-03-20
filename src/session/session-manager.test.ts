@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { Database } from "bun:sqlite"
 import { createSessionManager } from "./session-manager.js"
 import type { SessionManager } from "./session-manager.js"
+
+const isBun = typeof (globalThis as any).Bun !== "undefined"
+const describeOrSkip = isBun ? describe : describe.skip
+
+let Database: typeof import("bun:sqlite").Database
+if (isBun) {
+  ;({ Database } = await import("bun:sqlite"))
+}
 
 const SERVER_URL = "http://127.0.0.1:4096"
 const DEFAULT_AGENT = "claude"
@@ -10,7 +17,7 @@ function createTestDb(): Database {
   return new Database(":memory:")
 }
 
-describe("session-manager", () => {
+describeOrSkip("session-manager", () => {
   let db: Database
   let sm: SessionManager
   const originalFetch = globalThis.fetch

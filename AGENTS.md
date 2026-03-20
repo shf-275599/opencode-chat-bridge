@@ -1,4 +1,4 @@
-# AGENTS.md — opencode-lark
+# AGENTS.md — opencode-im-bridge
 
 Architecture guide for contributors. Covers module layout, key abstractions, data flow, and how to extend the system.
 

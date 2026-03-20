@@ -142,6 +142,11 @@ export function buildHelpCard(): Record<string, unknown> {
         },
         {
           tag: "button",
+          text: { tag: "plain_text", content: "Model" },
+          value: { action: "command_execute", command: "/models" },
+        },
+        {
+          tag: "button",
           text: { tag: "plain_text", content: "📦 压缩历史" },
           value: { action: "command_execute", command: "/compact" },
         },
@@ -156,6 +161,54 @@ export function buildHelpCard(): Record<string, unknown> {
           type: "danger",
           value: { action: "command_execute", command: "/abort" },
         },
+      ],
+    },
+  }
+}
+
+export function buildModelSelectorCard(
+  models: Array<{ id: string; providerName: string; modelName: string }>,
+  currentModelId?: string,
+): Record<string, unknown> {
+  const visibleModels = models.slice(0, 12)
+  const truncatedCount = Math.max(0, models.length - visibleModels.length)
+
+  return {
+    schema: "2.0",
+    config: { wide_screen_mode: true },
+    header: {
+      title: {
+        tag: "plain_text",
+        content: "Model",
+      },
+      template: "indigo",
+    },
+    body: {
+      elements: [
+        {
+          tag: "markdown",
+          content: currentModelId
+            ? `**Current model:** \`${currentModelId}\`\n\nChoose a model below.`
+            : "**Choose a model below.**",
+        },
+        ...visibleModels.map((model) => {
+          const isCurrent = model.id === currentModelId
+          return {
+            tag: "button",
+            text: {
+              tag: "plain_text",
+              content: `${isCurrent ? "* " : ""}${model.providerName} / ${model.modelName}`,
+            },
+            type: isCurrent ? "primary" : "default",
+            value: { action: "command_execute", command: `/models ${model.id}` },
+          }
+        }),
+        ...(truncatedCount > 0
+          ? [{
+            tag: "markdown",
+            content: `And ${truncatedCount} more. Use \`/models provider/model\` to switch directly.`,
+          }]
+          : []),
       ],
     },
   }

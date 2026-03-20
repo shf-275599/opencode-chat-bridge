@@ -299,6 +299,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
             { command: "compact", description: "压缩历史记录" },
             { command: "share", description: "分享会话链接" },
             { command: "agent", description: "??/?? Agent" },
+            { command: "models", description: "List/switch models" },
             { command: "help", description: "显示帮助" },
         ]
         await this.callApi("setMyCommands", { commands })

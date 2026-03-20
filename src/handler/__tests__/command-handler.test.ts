@@ -13,6 +13,7 @@ function createMockSessionManager(
     getExisting: vi.fn().mockResolvedValue(mapping?.session_id),
     deleteMapping: vi.fn().mockReturnValue(true),
     setMapping: vi.fn().mockReturnValue(true),
+    setModel: vi.fn().mockReturnValue(true),
     cleanup: vi.fn().mockReturnValue(0),
   }
 }
@@ -21,6 +22,7 @@ const DEFAULT_MAPPING: SessionMapping = {
   feishu_key: "chat-1",
   session_id: "ses-123",
   agent: "build",
+  model: null,
   created_at: Date.now(),
   last_active: Date.now(),
   is_bound: 1,
@@ -216,6 +218,83 @@ describe("createCommandHandler", () => {
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
         content: expect.stringContaining("Agent"),
+      })
+    })
+  })
+
+  describe("/models", () => {
+    it("sends interactive card with model buttons", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              all: [
+                {
+                  id: "openai",
+                  name: "OpenAI",
+                  models: {
+                    "gpt-5": { id: "gpt-5", name: "GPT-5" },
+                    "gpt-5-mini": { id: "gpt-5-mini", name: "GPT-5 Mini" },
+                  },
+                },
+              ],
+            }),
+        })
+      mockFeishuClient.replyMessage = vi.fn().mockResolvedValue({ code: 0, msg: "ok" })
+
+      const handler = createHandler()
+      const result = await handler("chat-1", "chat-1", "msg-1", "/models")
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch).toHaveBeenNthCalledWith(1, "http://test:4096/provider")
+      expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
+        msg_type: "interactive",
+        content: expect.any(String),
+      })
+
+      const callArgs = mockFeishuClient.replyMessage.mock.calls[0]
+      const content = JSON.parse(callArgs?.[1]?.content as string)
+      expect(content.header?.title?.content).toContain("Model")
+      const actionElements = content.body.elements?.filter((e: any) => e.tag === "button")
+      expect(actionElements).toHaveLength(2)
+      expect(actionElements[0]?.value?.command).toBe("/models openai/gpt-5")
+    })
+
+    it("switches to a valid model", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              all: [
+                {
+                  id: "openai",
+                  name: "OpenAI",
+                  models: {
+                    "gpt-5": { id: "gpt-5", name: "GPT-5" },
+                  },
+                },
+              ],
+            }),
+        })
+        .mockResolvedValueOnce({ ok: true })
+      mockFeishuClient.replyMessage = vi.fn().mockResolvedValue({ code: 0, msg: "ok" })
+
+      const handler = createHandler()
+      const result = await handler("chat-1", "chat-1", "msg-1", "/models openai/gpt-5")
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenNthCalledWith(2, "http://test:4096/session/ses-123/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "models", arguments: "openai/gpt-5" }),
+      })
+      expect(mockSessionManager.setModel).toHaveBeenCalledWith("chat-1", "openai/gpt-5")
+      expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
+        msg_type: "text",
+        content: expect.stringContaining("Model switch command sent"),
       })
     })
   })

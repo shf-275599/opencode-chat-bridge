@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.36.2 (2026-03-20)
+
+### Improvements
+
+- **AppConfig**: Native support for `RELIABILITY_CRON_*` and `RELIABILITY_HEARTBEAT_*` environment variables for fast, full-environment deployment.
+- **QQ WebSocket Resilience**: Added a runtime hotfix to force fresh `IDENTIFY` after `INVALID_SESSION` to avoid infinite reconnect loops.
+- **QQ WebSocket Stability**: Set explicit WebSocket receiver defaults (`maxRetries`, `reconnectDelay`, `heartbeatInterval`) to prevent NaN backoff warnings.
+- **Agent Commands**: Added `/agent` command support to list and switch agents, plus message-level agent forwarding.
+
+### Bug Fixes
+
+- **Tests**: Fixed `/agent` command assertion case mismatch in `command-handler.test.ts` to keep CI/CD green.
+- **Agent Routing**: Persisted per-chat agent selection in session mapping and included `agent` in session message posts.
+
+### Dependencies
+
+- **cron**: Added `cron` and `@types/cron` dependencies and unified the Windows test runner entry path.
+
 ## 0.36.1 (2026-03-19)
 
 ### Features

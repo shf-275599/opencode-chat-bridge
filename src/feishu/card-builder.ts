@@ -137,7 +137,7 @@ export function buildHelpCard(): Record<string, unknown> {
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "?????? Agent" },
+          text: { tag: "plain_text", content: "🤖 选择 Agent" },
           value: { action: "command_execute", command: "/agent" },
         },
         {

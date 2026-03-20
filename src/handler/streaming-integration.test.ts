@@ -281,6 +281,82 @@ describe("createStreamingBridge", () => {
     expect(cardContent.header.template).toBe("indigo")
   })
 
+  it("sends permission requests as interactive cards via plugin outbound", async () => {
+    const sendCard = vi.fn().mockResolvedValue(undefined)
+    const sendText = vi.fn().mockResolvedValue(undefined)
+    const deps = makeDeps({
+      channelManager: {
+        getChannel: vi.fn().mockReturnValue({
+          outbound: {
+            sendCard,
+            sendText,
+          },
+        }),
+      } as any,
+    })
+    const bridge = createStreamingBridge(deps)
+
+    const onComplete = vi.fn()
+    const handlePromise = bridge.handleMessage(
+      "chat-1",
+      "ses-1",
+      eventListeners,
+      eventProcessor,
+      mockSendMessage,
+      onComplete,
+      "msg_original",
+      null,
+      "feishu",
+    )
+
+    await waitFor(() => {
+      expect(eventListeners.size).toBe(1)
+    })
+
+    const listener = [...eventListeners.get("ses-1")!][0]!
+    listener({
+      type: "permission.asked",
+      properties: {
+        sessionID: "ses-1",
+        id: "perm-1",
+        permission: "command",
+        patterns: ["Allow running tests?"],
+        metadata: {},
+        always: [],
+      },
+    })
+
+    await waitFor(() => {
+      expect(sendCard).toHaveBeenCalledTimes(1)
+    })
+
+    expect(sendText).not.toHaveBeenCalled()
+    expect(sendCard).toHaveBeenCalledWith(
+      { address: "chat-1" },
+      expect.objectContaining({
+        schema: "2.0",
+        body: expect.objectContaining({
+          elements: expect.arrayContaining([
+            expect.objectContaining({
+              value: expect.objectContaining({
+                action: "permission_reply",
+                requestId: "perm-1",
+                reply: "once",
+              }),
+            }),
+          ]),
+        }),
+      }),
+    )
+
+    listener({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    })
+
+    await handlePromise
+  })
+
   it("removes listener on SessionIdle", async () => {
     const deps = makeDeps({
       feishuClient: {

@@ -11,7 +11,7 @@ const FeishuConfigSchema = z.object({
   appId: z.string().min(1),
   appSecret: z.string().min(1),
   verificationToken: z.string().optional().default(""),
-  webhookPort: z.number().int().positive().default(3000),
+  webhookPort: z.number().int().positive().default(3001),
   encryptKey: z.string().optional(),
 })
 
@@ -136,7 +136,11 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
         appId: process.env["FEISHU_APP_ID"],
         appSecret: process.env["FEISHU_APP_SECRET"] ?? "",
         verificationToken: process.env["FEISHU_VERIFICATION_TOKEN"] ?? "",
-        webhookPort: Number(process.env["OPENCODE_FEISHU_PORT"] ?? "3000"),
+        webhookPort: Number(
+          process.env["FEISHU_WEBHOOK_PORT"] ??
+          process.env["OPENCODE_FEISHU_PORT"] ??
+          "3001",
+        ),
         encryptKey: process.env["FEISHU_ENCRYPT_KEY"],
       } : undefined,
       qq: process.env["QQ_APP_ID"] ? {

@@ -5,6 +5,8 @@
  * through the standard ChannelPlugin pipeline.
  */
 
+import { readFile } from "node:fs/promises"
+import { basename } from "node:path"
 import { BaseChannelPlugin } from "../base-plugin.js"
 import type {
     ChannelId,
@@ -170,6 +172,19 @@ export class TelegramPlugin extends BaseChannelPlugin {
                     }
                 }
             },
+
+            sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                this.logger.info(`[TelegramPlugin] Attempting to send image to ${target.address}: ${filePath}`)
+                try {
+                    const fileData = await readFile(filePath)
+                    const fileName = basename(filePath)
+                    await this.callApiMultipart("sendPhoto", target.address, "photo", fileData, fileName)
+                    this.logger.info(`[TelegramPlugin] Image sent successfully: ${filePath}`)
+                } catch (err) {
+                    this.logger.error(`[TelegramPlugin] Failed to send image to ${target.address}: ${err}`)
+                    throw err
+                }
+            },
         }
 
         // 5. Streaming adapter — flush 为 no-op，最终内容通过 sendText 发送
@@ -206,7 +221,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
     // ── Private ──
 
     /**
-     * 调用 Telegram Bot API。
+     * 调用 Telegram Bot API（JSON body）。
      */
     private async callApi(method: string, params: Record<string, unknown>): Promise<unknown> {
         const token = this.telegramConfig.botToken
@@ -229,6 +244,46 @@ export class TelegramPlugin extends BaseChannelPlugin {
         }
         
         this.logger.debug(`[TelegramPlugin] API Success (${method})`)
+        return data
+    }
+
+    /**
+     * 调用 Telegram Bot API（multipart/form-data，用于文件上传）。
+     * @param method API method name (e.g. "sendPhoto")
+     * @param chatId Target chat ID
+     * @param fieldName Form field name for the file (e.g. "photo")
+     * @param fileData File binary data
+     * @param fileName Original file name (used for MIME detection by Telegram)
+     */
+    private async callApiMultipart(
+        method: string,
+        chatId: string,
+        fieldName: string,
+        fileData: Uint8Array,
+        fileName: string,
+    ): Promise<unknown> {
+        const token = this.telegramConfig.botToken
+        const url = `${TELEGRAM_API_BASE}/bot${token}/${method}`
+
+        const form = new FormData()
+        form.append("chat_id", chatId)
+        form.append(fieldName, new Blob([fileData]), fileName)
+
+        this.logger.debug(`[TelegramPlugin] Multipart API Request: ${method} (${fileName}) to ${chatId}`)
+
+        const res = await fetch(url, { method: "POST", body: form })
+        const data = (await res.json()) as { ok: boolean; result?: any; description?: string; error_code?: number }
+
+        if (!data.ok) {
+            this.logger.error(`[TelegramPlugin] API Error (${method}): ${data.description}`, {
+                error_code: data.error_code,
+                chatId,
+                fileName,
+            })
+            throw new Error(`Telegram API error (${method}): ${data.description ?? "unknown"}`)
+        }
+
+        this.logger.debug(`[TelegramPlugin] Multipart API Success (${method})`)
         return data
     }
 

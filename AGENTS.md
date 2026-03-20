@@ -1,17 +1,17 @@
-# AGENTS.md — opencode-lark
+# AGENTS.md — opencode-im-bridge
 
 Architecture guide for contributors. Covers module layout, key abstractions, data flow, and how to extend the system.
 
 ## What This Project Does
 
-`opencode-lark` bridges IM chats (Feishu, QQ, Telegram) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/Telegram), while tool and sub-agent status are shown via separate cards.
+`opencode-im-bridge` bridges IM chats (Feishu, QQ, Telegram) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/Telegram), while tool and sub-agent status are shown via separate cards.
 
 ```
 Feishu client
     ↕  WebSocket (long-lived)
 Feishu Open Platform
     ↕  WebSocket / Webhook
-opencode-lark  (this project)
+opencode-im-bridge  (this project)
     ↕  HTTP API + SSE
 opencode server  (localhost:4096)
     ↕  stdin/stdout
@@ -104,7 +104,7 @@ opencode SSE stream
 
 ## Startup Phases (`src/index.ts`)
 
-1. Load config (`opencode-lark.jsonc` or env vars)
+1. Load config (`opencode-im-bridge.jsonc` or env vars)
 2. Connect to opencode server (exponential-backoff retry, max 10 attempts)
 3. Init SQLite database
 4. Create shared services (SessionManager, EventProcessor, StreamingBridge)
@@ -113,6 +113,21 @@ opencode SSE stream
 7. Start channels (WebSocket) + webhook server (card action callbacks)
 8. Start optional CronService + HeartbeatService
 9. Register SIGTERM/SIGINT handlers for graceful shutdown
+---
+
+## Development Guidelines
+
+### Package Manager
+This project uses **npm** as its primary package manager. Please ensure you run `npm install` to keep the lockfile (`package-lock.json`) consistent.
+
+### Code Style & Conventions
+- **TypeScript**: The project is written in strictly typed TypeScript (`ES2022` target, `NodeNext` modules).
+- **ESM Imports**: Use explicit `.js` extensions for relative imports (e.g., `import { loadConfig } from "./utils/config.js"`) as required by NodeNext/ESM resolution.
+- **Node.js Built-ins**: Use the `node:` prefix for built-in modules (e.g., `import { join } from "node:path"`).
+- **Logging**: Do not use raw `console.log`. Always use the shared logger instance (e.g., `import { createLogger } from "./utils/logger.js"`).
+- **File System**: For filesystem operations, prefer `node:fs/promises` and handle path resolution securely, guarding against path traversal.
+- **Formatting**: Please follow the existing indentation (2 spaces) and avoid trailing commas where unnecessary.
+
 ---
 
 ## Extension Points
@@ -129,7 +144,7 @@ opencode SSE stream
 1. Open `src/cron/cron-service.ts`.
 2. Add your job definition to the cron config schema in `src/types.ts`.
 3. Register the new job inside `CronService.start()` with a cron expression and handler function.
-4. Enable it in `opencode-lark.jsonc` under the `cron` key.
+4. Enable it in `opencode-im-bridge.jsonc` under the `cron` key.
 
 ### Adding a Heartbeat Check
 
@@ -153,4 +168,4 @@ opencode SSE stream
 
 \* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`TELEGRAM_BOT_TOKEN`/`DISCORD_BOT_TOKEN`) must be configured.
 
-See `.env.example` and `opencode-lark.example.jsonc` for full reference.
+See `.env.example` and `opencode-im-bridge.example.jsonc` for full reference.

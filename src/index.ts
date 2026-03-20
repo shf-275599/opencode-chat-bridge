@@ -197,9 +197,7 @@ async function main(): Promise<void> {
 
   const subAgentTracker = new SubAgentTracker({ serverUrl })
 
-  const outboundMedia = config.feishu
-    ? createOutboundMediaHandler({ feishuClient, logger })
-    : undefined
+  const outboundMedia = createOutboundMediaHandler({ logger })
 
   const streamingBridge = createStreamingBridge({
     cardkitClient,

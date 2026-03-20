@@ -1023,7 +1023,9 @@ export function createMessageHandler(
                 // When streaming bridge is active, it handles outbound media in its own SessionIdle.
                 if (deps.outboundMedia && !deps.streamingBridge) {
                   try {
-                    await deps.outboundMedia.sendDetectedFiles(event.chat_id, responseText)
+                    const channelId = (event as any)._channelId || "feishu"
+                    const adapter = deps.channelManager?.getChannel(channelId)?.outbound
+                    await deps.outboundMedia.sendDetectedFiles({ address: event.chat_id }, responseText, adapter)
                   } catch (err) {
                     logger.warn(`outboundMedia.sendDetectedFiles failed: ${err}`)
                   }
@@ -1108,7 +1110,9 @@ export function createMessageHandler(
     await sendResponse(responseText, event, thinkingMessageId)
     if (deps.outboundMedia) {
       try {
-        await deps.outboundMedia.sendDetectedFiles(event.chat_id, responseText)
+        const channelId = (event as any)._channelId || "feishu"
+        const adapter = deps.channelManager?.getChannel(channelId)?.outbound
+        await deps.outboundMedia.sendDetectedFiles({ address: event.chat_id }, responseText, adapter)
       } catch (err) {
         logger.warn(`outboundMedia.sendDetectedFiles in sync fallback failed: ${err}`)
       }

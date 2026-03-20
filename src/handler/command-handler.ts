@@ -40,6 +40,12 @@ interface Session {
   title?: string
 }
 
+interface AgentInfo {
+  name: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+}
+
 // Card builders removed - used centralized card-builder.ts instead
 
 // ── Factory ──
@@ -234,6 +240,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 - /compact: 压缩历史
 - /share: 分享会话
 - /abort: 中止任务
+- /agent: ??/?? Agent
 - /cron: 计划任务管理
 - /help: 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
@@ -296,6 +303,55 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, "目前支持的子命令：/cron list, /cron remove <id>。复杂的自然语言创建暂未实装。", channelId)
   }
 
+  async function handleAgent(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    args: string[],
+  ): Promise<void> {
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, "No session bound yet. Use /sessions or /new first.", channelId)
+      return
+    }
+
+    const resp = await fetch(`${serverUrl}/agent`)
+    if (!resp.ok) {
+      throw new Error(`List agents failed: HTTP ${resp.status}`)
+    }
+    const agents = (await resp.json()) as AgentInfo[]
+    const available = agents.filter((a) => a.mode === "primary" || a.mode === "all")
+    const names = available.map((a) => a.name)
+    const current = mapping.agent || "build"
+
+    const targetRaw = args[0]
+    if (!targetRaw || targetRaw.toLowerCase() === "list") {
+      const listText = names.length
+        ? names
+            .map((n) => (n.toLowerCase() === current.toLowerCase() ? `* ${n}` : `- ${n}`))
+            .join("\n")
+        : "No agents available"
+      await replyText(
+        chatId,
+        messageId,
+        `Current agent: ${current}\n\nAvailable agents:\n${listText}\n\nUsage: /agent {name}`,
+        channelId,
+      )
+      return
+    }
+
+    const matched = names.find((n) => n.toLowerCase() === targetRaw.toLowerCase())
+    if (!matched) {
+      const listText = names.length ? names.join(", ") : "none"
+      await replyText(chatId, messageId, `Agent not found: ${targetRaw}\nAvailable: ${listText}`, channelId)
+      return
+    }
+
+    sessionManager.setMapping(feishuKey, mapping.session_id, matched)
+    await replyText(chatId, messageId, `Agent switched to: ${matched}`, channelId)
+  }
+
   return async function handleCommand(
     feishuKey: string,
     chatId: string,
@@ -338,6 +394,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/cron": {
           const args = parts.slice(1)
           await handleCron(feishuKey, chatId, messageId, channelId, args)
+          return true
+        }
+
+        case "/agent": {
+          const args = parts.slice(1)
+          await handleAgent(feishuKey, chatId, messageId, channelId, args)
           return true
         }
 

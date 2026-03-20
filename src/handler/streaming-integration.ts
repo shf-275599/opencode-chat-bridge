@@ -93,20 +93,22 @@ export function createStreamingBridge(
         let settled = false
         let syncResponseBody = ""
         // Helper: send text reply and clean up reaction
-        const sendFinalResponse = async (text: string): Promise<void> => {
-          if (plugin?.outbound?.sendText) {
-            logger.info(`[StreamingBridge] Sending final response via plugin ${channelId} to ${chatId}`)
-            await plugin.outbound.sendText({ address: chatId }, text)
-            logger.info(`[StreamingBridge] Final response sent via plugin ${channelId}`)
-          } else if (feishuClient) {
-            logger.info(`[StreamingBridge] Sending final response via Feishu API fallback to ${chatId}`)
-            await feishuClient.replyMessage(messageId, {
-              msg_type: "interactive",
-              content: JSON.stringify(buildResponseCard(text)),
-            })
-            logger.info(`[StreamingBridge] Final response sent via Feishu API fallback`)
-          } else {
-            logger.warn(`No plugin outbound and no feishuClient available to send response for channel ${channelId}`)
+        const sendFinalResponse = async (text: string, skipMessage = false): Promise<void> => {
+          if (!skipMessage) {
+            if (plugin?.outbound?.sendText) {
+              logger.info(`[StreamingBridge] Sending final response via plugin ${channelId} to ${chatId}`)
+              await plugin.outbound.sendText({ address: chatId }, text)
+              logger.info(`[StreamingBridge] Final response sent via plugin ${channelId}`)
+            } else if (feishuClient) {
+              logger.info(`[StreamingBridge] Sending final response via Feishu API fallback to ${chatId}`)
+              await feishuClient.replyMessage(messageId, {
+                msg_type: "interactive",
+                content: JSON.stringify(buildResponseCard(text)),
+              })
+              logger.info(`[StreamingBridge] Final response sent via Feishu API fallback`)
+            } else {
+              logger.warn(`No plugin outbound and no feishuClient available to send response for channel ${channelId}`)
+            }
           }
           if (reactionId && channelId === "feishu" && feishuClient) {
             try {
@@ -245,7 +247,7 @@ export function createStreamingBridge(
               closeCard
                 .then(async () => {
                   try {
-                    await sendFinalResponse(responseText)
+                    await sendFinalResponse(responseText, !!card)
                   } catch (err) {
                     logger.warn(`sendFinalResponse failed: ${err}`)
                   }
@@ -299,7 +301,7 @@ export function createStreamingBridge(
           }
           // Send fallback text as reply
           try {
-            await sendFinalResponse(fallbackText)
+            await sendFinalResponse(fallbackText, !!card)
           } catch (err) {
             logger.warn(`sendFinalResponse in timeout fallback failed: ${err}`)
           }

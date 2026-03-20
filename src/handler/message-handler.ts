@@ -514,7 +514,8 @@ export function createMessageHandler(
 
     // ── 8. Build the POST-to-opencode function ──
     let currentSessionId = sessionId
-    const postBody = JSON.stringify({ parts })
+    const preferredAgent = sessionManager.getSession(feishuKey)?.agent
+    const postBody = JSON.stringify({ parts, agent: preferredAgent })
 
     async function postToOpencode(): Promise<string> {
       const url = `${serverUrl}/session/${currentSessionId}/message`
@@ -544,7 +545,7 @@ export function createMessageHandler(
         if (!(err instanceof SessionGoneError)) throw err
         logger.warn(`Session ${currentSessionId} returned 404 — clearing stale mapping and retrying`)
         sessionManager.deleteMapping(feishuKey)
-        const newSessionId = await sessionManager.getOrCreate(feishuKey)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey, preferredAgent)
         ownedSessions.add(newSessionId)
         logger.info(`Session self-healed: ${currentSessionId} → ${newSessionId}`)
         currentSessionId = newSessionId

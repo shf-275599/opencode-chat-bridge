@@ -1,29 +1,33 @@
 /**
  * Outbound media handler — detects file paths in agent replies
- * and uploads them to Feishu as image or file messages.
+ * and sends them to the target channel as image messages.
  *
  * Security: only files within allowed directories may be uploaded.
  * Symlinks are resolved via fs.realpath to prevent escaping the allowlist.
+ *
+ * Design: uses ChannelOutboundAdapter.sendImage (optional) so each channel
+ * plugin is responsible for its own upload/send logic. Falls back silently
+ * if the plugin does not implement sendImage.
  */
 
-import { readFile, stat, realpath } from "node:fs/promises"
+import { stat, realpath } from "node:fs/promises"
 import { resolve } from "node:path"
 import { homedir } from "node:os"
-import type { FeishuApiClient } from "../feishu/api-client.js"
+import type { ChannelOutboundAdapter, OutboundTarget } from "../channel/types.js"
 import type { Logger } from "../utils/logger.js"
 import { getAttachmentsDir } from "../utils/paths.js"
 
 // ── Public types ──
 
 export interface OutboundMediaDeps {
-  feishuClient: FeishuApiClient
+  outbound: ChannelOutboundAdapter
   logger: Logger
   /** Extra directories (absolute) from which uploads are allowed. */
   allowedUploadDirs?: string[]
 }
 
 export interface OutboundMediaHandler {
-  sendDetectedFiles(chatId: string, text: string): Promise<void>
+  sendDetectedFiles(target: OutboundTarget, text: string): Promise<void>
 }
 
 // ── Constants ──
@@ -132,20 +136,33 @@ async function resolveAllowedPath(
 export function createOutboundMediaHandler(
   deps: OutboundMediaDeps,
 ): OutboundMediaHandler {
-  const { feishuClient, logger } = deps
+  const { outbound, logger } = deps
   const allowlist = buildAllowlist(deps.allowedUploadDirs)
 
   return {
-    async sendDetectedFiles(chatId: string, text: string): Promise<void> {
+    async sendDetectedFiles(target: OutboundTarget, text: string): Promise<void> {
+      // Skip entirely if the channel plugin doesn't support sendImage
+      if (!outbound.sendImage) {
+        logger.debug("Channel plugin does not implement sendImage, skipping media detection")
+        return
+      }
+
       const paths = [...new Set(extractFilePaths(text))]
       if (paths.length === 0) {
         logger.debug(`No file paths detected in response text (${text.length} chars)`)
         return
       }
 
-      logger.info(`Detected ${paths.length} file path(s) in agent reply, attempting upload`)
+      // Filter to image files only
+      const imagePaths = paths.filter(isImageFile)
+      if (imagePaths.length === 0) {
+        logger.debug("No image file paths detected in response text")
+        return
+      }
 
-      for (const filePath of paths) {
+      logger.info(`Detected ${imagePaths.length} image path(s) in agent reply, attempting send`)
+
+      for (const filePath of imagePaths) {
         try {
           // Cheap string prefilter — skip FS calls for paths clearly outside allowlist
           const resolved = resolve(filePath)
@@ -165,27 +182,11 @@ export function createOutboundMediaHandler(
             continue
           }
 
-          // Read file using resolved path
-          const fileData = await readFile(realPath)
-
-          if (isImageFile(realPath)) {
-            const imageKey = await feishuClient.uploadImage(fileData)
-            await feishuClient.sendMessage(chatId, {
-              msg_type: "image",
-              content: JSON.stringify({ image_key: imageKey }),
-            })
-            logger.info(`Sent image to Feishu: ${realPath}`)
-          } else {
-            const fileName = realPath.split("/").pop() ?? "file"
-            const fileKey = await feishuClient.uploadFile(fileData, fileName)
-            await feishuClient.sendMessage(chatId, {
-              msg_type: "file",
-              content: JSON.stringify({ file_key: fileKey }),
-            })
-            logger.info(`Sent file to Feishu: ${realPath}`)
-          }
+          // Delegate to channel plugin — it owns the upload/send implementation
+          await outbound.sendImage(target, realPath)
+          logger.info(`Sent image via channel plugin: ${realPath}`)
         } catch (err) {
-          logger.warn(`Failed to send file ${filePath} to Feishu: ${err}`)
+          logger.warn(`Failed to send image ${filePath}: ${err}`)
         }
       }
     },

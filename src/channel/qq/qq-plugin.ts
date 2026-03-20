@@ -145,6 +145,20 @@ export class QQPlugin extends BaseChannelPlugin {
           throw err
         }
       },
+
+      sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[QQPlugin] Attempting to send image to ${target.address}: ${filePath}`)
+        try {
+          const res = await this.qqBot.messageService.sendPrivateMessage(
+            target.address,
+            [segment.image(filePath)],
+          )
+          this.logger.info(`[QQPlugin] Image sent successfully. Response: ${JSON.stringify(res)}`)
+        } catch (err) {
+          this.logger.error(`[QQPlugin] Failed to send image to ${target.address}: ${err}`)
+          throw err
+        }
+      },
         }
 
         // 5. Streaming adapter

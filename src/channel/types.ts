@@ -177,6 +177,13 @@ export interface ChannelOutboundAdapter {
    * @param card Card object (channel-specific format)
    */
   sendCard?(target: OutboundTarget, card: unknown): Promise<void>;
+
+  /**
+   * Optional: Send image file to a target
+   * @param target Destination specification
+   * @param filePath Absolute path to the image file (already validated and within allowlist)
+   */
+  sendImage?(target: OutboundTarget, filePath: string): Promise<void>;
 }
 
 /**

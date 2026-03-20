@@ -40,19 +40,30 @@ const ProgressConfigSchema = z.object({
 
 
 const CronJobSchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
   schedule: z.string(),
   prompt: z.string(),
   chatId: z.string(),
+  channelId: z.string().optional().default("feishu"),
+  enabled: z.boolean().optional().default(true),
 })
 
 const CronConfigSchema = z.object({
-  jobs: z.array(CronJobSchema),
+  enabled: z.boolean().default(true),
+  apiEnabled: z.boolean().default(true),
+  apiPort: z.number().default(4097),
+  apiHost: z.string().default("127.0.0.1"),
+  jobsFile: z.string().default("./data/cron-jobs.json"),
+  jobs: z.array(CronJobSchema).default([]),
 })
 
 const HeartbeatConfigSchema = z.object({
-  intervalMs: z.number().default(60000),
+  proactiveEnabled: z.boolean().default(false),
+  intervalMs: z.number().default(1800000),
   statusChatId: z.string().optional(),
+  alertChats: z.array(z.string()).default([]),
+  agent: z.string().default("build"),
 })
 
 const AppConfigSchema = z.object({
@@ -111,6 +122,15 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
 
   // Fall back to pure env vars if no config file
   if (!rawText) {
+    const cronEnabledEnv = process.env["RELIABILITY_CRON_ENABLED"]
+    const cronApiEnabledEnv = process.env["RELIABILITY_CRON_API_ENABLED"]
+    const cronConfigured =
+      cronEnabledEnv !== undefined ||
+      cronApiEnabledEnv !== undefined ||
+      process.env["RELIABILITY_CRON_JOBS_FILE"] !== undefined ||
+      process.env["RELIABILITY_CRON_API_PORT"] !== undefined ||
+      process.env["RELIABILITY_CRON_API_HOST"] !== undefined
+
     rawText = JSON.stringify({
       feishu: process.env["FEISHU_APP_ID"] && process.env["FEISHU_APP_ID"] !== "cli_xxxxxxxxxxxxxxxx" && process.env["FEISHU_APP_ID"] !== "your_app_id_here" ? {
         appId: process.env["FEISHU_APP_ID"],
@@ -136,8 +156,25 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
           ? process.env["DISCORD_ALLOWED_CHANNEL_IDS"].split(",").map((s: string) => s.trim()).filter(Boolean)
           : [],
       } : undefined,
-      defaultAgent: "build",
-      dataDir: "./data",
+      defaultAgent: process.env["OPENCODE_DEFAULT_AGENT"] ?? "build",
+      dataDir: process.env["OPENCODE_DATA_DIR"] ?? "./data",
+      cron: cronConfigured ? {
+        enabled: cronEnabledEnv !== "false",
+        apiEnabled: cronApiEnabledEnv !== "false",
+        apiPort: Number(process.env["RELIABILITY_CRON_API_PORT"] ?? "4097"),
+        apiHost: process.env["RELIABILITY_CRON_API_HOST"] ?? "127.0.0.1",
+        jobsFile: process.env["RELIABILITY_CRON_JOBS_FILE"] ?? "./data/cron-jobs.json",
+        jobs: [],
+      } : undefined,
+      heartbeat: {
+        proactiveEnabled: process.env["RELIABILITY_PROACTIVE_HEARTBEAT_ENABLED"] === "true",
+        intervalMs: Number(process.env["RELIABILITY_HEARTBEAT_INTERVAL_MS"] ?? "1800000"),
+        statusChatId: process.env["RELIABILITY_HEARTBEAT_STATUS_CHAT_ID"],
+        alertChats: process.env["RELIABILITY_HEARTBEAT_ALERT_CHATS"]
+          ? process.env["RELIABILITY_HEARTBEAT_ALERT_CHATS"].split(",").map((s) => s.trim()).filter(Boolean)
+          : [],
+        agent: process.env["RELIABILITY_HEARTBEAT_AGENT"] ?? "build",
+      }
     })
   }
 

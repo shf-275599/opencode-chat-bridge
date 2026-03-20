@@ -61,12 +61,54 @@ export class QQPlugin extends BaseChannelPlugin {
             sandbox: this.appConfig.qq.sandbox,
             removeAt: true,
             logLevel: "info",
+            // Connection manager retry (Session/Connection)
             maxRetry: 10,
+            // WebSocket receiver retry/backoff settings
+            maxRetries: 10,
+            reconnectDelay: 1000,
+            heartbeatInterval: 45000,
             intents: [
                 "C2C_MESSAGE_CREATE", // Private messages
             ],
             mode: ReceiverMode.WEBSOCKET,
         })
+
+        // Hotfix: after INVALID_SESSION, force a fresh IDENTIFY instead of RESUME
+        // to avoid infinite reconnect loops.
+        {
+            const receiver = (this.qqBot as any).receiver ?? (this.qqBot as any).sessionManager?.receiver
+            if (receiver && typeof receiver.handleInvalidSession === "function" && typeof receiver.handleHello === "function") {
+                const logger = this.logger
+                const state = receiver as any
+                let forceIdentify = false
+                const originalInvalid = state.handleInvalidSession.bind(receiver)
+                const originalHello = state.handleHello.bind(receiver)
+
+                state.handleInvalidSession = (...args: any[]) => {
+                    forceIdentify = true
+                    if (typeof state.isReconnect === "boolean") {
+                        state.isReconnect = false
+                    }
+                    logger.warn("[QQPlugin] Invalid session detected; forcing IDENTIFY on next HELLO")
+                    return originalInvalid(...args)
+                }
+
+                state.handleHello = async (...args: any[]) => {
+                    if (forceIdentify) {
+                        forceIdentify = false
+                        if (typeof state.isReconnect === "boolean") {
+                            state.isReconnect = false
+                        }
+                        logger.info("[QQPlugin] Forcing IDENTIFY (skip RESUME) after invalid session")
+                    }
+                    return originalHello(...args)
+                }
+
+                this.logger.info("[QQPlugin] Installed WebSocket invalid-session hotfix")
+            } else {
+                this.logger.warn("[QQPlugin] Unable to install WebSocket hotfix (receiver methods not found)")
+            }
+        }
 
         // 1. Config adapter
         this.config = {

@@ -177,6 +177,49 @@ describe("createCommandHandler", () => {
     })
   })
 
+  describe("/agent", () => {
+    it("lists agents with current selection", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { name: "build", mode: "primary" },
+            { name: "researcher", mode: "primary" },
+            { name: "subtask", mode: "subagent" },
+          ]),
+      })
+      mockFeishuClient.replyMessage = vi.fn().mockResolvedValue({ code: 0, msg: "ok" })
+
+      const handler = createHandler()
+      const result = await handler("chat-1", "chat-1", "msg-1", "/agent")
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith("http://test:4096/agent")
+      expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
+        msg_type: "text",
+        content: expect.stringContaining("agent"),
+      })
+    })
+
+    it("switches to a valid agent", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([{ name: "build", mode: "primary" }, { name: "researcher", mode: "primary" }]),
+      })
+      mockFeishuClient.replyMessage = vi.fn().mockResolvedValue({ code: 0, msg: "ok" })
+
+      const handler = createHandler()
+      const result = await handler("chat-1", "chat-1", "msg-1", "/agent researcher")
+
+      expect(result).toBe(true)
+      expect(mockSessionManager.setMapping).toHaveBeenCalledWith("chat-1", "ses-123", "researcher")
+      expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
+        msg_type: "text",
+        content: expect.stringContaining("Agent"),
+      })
+    })
+  })
+
   describe("/connect", () => {
     it("connects to a valid session", async () => {
       mockFetch

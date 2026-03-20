@@ -20,7 +20,13 @@ import { getAttachmentsDir } from "../utils/paths.js"
 // ── Public types ──
 
 export interface OutboundMediaDeps {
-  outbound: ChannelOutboundAdapter
+  /**
+   * Channel outbound adapter that implements sendImage.
+   * Optional at construction time — sendDetectedFiles is a no-op when not provided.
+   * Callers (streaming-integration, message-handler) should inject the correct
+   * channel plugin's outbound adapter per message.
+   */
+  outbound?: ChannelOutboundAdapter
   logger: Logger
   /** Extra directories (absolute) from which uploads are allowed. */
   allowedUploadDirs?: string[]
@@ -141,9 +147,9 @@ export function createOutboundMediaHandler(
 
   return {
     async sendDetectedFiles(target: OutboundTarget, text: string): Promise<void> {
-      // Skip entirely if the channel plugin doesn't support sendImage
-      if (!outbound.sendImage) {
-        logger.debug("Channel plugin does not implement sendImage, skipping media detection")
+      // Skip entirely if no outbound adapter or it doesn't support sendImage
+      if (!outbound?.sendImage) {
+        logger.debug("Channel plugin not provided or does not implement sendImage, skipping media detection")
         return
       }
 

@@ -121,9 +121,35 @@ export async function pickConfig(): Promise<string | null> {
 
   if (envFiles.length === 0) return null
 
-  if (envFiles.length === 1) {
+  // 1. Check if a specific config is requested via argument --config <appId>
+  const configArgIndex = process.argv.indexOf("--config")
+  if (configArgIndex !== -1 && process.argv.length > configArgIndex + 1) {
+    const requestedAppId = process.argv[configArgIndex + 1]
+    const matched = envFiles.find(e => e.appId === requestedAppId)
+    if (matched) {
+      process.stdout.write(`Auto-selecting requested config: ${matched.appId}\n`)
+      return matched.filePath
+    }
+    process.stdout.write(red(`Requested config '${requestedAppId}' not found. Falling back to picker.\n`))
+  }
+
+  // 2. Check if a specific config is requested via ENV OPENCODE_IM_CONFIG
+  const envAppId = process.env.OPENCODE_IM_CONFIG
+  if (envAppId) {
+    const matched = envFiles.find(e => e.appId === envAppId)
+    if (matched) {
+      process.stdout.write(`Auto-selecting requested config from ENV: ${matched.appId}\n`)
+      return matched.filePath
+    }
+  }
+
+  if (envFiles.length === 1 || !process.stdin.isTTY) {
     const first = envFiles[0]!
-    process.stdout.write(`Auto-selecting config: ${first.appId}\n`)
+    if (!process.stdin.isTTY && envFiles.length > 1) {
+      process.stdout.write(`Non-interactive environment detected. Auto-selecting config 1: ${first.appId}\n`)
+    } else {
+      process.stdout.write(`Auto-selecting config: ${first.appId}\n`)
+    }
     return first.filePath
   }
 

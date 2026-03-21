@@ -169,3 +169,70 @@ This project uses **npm** as its primary package manager. Please ensure you run 
 \* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`TELEGRAM_BOT_TOKEN`/`DISCORD_BOT_TOKEN`) must be configured.
 
 See `.env.example` and `opencode-im-bridge.example.jsonc` for full reference.
+
+---
+
+## 跨 Session 长期记忆 (Long-term Memory)
+
+本项目支持与 OpenCode 的 Obsidian 长期记忆系统集成，实现跨会话上下文保持。
+
+### 记忆系统配置
+
+在 `opencode-im-bridge.jsonc` 中配置记忆系统路径：
+
+```jsonc
+{
+  "memory": {
+    "enabled": true,
+    "vaultPath": "F:/Note/Notion/",
+    "memoryPath": "F:/Note/Notion/AI长期记忆系统/",
+    "taskPath": "F:/Note/Notion/任务管理系统/"
+  }
+}
+```
+
+### 记忆文件结构
+
+```
+AI长期记忆系统/
+├── 用户画像-{名字}.md    # 用户基本信息
+├── decisions-{名字}.md   # 决策记录
+├── 记忆库.md             # 知识库
+└── 记忆系统助手.md        # 操作指南
+```
+
+### 自动加载时机
+
+| 场景 | 加载内容 |
+|------|----------|
+| 会话开始 | 用户画像、技术栈偏好 |
+| 项目相关 | 历史决策、项目任务 |
+| 代码任务 | 知识库、最佳实践 |
+| 明确请求 | `@用户画像`、`@决策` |
+
+### 触发关键词
+
+- 「加载记忆」「读取记忆」「长期记忆」
+- 「跨会话」「查看用户信息」
+- `@用户画像`、`@决策`、`@知识库`
+
+### 写入时机
+
+Agent 应在以下情况写入记忆：
+- 用户明确偏好或设置
+- 关键决策或承诺
+- 待办事项或行动项
+
+### Obsidian-memory Skill
+
+如需在不同设备间同步，可使用 `obsidian-memory` Skill：
+
+```bash
+# 安装
+npx skills add obsidian-memory
+
+# 配置路径
+# 编辑 ~/.agents/skills/obsidian-memory/config.json
+```
+
+详见 [obsidian-memory Skill](https://github.com/your-repo/obsidian-memory)

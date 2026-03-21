@@ -57,8 +57,10 @@ export function createSessionManager(
 
   try {
     db.exec("ALTER TABLE feishu_sessions ADD COLUMN model TEXT")
-  } catch {
-    // Column already exists.
+  } catch (err) {
+    if (!(err instanceof Error) || !/duplicate column name: model/i.test(err.message)) {
+      throw err
+    }
   }
 
   const getStmt = db.prepare("SELECT * FROM feishu_sessions WHERE feishu_key = ?")

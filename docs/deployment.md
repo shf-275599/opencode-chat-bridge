@@ -41,7 +41,7 @@ pm2 startup windows
 pm2 save
 
 # Windows + 任务计划程序（管理员 PowerShell）
-schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\\path\\to\\bun.exe\" run \".\\opencode-im-bridge\\src\\index.ts\""
+schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\\path\\to\\bun.exe\" run \"C:\\path\\to\\your\\project\\src\\index.ts\""
 ```
 
 ```bash
@@ -114,8 +114,8 @@ pm2 save
 2. 创建基本任务 → 命名为 `opencode-im-bridge`
 3. 触发器：计算机启动时
 4. 操作：启动程序
-   - 程序：`C:\Users\YourUser\.bun\bin\bun.exe`
-   - 参数：`run "C:\\path\\to\\your\\project\\opencode-im-bridge\\src\\index.ts"`
+   - 程序：`C:\path\to\bun.exe`
+   - 参数：`run "C:\path\to\your\project\src\index.ts"`
 5. 完成
 
 ### Linux — 使用 systemd
@@ -130,8 +130,8 @@ After=network.target
 [Service]
 Type=simple
 User=your_username
-WorkingDirectory=/home/your_username/Projects/opencode-im-bridge
-ExecStart=/home/your_username/.bun/bin/bun run src/index.ts
+WorkingDirectory=/path/to/opencode-im-bridge
+ExecStart=/path/to/bun run src/index.ts
 Restart=always
 RestartSec=10
 
@@ -161,16 +161,16 @@ sudo systemctl status opencode-im-bridge
     <string>com.opencode.imbridge</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/your_user/.bun/bin/bun</string>
+        <string>/path/to/bun</string>
         <string>run</string>
-        <string>/Users/your_user/Projects/opencode-im-bridge/src/index.ts</string>
+        <string>/path/to/opencode-im-bridge/src/index.ts</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>WorkingDirectory</key>
-    <string>/Users/your_user/Projects/opencode-im-bridge</string>
+    <string>/path/to/opencode-im-bridge</string>
 </dict>
 </plist>
 ```

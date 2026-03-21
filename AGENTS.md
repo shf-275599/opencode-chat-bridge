@@ -169,3 +169,4 @@ This project uses **npm** as its primary package manager. Please ensure you run 
 \* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`TELEGRAM_BOT_TOKEN`/`DISCORD_BOT_TOKEN`) must be configured.
 
 See `.env.example` and `opencode-im-bridge.example.jsonc` for full reference.
+

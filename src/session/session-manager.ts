@@ -189,9 +189,10 @@ export function createSessionManager(
 
     setMapping(feishuKey, sessionId, agent) {
       const existing = getStmt.get(feishuKey) as SessionMapping | null
-      const agentName = agent ?? existing?.agent ?? defaultAgent
+      const sameSession = existing?.session_id === sessionId
+      const agentName = agent ?? (sameSession ? existing?.agent : defaultAgent) ?? defaultAgent
       const now = Date.now()
-      const nextModel = existing?.session_id === sessionId ? (existing?.model ?? null) : null
+      const nextModel = existing?.model ?? null
       const result = upsertStmt.run(feishuKey, sessionId, agentName, nextModel, now, now, 1)
       if (result.changes > 0) {
         logger.info(`Set session mapping: ${feishuKey} → ${sessionId}`)

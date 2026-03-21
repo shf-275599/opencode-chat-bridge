@@ -479,4 +479,24 @@ describeOrSkip("session-manager", () => {
       expect(sm.getSession("key-rl")).not.toBeNull()
     })
   })
+
+  describe("setMapping", () => {
+    it("resets agent and model when binding the same key to a different session", () => {
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, model, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run("key-switch", "ses-old", "gpt-4.1", "model-old", now, now, 1)
+
+      const changed = sm.setMapping("key-switch", "ses-new")
+      expect(changed).toBe(true)
+
+      const mapping = sm.getSession("key-switch")
+      expect(mapping).not.toBeNull()
+      expect(mapping!.session_id).toBe("ses-new")
+      expect(mapping!.agent).toBe(DEFAULT_AGENT)
+      expect(mapping!.model).toBe("model-old")
+    })
+  })
 })

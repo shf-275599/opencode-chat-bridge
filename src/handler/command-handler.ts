@@ -174,13 +174,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const modelId = mapping.model ?? ""
-    const [providerID, modelID] = modelId.includes("/") ? modelId.split("/") : [modelId, modelId]
-
     const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/summarize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ providerID, modelID }),
+      body: JSON.stringify({}),
     })
     if (!resp.ok) {
       throw new Error(`Compact failed: HTTP ${resp.status}`)

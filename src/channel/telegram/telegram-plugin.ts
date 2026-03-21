@@ -220,9 +220,9 @@ export class TelegramPlugin extends BaseChannelPlugin {
           target,
           pendingUpdates: [],
           createdAt: Date.now(),
-          lastMessageId: typeof target.context?.messageId === "number" || typeof target.context?.messageId === "string"
-            ? (target.context.messageId as string | number)
-            : undefined,
+          // Do NOT inherit lastMessageId from inbound message — we can only edit
+          // Bot-sent messages, not the user's original message that triggered streaming.
+          lastMessageId: undefined,
           lastRenderedText: "",
           flush: async (): Promise<void> => {
             const performFlush = async (): Promise<void> => {
@@ -347,7 +347,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
     }
 
     this.logger.debug(`[TelegramPlugin] Multipart API Success (${method})`)
-    return data
+    return
   }
 
   /**
@@ -361,7 +361,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
       { command: "abort", description: "中止当前任务" },
       { command: "compact", description: "压缩历史记录" },
       { command: "share", description: "分享会话链接" },
-      { command: "agent", description: "??/?? Agent" },
+      { command: "agent", description: "切换Agent" },
       { command: "help", description: "显示帮助" },
     ]
     await this.callApi("setMyCommands", { commands })
@@ -533,6 +533,43 @@ export class TelegramPlugin extends BaseChannelPlugin {
 
   private isAllowedChat(chatId: string): boolean {
     return this.telegramConfig.allowedChatIds.length === 0 || this.telegramConfig.allowedChatIds.includes(chatId)
+  }
+
+  private async sendHtmlMessage(chatId: string, html: string): Promise<void> {
+    await this.callApi("sendMessage", {
+      chat_id: chatId,
+      text: html,
+      parse_mode: "HTML",
+    })
+  }
+
+  private buildStreamingPreview(text: string): string {
+    if (text.endsWith("\n")) return text + "▌"
+    return text + " ▌"
+  }
+
+  private async upsertStreamingMessage(
+    chatId: string,
+    session: StreamingSession,
+    text: string,
+  ): Promise<void> {
+    if (session.lastMessageId) {
+      await this.callApi("editMessageText", {
+        chat_id: chatId,
+        message_id: session.lastMessageId,
+        text,
+        parse_mode: "HTML",
+      })
+    } else {
+      const result = await this.callApi<{ message_id: number }>("sendMessage", {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+      })
+      if (result.result) {
+        session.lastMessageId = String(result.result.message_id)
+      }
+    }
   }
 
   private async safeAnswerCallbackQuery(callbackQueryId: string, text: string): Promise<void> {

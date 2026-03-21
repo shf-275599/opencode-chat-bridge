@@ -162,6 +162,88 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, `已创建新会话: ${data.id}`, channelId)
   }
 
+  async function handleCompact(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+  ): Promise<void> {
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      return
+    }
+
+    const modelId = mapping.model ?? ""
+    const [providerID, modelID] = modelId.includes("/") ? modelId.split("/") : [modelId, modelId]
+
+    const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/summarize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerID, modelID }),
+    })
+    if (!resp.ok) {
+      throw new Error(`Compact failed: HTTP ${resp.status}`)
+    }
+
+    logger.info(`/compact: summarized session ${mapping.session_id}`)
+    await replyText(chatId, messageId, `已压缩会话历史 (会话: ${mapping.session_id})`, channelId)
+  }
+
+  async function handleShare(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+  ): Promise<void> {
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      return
+    }
+
+    const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    if (!resp.ok) {
+      throw new Error(`Share failed: HTTP ${resp.status}`)
+    }
+
+    const data = (await resp.json()) as { share?: { url?: string } }
+    const shareUrl = data.share?.url
+    logger.info(`/share: shared session ${mapping.session_id}, url: ${shareUrl}`)
+    if (shareUrl) {
+      await replyText(chatId, messageId, `会话已分享: ${shareUrl}`, channelId)
+    } else {
+      await replyText(chatId, messageId, `会话已分享 (会话: ${mapping.session_id})`, channelId)
+    }
+  }
+
+  async function handleUnshare(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+  ): Promise<void> {
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      return
+    }
+
+    const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/share`, {
+      method: "DELETE",
+    })
+    if (!resp.ok) {
+      throw new Error(`Unshare failed: HTTP ${resp.status}`)
+    }
+
+    logger.info(`/unshare: unshared session ${mapping.session_id}`)
+    await replyText(chatId, messageId, `已取消分享会话 (会话: ${mapping.session_id})`, channelId)
+  }
+
   async function handleAbort(
     feishuKey: string,
     chatId: string,
@@ -296,6 +378,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 - /sessions: 连接会话
 - /compact: 压缩历史
 - /share: 分享会话
+- /unshare: 取消分享
 - /abort: 中止任务
 - /agent: list/switch agent
 - /models: list/switch model
@@ -568,10 +651,13 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           return true
 
         case "/compact":
-          await handleSessionCommand(feishuKey, chatId, messageId, "session.compact", channelId)
+          await handleCompact(feishuKey, chatId, messageId, channelId)
           return true
         case "/share":
-          await handleSessionCommand(feishuKey, chatId, messageId, "session.share", channelId)
+          await handleShare(feishuKey, chatId, messageId, channelId)
+          return true
+        case "/unshare":
+          await handleUnshare(feishuKey, chatId, messageId, channelId)
           return true
         case "/":
         case "/help":

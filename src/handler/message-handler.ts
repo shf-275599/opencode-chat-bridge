@@ -241,6 +241,44 @@ async function fetchQuotedText(
 
 // ── Factory ──
 
+function getPlatformSignatureLabel(
+  channelId: string,
+  plugin?: { meta?: { label?: string } },
+): string {
+  if (channelId === "feishu" || channelId === "lark") {
+    return "Lark"
+  }
+
+  const label = plugin?.meta?.label?.trim()
+  if (label) return label
+  if (!channelId) return "Chat"
+  return channelId.charAt(0).toUpperCase() + channelId.slice(1)
+}
+
+function appendPlatformContextSignature(
+  text: string,
+  sessionId: string,
+  channelId: string,
+  signedSessions: Set<string>,
+  plugin?: { meta?: { label?: string } },
+): string {
+  const signatureLabel = getPlatformSignatureLabel(channelId, plugin)
+
+  if (!signedSessions.has(sessionId)) {
+    if (signedSessions.size > 1000) signedSessions.clear()
+    signedSessions.add(sessionId)
+
+    if (signatureLabel === "Lark") {
+      const attachDir = getAttachmentsDir()
+      return `${text}\n[Lark] Save files -> ${attachDir} (auto-sent to user)`
+    }
+
+    return `${text}\n[${signatureLabel}] Current platform is ${signatureLabel}. Do not assume Lark/Feishu MCP tools are available in this chat.`
+  }
+
+  return `${text}\n[${signatureLabel}]`
+}
+
 export interface MessageHandlerResult {
   handleMessage: (event: FeishuMessageEvent) => Promise<void>
   /** Flush all pending debounce buffers and clear timers. */
@@ -493,22 +531,17 @@ export function createMessageHandler(
       }
     }
 
-    // ── 7c. Add Lark context signature (full context on first message, lightweight tag on subsequent messages) ──
+    // ── 7c. Add platform context signature (full context on first message, lightweight tag on subsequent messages) ──
     if (parts[0]) {
-      if (!signedSessions.has(sessionId)) {
-        // Prevent unbounded growth — re-signing is harmless
-        if (signedSessions.size > 1000) signedSessions.clear()
-        signedSessions.add(sessionId)
-        const attachDir = getAttachmentsDir()
-        parts[0] = {
-          type: "text",
-          text: parts[0].text + `\n[Lark] Save files → ${attachDir} (auto-sent to user)`,
-        }
-      } else {
-        parts[0] = {
-          type: "text",
-          text: parts[0].text + `\n[Lark]`,
-        }
+      parts[0] = {
+        type: "text",
+        text: appendPlatformContextSignature(
+          parts[0].text,
+          sessionId,
+          channelId,
+          signedSessions,
+          plugin,
+        ),
       }
     }
 
@@ -789,21 +822,19 @@ export function createMessageHandler(
       }
     }
 
-    // Add Lark context signature
+    // Add platform context signature
     if (parts[0]) {
-      if (!signedSessions.has(sessionId)) {
-        if (signedSessions.size > 1000) signedSessions.clear()
-        signedSessions.add(sessionId)
-        const attachDir = getAttachmentsDir()
-        parts[0] = {
-          type: "text",
-          text: parts[0].text + `\n[Lark] Save files → ${attachDir} (auto-sent to user)`,
-        }
-      } else {
-        parts[0] = {
-          type: "text",
-          text: parts[0].text + `\n[Lark]`,
-        }
+      const channelId = (event as any)._channelId || "feishu"
+      const plugin = deps.channelManager?.getChannel(channelId)
+      parts[0] = {
+        type: "text",
+        text: appendPlatformContextSignature(
+          parts[0].text,
+          sessionId,
+          channelId,
+          signedSessions,
+          plugin,
+        ),
       }
     }
 

@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps
 # Specify the explicit path to bun executable
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -BunPath "C:\Users\YourUser\.bun\bin\bun.exe"
 
-# Remove the autostart autostart task
+# Remove the autostart task
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Remove
 ```
 

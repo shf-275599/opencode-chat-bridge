@@ -16,6 +16,14 @@ if (-not $RepoRoot) {
   $RepoRoot = Split-Path -Parent $scriptRoot
 }
 
+if ($Remove) {
+  if ($PSCmdlet.ShouldProcess($TaskName, "Remove scheduled task")) {
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Output "Removed scheduled task: $TaskName"
+  }
+  exit 0
+}
+
 function Resolve-BunPath {
   param([string]$ConfiguredPath)
 
@@ -39,14 +47,6 @@ if (-not (Test-Path -LiteralPath $RepoRoot)) {
 }
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
-
-if ($Remove) {
-  if ($PSCmdlet.ShouldProcess($TaskName, "Remove scheduled task")) {
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-    Write-Host "Removed scheduled task: $TaskName"
-  }
-  exit 0
-}
 
 $BunPath = Resolve-BunPath -ConfiguredPath $BunPath
 $launcherPath = Join-Path (Split-Path -Parent $PSCommandPath) "windows-start-bridge.ps1"
@@ -102,13 +102,13 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register scheduled task")) {
     -Description "Start opencode-im-bridge automatically on Windows" `
     -Force | Out-Null
 
-  Write-Host "Registered scheduled task: $TaskName"
-  Write-Host "Trigger: $Trigger"
-  Write-Host "RepoRoot: $RepoRoot"
-  Write-Host "BunPath: $BunPath"
-  Write-Host ""
-  Write-Host "Manage it with:"
-  Write-Host "  Get-ScheduledTask -TaskName `"$TaskName`""
-  Write-Host "  Start-ScheduledTask -TaskName `"$TaskName`""
-  Write-Host "  .\scripts\setup-autostart.ps1 -Remove"
+  Write-Output "Registered scheduled task: $TaskName"
+  Write-Output "Trigger: $Trigger"
+  Write-Output "RepoRoot: $RepoRoot"
+  Write-Output "BunPath: $BunPath"
+  Write-Output ""
+  Write-Output "Manage it with:"
+  Write-Output "  Get-ScheduledTask -TaskName `"$TaskName`""
+  Write-Output "  Start-ScheduledTask -TaskName `"$TaskName`""
+  Write-Output "  .\scripts\setup-autostart.ps1 -Remove"
 }

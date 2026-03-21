@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TASK_NAME="opencode-im-bridge"
-TRIGGER="login"
 REMOVE=0
 CONFIG_ID=""
 BUN_PATH="${BUN_PATH:-$(command -v bun || true)}"
@@ -15,7 +14,6 @@ Usage:
   ./scripts/setup-autostart.sh [options]
 
 Options:
-  --trigger login|startup   Autostart timing. Linux user systemd always behaves like login.
   --bun-path PATH           Explicit bun binary path.
   --repo-root PATH          Explicit repository root.
   --task-name NAME          Service/agent name. Default: opencode-im-bridge
@@ -27,10 +25,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --trigger)
-      TRIGGER="${2:-}"
-      shift 2
-      ;;
     --bun-path)
       BUN_PATH="${2:-}"
       shift 2
@@ -63,19 +57,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$BUN_PATH" ]]; then
-  echo "Could not find 'bun' in PATH. Install Bun first or pass --bun-path." >&2
-  exit 1
-fi
+# Removal should still work after Bun is uninstalled or the repo has been moved,
+# so installation-only prerequisites are validated only outside remove mode.
+if [[ $REMOVE -ne 1 ]]; then
+  if [[ -z "$BUN_PATH" ]]; then
+    echo "Could not find 'bun' in PATH. Install Bun first or pass --bun-path." >&2
+    exit 1
+  fi
 
-if [[ ! -x "$BUN_PATH" ]]; then
-  echo "bun is not executable: $BUN_PATH" >&2
-  exit 1
-fi
+  if [[ ! -x "$BUN_PATH" ]]; then
+    echo "bun is not executable: $BUN_PATH" >&2
+    exit 1
+  fi
 
-if [[ ! -d "$REPO_ROOT" ]]; then
-  echo "Repository root does not exist: $REPO_ROOT" >&2
-  exit 1
+  if [[ ! -d "$REPO_ROOT" ]]; then
+    echo "Repository root does not exist: $REPO_ROOT" >&2
+    exit 1
+  fi
 fi
 
 OS_NAME="$(uname -s)"

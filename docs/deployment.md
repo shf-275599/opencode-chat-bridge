@@ -41,7 +41,7 @@ pm2 startup windows
 pm2 save
 
 # Windows + 任务计划程序（管理员 PowerShell）
-schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\Users\YourUser\\.bun\\bin\\bun.exe\" run \".\opencode-lark\src\index.ts\""
+schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"powershell.exe\" -NoProfile -ExecutionPolicy Bypass -File \".\\scripts\\windows-start-bridge.ps1\""
 ```
 
 ```bash
@@ -106,7 +106,7 @@ pm2 save
 3. 触发器：计算机启动时
 4. 操作：启动程序
    - 程序：`C:\Users\YourUser\.bun\bin\bun.exe`
-   - 参数：`startup "D:\Project\PRwithAI\opencode-lark\start.sh"`
+   - 参数：`-NoProfile -ExecutionPolicy Bypass -File "C:\Path\To\opencode-im-bridge\scripts\windows-start-bridge.ps1"`
 5. 完成
 
 ### Linux — 使用 systemd

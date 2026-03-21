@@ -153,7 +153,7 @@ The service starts automatically after setup completes.
 > **Tip**: To re-run the wizard later, use `opencode-im-bridge init`.
 >
 > To configure manually instead, create a `.env` file with relevant credentials before starting:
-> - Feishu: `FEISHU_APP_ID`, ``
+> - Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
 > - QQ: `QQ_APP_ID`, `QQ_SECRET`
 > - Telegram: `TELEGRAM_BOT_TOKEN`
 

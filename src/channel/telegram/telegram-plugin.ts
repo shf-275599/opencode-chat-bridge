@@ -345,76 +345,34 @@ export class TelegramPlugin extends BaseChannelPlugin {
       })
       throw new Error(`Telegram API error (${method}): ${data.description ?? "unknown"}`)
     }
+
+    this.logger.debug(`[TelegramPlugin] Multipart API Success (${method})`)
+    return data
   }
 
-  private async sendHtmlMessage(chatId: string, text: string): Promise<void> {
-    const html = mdToHtml(text)
-    try {
-      await this.callApi("sendMessage", {
-        chat_id: chatId,
-        text: html,
-        parse_mode: "HTML",
-      })
-    } catch (err: any) {
-      this.logger.warn(`[TelegramPlugin] HTML send failed, falling back to plain text: ${err.message}`)
-      await this.callApi("sendMessage", {
-        chat_id: chatId,
-        text,
-      })
-    }
-  }
-
-  private buildStreamingPreview(text: string): string {
-    if (text.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
-      return text
-    }
-
-    const preview = text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH - 48).trimEnd()
-    return `${preview}\n\n[Streaming preview truncated. Full reply follows.]`
-  }
-
-  private async upsertStreamingMessage(chatId: string, session: StreamingSession, text: string): Promise<void> {
-    const html = mdToHtml(text)
-
-    if (session.lastMessageId) {
-      try {
-        await this.callApi("editMessageText", {
-          chat_id: chatId,
-          message_id: session.lastMessageId,
-          text: html,
-          parse_mode: "HTML",
-        })
-        return
-      } catch (err: any) {
-        if (!String(err.message).includes("message is not modified")) {
-          this.logger.warn(`[TelegramPlugin] editMessageText failed, falling back to sendMessage: ${err}`)
-        }
-      }
-    }
-
-    const response = await this.callApi<{ message_id: number }>("sendMessage", {
-      chat_id: chatId,
-      text: html,
-      parse_mode: "HTML",
-    })
-    session.lastMessageId = response.result?.message_id
-  }
-
+  /**
+   * 注册 Bot 斜杠命令菜单。
+   * 用户在 Telegram 中输入 "/" 后会弹出可选命令列表。
+   */
   private async registerCommands(): Promise<void> {
     const commands = [
-      { command: "new", description: "Create a new session" },
-      { command: "sessions", description: "List or switch sessions" },
-      { command: "abort", description: "Abort the current task" },
-      { command: "compact", description: "Compact current session history" },
-      { command: "share", description: "Share current session" },
-      { command: "agent", description: "List or switch agents" },
-      { command: "models", description: "List or switch models" },
-      { command: "help", description: "Show available commands" },
+      { command: "new", description: "新建会话" },
+      { command: "sessions", description: "查看/切换会话" },
+      { command: "abort", description: "中止当前任务" },
+      { command: "compact", description: "压缩历史记录" },
+      { command: "share", description: "分享会话链接" },
+      { command: "agent", description: "??/?? Agent" },
+      { command: "help", description: "显示帮助" },
     ]
     await this.callApi("setMyCommands", { commands })
+    this.logger.info("[TelegramPlugin] Bot commands registered successfully")
   }
 
-  private async startPolling(): Promise<void> {
+  /**
+   * 长轮询主循环。
+   * 使用 AbortController 支持优雅关闭。
+   */
+  private async startPolling(onMessage?: (event: unknown) => Promise<void>): Promise<void> {
     let offset = 0
     let connectAttempt = 0
     this.logger.info("[TelegramPlugin] Long polling started")
@@ -523,15 +481,15 @@ export class TelegramPlugin extends BaseChannelPlugin {
         await this.safeAnswerCallbackQuery(query.id, "Submitted.")
         const value: Record<string, string> = payload.action === "qa"
           ? {
-              action: "question_answer",
-              requestId: payload.requestId ?? "",
-              answers: JSON.stringify(payload.answers ?? []),
-            }
+            action: "question_answer",
+            requestId: payload.requestId ?? "",
+            answers: JSON.stringify(payload.answers ?? []),
+          }
           : {
-              action: "permission_reply",
-              requestId: payload.requestId ?? "",
-              reply: payload.reply ?? "reject",
-            }
+            action: "permission_reply",
+            requestId: payload.requestId ?? "",
+            reply: payload.reply ?? "reject",
+          }
         await this.onCardAction({
           action: {
             tag: "button",
@@ -620,7 +578,7 @@ export function mdToHtml(text: string): string {
     .replace(/~~([^~]+)~~/g, "<s>$1</s>")
     .replace(/__([^_]+)__/g, "<u>$1</u>")
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, "$1<i>$2</i>")
+    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
     .replace(/`([^`\n]+)`/g, "<code>$1</code>")
 
   html = html.replace(/\u0000(\d+)\u0000/g, (_match, index) => blocks[Number(index)] ?? "")
@@ -645,5 +603,6 @@ function escapeHtml(text: string): string {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
 
 export { createTelegramInlineCard }

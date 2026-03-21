@@ -54,9 +54,56 @@ bun install
 bun run dev
 ```
 
+## 4. Autostart Scripts
+
+The repository includes ready-to-run autostart helpers for all platforms.
+
+### Windows One-Click Script
+
+The repository includes a built-in Windows autostart configuration script. This is the recommended approach for Windows:
+
+```powershell
+# Register to start automatically upon current user login
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1
+
+# Register to start automatically when the system boots
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Trigger Startup
+
+# Register with a specific configuration profile (bypasses terminal prompt when multiple configs exist)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -ConfigId my_config_name
+
+# Specify the explicit path to bun executable
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -BunPath "C:\path\to\bun.exe"
+
+# Remove the autostart task
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Remove
+```
+
+Notes:
+- `scripts/setup-autostart.ps1` is responsible for registering/removing Windows scheduled tasks.
+- `scripts/windows-start-bridge.ps1` ensures `bun run src/index.ts` is launched in the correct repository directory.
+- By default, it uses the `Logon` trigger, which is best for local deployments relying on the current user's environment.
+
+```bash
+# Linux/macOS
+chmod +x ./scripts/setup-autostart.sh ./scripts/unix-start-bridge.sh
+./scripts/setup-autostart.sh
+
+# Register with a specific config
+./scripts/setup-autostart.sh --config-id my_config_name
+
+# Remove
+./scripts/setup-autostart.sh --remove
+```
+
+Platform behavior:
+- Windows: registers a Scheduled Task for the current user
+- Linux: installs a user-level `systemd` service in `~/.config/systemd/user/`
+- macOS: installs a `launchd` agent in `~/Library/LaunchAgents/`
+
 ---
 
-## 4. Best Practices
+## 5. Best Practices
 
 - **CWD Override**: If managing multiple `opencode` projects, use `OPENCODE_CWD` to ensure the bridge discovers the correct sessions.
 - **Port Mapping**: For Webhook mode, ensure `FEISHU_WEBHOOK_PORT` (default: 3001) is accessible or proxied via Nginx.

@@ -1,8 +1,8 @@
-[中文版](README.zh-CN.md)
+[English](README-en.md)
 
 # opencode-im-bridge
 
-> Bridge Feishu\QQ\Telegram\Discord chats to opencode TUI sessions with real-time two-way messaging.
+> 将飞书\QQ\Telegram\Discord机器人与 opencode TUI session 打通，实现双向实时消息转发。
 
 ![CI](https://github.com/ET06731/opencode-im-bridge/actions/workflows/ci.yml/badge.svg)
 ![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
@@ -10,28 +10,28 @@
 
 ---
 
-## Features
+## 功能特性
 
-- **Real-time bridging** — Messages sent in Feishu arrive in your opencode TUI instantly. Agent replies stream back as live-updating cards with **Markdown rendering support** (headings, lists, code blocks, etc.).
-- **Multi-channel support** — Now supports bridging QQ, Telegram, and Discord messages via their official platform APIs.
-- **Interactive cards** — Agent questions and permission requests appear as clickable Feishu cards. Answer or approve directly from the chat — no need to switch to the TUI. (Currently supported primarily for Feishu)
-- **WebSocket connection** — Uses Feishu's long-lived WebSocket mode. No webhook polling, no public IP required.
-- **SSE streaming** — Consumes the opencode SSE event stream and debounces card updates to stay within rate limits.
-- **Conversation memory** — SQLite-backed per-thread history is prepended to each message, giving the agent context across turns.
-- **Session auto-discovery** — Finds and binds to the latest opencode TUI session for a working directory. Survives restarts.
-- **Graceful recovery** — Reconnects to the opencode server with exponential backoff (up to 10 attempts) on startup.
-- **Extensible channel layer** — `ChannelPlugin` interface lets you add Slack, Discord, or any other platform without touching core logic.
-- **File and image support** — Handles image and file messages from Feishu (not just text). Downloads attachments to `${OPENCODE_CWD}/.opencode-im-bridge/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
+- **实时桥接** — 飞书消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回飞书。支持 **Markdown 格式渲染**（标题、列表、代码块等）。
+- **多渠道支持** — 现在支持通过官方 Node SDK 桥接 QQ、Telegram 和 Discord 消息。QQ 渠道同样支持 Markdown 渲染。
+- **交互式卡片** — agent 的提问和权限请求以可点击的飞书卡片呈现，直接在聊天中回答或审批，无需切换到 TUI。(目前主要在飞书端支持)
+- **WebSocket 长连接** — 采用飞书 / QQ 的 WebSocket 长连接模式，无需公网 IP，无需轮询。
+- **SSE 流式输出** — 订阅 opencode SSE 事件流，防抖处理卡片更新，避免触发频率限制。
+- **对话记忆** — SQLite 存储每个会话的对话历史，每次消息自动携带上下文。
+- **Session 自动发现** — 自动发现并绑定当前目录的最新 TUI session，重启后映射关系持久保存。
+- **优雅重连** — 启动时指数退避重连 opencode server，最多重试 10 次，无需手动等待 server 就绪。
+- **可扩展渠道层** — `ChannelPlugin` 接口设计，可扩展接入 Slack、Discord、QQ 等其他平台，无需修改核心逻辑。
+- **文件与图片支持** — 支持飞书图片和文件消息（不限于文字）。附件下载保存至 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`，并将本地路径传给 opencode 供其读取分析。支持流式下载，50 MB 大小限制，文件名安全处理。
 
 ---
 
-## Architecture
+## 架构概览
 
 ```mermaid
 graph TD;
-    subgraph "IM Platform"
-        Feishu[Feishu Group/P2P]
-        QQ[QQ Official Bot Platform]
+    subgraph "IM 平台 (Client & Platform)"
+        Feishu[飞书 群聊/私信]
+        QQ[QQ 官方机器人平台]
     end
 
     subgraph "opencode-im-bridge (Bridge Middleware)"
@@ -41,7 +41,7 @@ graph TD;
         FeishuPlugin <--> ChannelManager
         QQPlugin <--> ChannelManager
 
-        ChannelManager <--> SessionManager[(SQLite Memory / Session Map)]
+        ChannelManager <--> SessionManager[(SQLite 对话记忆 / Session映射)]
     end
     
     subgraph "opencode Server"
@@ -50,52 +50,62 @@ graph TD;
 
     Feishu <--> |Webhook/WebSocket| FeishuPlugin
     QQ <--> |WebSocket| QQPlugin
-    ChannelManager <--> |HTTP POST + SSE Streaming| Agent
+    ChannelManager <--> |HTTP POST + SSE 流式通信| Agent
 ```
 
-> `opencode serve` runs the HTTP server. Use `opencode attach` in a separate terminal to view the session in TUI.
+> `opencode serve` 运行 HTTP server，在另一个终端用 `opencode attach` 查看 TUI 会话。
 
-**Inbound (Feishu → TUI):** Feishu sends a message over WebSocket. opencode-im-bridge normalizes it, resolves the bound session, prepends conversation history, then POSTs to the opencode API. The TUI sees the message immediately.
+**入站（飞书 → TUI）：** 飞书通过 WebSocket 发送消息，opencode-im-bridge 标准化处理后找到绑定的 session，拼接对话历史，POST 到 opencode API。TUI 即时收到消息。
 
-**Outbound (TUI → Feishu):** opencode-im-bridge subscribes to the opencode SSE stream. As the agent produces text, `TextDelta` events accumulate and a debounced card update fires. Once `SessionIdle` arrives, the final card is flushed to Feishu.
+**出站（TUI → 飞书）：** opencode-im-bridge 订阅 opencode SSE 流。agent 输出文字时，`TextDelta` 事件累积并触发防抖卡片更新。`SessionIdle` 到达后，最终卡片推送到飞书。
 
-### Supported Message Types
+### 支持的消息类型
 
-| Message Type | Supported | Notes |
+| 消息类型 | 支持 | 说明 |
 |---|---|---|
-| `text` | ✅ | Plain text messages, supports Markdown rendering |
-| `post` | ✅ | Rich text / multi-paragraph messages |
-| `image` | ✅ | Photos and screenshots — downloaded and saved locally |
-| `file` | ✅ | Documents, code files, etc. — downloaded and saved locally |
-| `audio` / `video` / `sticker` | ❌ | Logged and skipped |
+| `text` | ✅ | 普通文字消息，支持 Markdown 渲染 |
+| `post` | ✅ | 富文本 / 多段落消息 |
+| `image` | ✅ | 图片和截图 — 自动下载保存到本地 |
+| `file` | ✅ | 文档、代码文件等 — 自动下载保存到本地 |
+| `audio` / `video` / `sticker` | ❌ | 记录日志后跳过，不处理 |
 
-Downloaded files are saved to `${OPENCODE_CWD}/.opencode-lark/attachments/` (falls back to the system temp directory if that path isn't writable).
+下载的文件保存在 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`（若该路径不可写则回退至系统临时目录）。
 
-#### Slash Commands
+#### 斜杠命令 (Slash Commands)
 
-Type slash commands directly in the chat to manage opencode sessions:
-- `/new`: Create a new session (and bind it to the current chat)
-- `/sessions`: List recent sessions and current bound status (Interactive card in Feishu, text list in QQ)
-- `/connect {session_id}`: Connect/bind the current chat to a specific historical session
-- `/compact`: Compact context history (equivalent to `session.compact`)
-- `/share`: Share the current session (equivalent to `session.share`)
-- `/abort`: Abort the currently executing task
-- `/help` or `/`: Show the command help menu
+在聊天窗口中输入斜杠命令可直接进行会话管理：
+- `/new`：新建会话（并自动绑定到当前聊天）
+- `/sessions`：获取最近会话列表及当前绑定状态（飞书返回交互式卡片，QQ 返回文本列表）
+- `/connect {session_id}`：将当前聊天连接/绑定到指定的历史会话
+- `/compact`：执行上下文历史压缩（对应 `session.compact`）
+- `/share`：分享当前会话（对应 `session.share`）
+- `/abort`：中止当前正在执行的任务
+- `/help` 或 `/`：查看命令帮助菜单
 
 ---
 
-## Install
+## 快速开始
 
-> **Note**: [Bun](https://bun.sh) is the required runtime — this project uses `bun:sqlite` which is Bun-only.
+5 分钟即可上手。
+
+### 前置要求
+
+- **[Bun](https://bun.sh)**（必需运行时，本项目使用 `bun:sqlite`，仅 Bun 支持）
+- **[opencode](https://opencode.ai)** 已安装在本地
+- 已配置凭证的飞书开放平台应用 或 QQ、Telegram、Discord 等平台机器人（👉参见[《机器人配置指南》](docs/CONFIGURATION.zh-CN.md)）
+
+### 步骤
+
+**1. 安装**
 
 ```bash
-# Global install
+# 全局安装
 npm install -g opencode-im-bridge
-# or
+# 或
 bun add -g opencode-im-bridge
 ```
 
-Or clone and run from source:
+或从源码运行：
 
 ```bash
 git clone https://github.com/ET06731/opencode-im-bridge.git
@@ -103,28 +113,7 @@ cd opencode-im-bridge
 bun install
 ```
 
----
-
-## Quick Start
-
-Get up and running in 5 minutes. You'll need a Feishu Open Platform app with bot capability — see [Feishu App Setup](#feishu-app-setup) below for the detailed walkthrough if you haven't created one yet.
-
-### Prerequisites
-
-- **[Bun](https://bun.sh)** (required runtime — this project uses `bun:sqlite` which is Bun-only)
-- **[opencode](https://opencode.ai)** installed locally
-- A **Feishu Open Platform app** or **QQ Official Bot** with credentials (see setup guides below)
-
-### Steps
-
-**1. Install**
-
-```bash
-bun add -g opencode-im-bridge
-# or: npm install -g opencode-im-bridge
-```
-
-**2. Start opencode server**
+**2. 启动 opencode server**
 
 ```bash
 # macOS / Linux
@@ -134,73 +123,65 @@ OPENCODE_SERVER_PORT=4096 opencode serve
 $env:OPENCODE_SERVER_PORT=4096; opencode serve
 ```
 
-**3. Start opencode-im-bridge**
+**3. 启动 opencode-im-bridge**
 
-In a second terminal:
+在第二个终端：
 
 ```bash
 opencode-im-bridge
 ```
 
-On first run with no configuration, an interactive setup wizard guides you through:
-- Selecting channels (Feishu, QQ, TTelegram, Discord or all)
-- Entering your Feishu/QQ App ID and App Secret/Token (masked input)
-- Validating the opencode server connection
-- Saving credentials to corresponding `.env.{appId}` files
+首次运行无配置时，交互式向导将引导你完成：
+- 选择渠道（飞书、QQ 或 两者皆选）
+- 输入飞书/QQ的 App ID、App Secret/Token（密码遮蔽输入）
+- 验证 opencode server 连通性
 
-The service starts automatically after setup completes.
+配置完成后服务自动启动。
 
-> **Tip**: To re-run the wizard later, use `opencode-im-bridge init`.
->
-> To configure manually instead, create a `.env` file with relevant credentials before starting:
-> - Feishu: `FEISHU_APP_ID`, ``
-> - QQ: `QQ_APP_ID`, `QQ_SECRET`
-> - Telegram: `TELEGRAM_BOT_TOKEN`
+> **提示**：如需重新配置，运行 `opencode-im-bridge init`。
 
-**4. Send a test message**
+> 如需手动配置，可在启动前创建 `.env` 文件并填写相关凭据：
+> - 飞书：`FEISHU_APP_ID`, `FEISHU_APP_SECRET`
+> - QQ：`QQ_APP_ID`, `QQ_SECRET`
 
-Send any message to your Feishu bot. On first contact it auto-discovers the latest TUI session and replies:
+**4. 发送测试消息**
+
+向机器人发送任意消息。首次联系时自动发现最新 TUI session 并回复：
 
 > Connected to session: ses_xxxxx
 
-After that, Feishu and the TUI share a live two-way channel. To attach the TUI:
+首次消息后机器人收到 session 绑定通知，之后双向消息互通。要在 TUI 中查看该会话：
 ```bash
 opencode attach http://127.0.0.1:4096 --session {session_id}
 ```
-The `session_id` is shown in opencode-im-bridge's startup logs (e.g. `Bound to TUI session: ... → ses_xxxxx`).
+`session_id` 会在 opencode-im-bridge 启动日志中显示（如 `Bound to TUI session: ... → ses_xxxxx`）。
 
 ---
 
-## Bot Configuration
+## 手动配置说明（面向开发者）
 
-We support multiple platforms including Feishu, QQ, Telegram, and Discord.
+### 环境变量
 
-👉 **[Read the Bot Configuration Guide](docs/CONFIGURATION.md)**
-
----
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Required | Default | Description |
+| 变量 | 必需 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `FEISHU_APP_ID` | yes | | Feishu App ID |
-| `FEISHU_APP_SECRET` | yes | | Feishu App Secret |
-| `OPENCODE_SERVER_URL` | no | `http://localhost:4096` | opencode server URL |
-| `FEISHU_WEBHOOK_PORT` | no | `3001` | HTTP webhook fallback port (only needed if not using WebSocket for card callbacks) |
-| `OPENCODE_CWD` | no | `process.cwd()` | Override session discovery directory |
-| `FEISHU_VERIFICATION_TOKEN` | no | | Event subscription verification token |
-| `FEISHU_ENCRYPT_KEY` | no | | Event encryption key |
+| `FEISHU_APP_ID` | 否 | | 飞书应用 App ID |
+| `FEISHU_APP_SECRET` | 否 | | 飞书应用 App Secret |
+| `QQ_APP_ID` | 否 | | QQ 应用 App ID |
+| `QQ_SECRET` | 否 | | QQ 应用 App Secret |
+| `OPENCODE_SERVER_URL` | 否 | `http://localhost:4096` | opencode server 地址 |
+| `FEISHU_WEBHOOK_PORT` | 否 | `3001` | HTTP webhook 回退端口（仅在不使用 WebSocket 接收卡片回调时需要） |
+| `OPENCODE_CWD` | 否 | `process.cwd()` | 覆盖 session 发现目录 |
+| `FEISHU_VERIFICATION_TOKEN` | 否 | | 事件订阅验证 token |
+| `FEISHU_ENCRYPT_KEY` | 否 | | 事件加密密钥 |
 
-### JSONC Config
+### JSONC 配置文件
 
-`opencode-im-bridge.jsonc` (gitignored; copy from `opencode-im-bridge.example.jsonc`):
-(also supports `opencode-lark.jsonc` and `opencode-feishu.jsonc` for backward compatibility)
+`opencode-im-bridge.jsonc`（从 `opencode-im-bridge.example.jsonc` 复制）：
 
 ```jsonc
 // opencode-im-bridge.jsonc
 {
+  // 可选：启用飞书
   "feishu": {
     "appId": "${FEISHU_APP_ID}",
     "appSecret": "${FEISHU_APP_SECRET}",
@@ -208,113 +189,67 @@ We support multiple platforms including Feishu, QQ, Telegram, and Discord.
     "webhookPort": 3001,
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
-  // Default opencode agent name. This should match an agent configured in your opencode setup.
-  // Common values: "build", "claude", "code" — check your opencode config for available agents.
+  // 可选：启用 QQ
+  "qq": {
+    "appId": "${QQ_APP_ID}",
+    "secret": "${QQ_SECRET}",
+    "sandbox": false
+  },
+  // 默认 opencode agent 名称，需与 opencode 配置中的 agent 匹配。
+  // 常见值："build"、"claude"、"code" — 请查看你的 opencode 配置。
   "defaultAgent": "build",
   "dataDir": "./data",
   "progress": {
     "debounceMs": 500,
     "maxDebounceMs": 3000
-  },
-  "messageDebounceMs": 10000,  // Debounce timer for batching rapid multi-message inputs (text=immediate, media=buffer)
-  // Optional: Enable QQ
-  "qq": {
-    "appId": "${QQ_APP_ID}",
-    "secret": "${QQ_SECRET}",
-    "sandbox": false
   }
 }
 ```
 
-Supports `${ENV_VAR}` interpolation and JSONC comments. If no config file is found, the app builds a default config from `.env` values directly.
+支持 `${ENV_VAR}` 环境变量插值和 JSONC 注释。无配置文件时自动从 `.env` 构建默认配置。
 
 ---
 
-## Lark MCP Tools
-
-opencode-im-bridge pairs with [lark-openapi-mcp](https://github.com/larksuite/lark-openapi-mcp) to give the opencode agent direct access to Feishu's cloud document ecosystem — read/write docs, upload files, query Bitable tables, and search the wiki, all from within a single conversation.
-
-### Supported Capabilities
-
-| Category | Capabilities |
-|----------|-------------|
-| **Docs** (docx) | Create doc, write Markdown, read Markdown, get raw text content, search docs, import file as doc |
-| **Drive** | Upload local file to cloud drive, download file from cloud drive |
-| **Bitable** | Create Bitable app, manage tables, list fields, record CRUD |
-| **Messaging** (im) | List chats the bot belongs to, get chat members |
-| **Wiki** | Search wiki nodes, get node details |
-
-### Required User Scopes
-
-When calling tools with `user_access_token` (i.e. `useUAT: true`), enable the following scopes in **Permissions & Scopes** in the Feishu Open Platform console:
-
-| Scope | Purpose |
-|-------|---------|
-| `drive:drive` | Cloud drive read/write |
-| `docx:document` | Document read/write |
-| `bitable:app` | Bitable CRUD |
-| `im:chat:readonly` | Query chat/group info |
-| `wiki:wiki:readonly` | Wiki search and read |
-
-### Configuration
-
-Add a `lark-mcp` entry to the `mcp` section of your opencode config (`~/.config/opencode/config.json`):
-
-```jsonc
-{
-  "mcp": {
-    "lark-mcp": {
-      "type": "local",
-      "command": ["node", "/path/to/lark-openapi-mcp/dist/cli.js", "mcp", "-a", "${FEISHU_APP_ID}", "-s", "${FEISHU_APP_SECRET}", "--oauth", "--token-mode", "user_access_token", "-l", "zh"],
-      "enabled": true
-    }
-  }
-}
-```
-
-> **Note**: Pass `--token-mode user_access_token` to call tools on behalf of a user (required for drive uploads, wiki operations, etc.). Replace `/path/to/lark-openapi-mcp` with the actual install path after cloning/installing the package.
-
----
-
-## Project Structure
+## 项目结构
 
 ```
 src/
-├── index.ts         # Entry point, 9-phase startup + graceful shutdown
-├── types.ts         # Shared type definitions
-├── channel/         # ChannelPlugin interface, ChannelManager, FeishuPlugin
-├── feishu/          # Feishu REST client, CardKit, WebSocket, message dedup
-├── handler/         # MessageHandler (inbound pipeline) + StreamingBridge (SSE → cards)
-├── session/         # TUI session discovery, thread→session mapping, progress cards
-├── streaming/       # EventProcessor (SSE parsing), SessionObserver, SubAgentTracker
-├── cron/            # CronService (scheduled jobs) + HeartbeatService
-├── utils/           # Config loader, logger, SQLite init, EventListenerMap
+├── index.ts         # 入口，9 阶段启动 + 优雅关闭
+├── types.ts         # 共享类型定义
+├── channel/         # ChannelPlugin 接口、ChannelManager、FeishuPlugin
+├── feishu/          # 飞书 REST 客户端、CardKit、WebSocket、消息去重
+├── handler/         # MessageHandler（入站管道）+ StreamingBridge（SSE → 卡片）
+├── session/         # TUI session 发现、thread→session 映射、进度卡片
+├── streaming/       # EventProcessor（SSE 解析）、SessionObserver、SubAgentTracker
+├── memory/          # SQLite 驱动的会话级对话记忆
+├── cron/            # CronService（定时任务）+ HeartbeatService
+└── utils/           # 配置加载、日志、SQLite 初始化、EventListenerMap
 ```
 
 ---
 
-## Development
+## 开发
 
 ```bash
-bun run dev          # Watch mode, auto-restart on changes
-bun run start        # Production mode
-bun run test:run     # Run all tests (vitest)
-bun run build        # Compile TypeScript to dist/
+bun run dev          # 开发模式，代码变更自动重启
+bun run start        # 生产模式
+bun run test:run     # 运行全部测试
+bun run build        # 编译到 dist/
 ```
 
-> **Note:** Use `bun run test:run` rather than `bun test`. The latter picks up both `src/` and `dist/` test files; `vitest` is configured to scope to `src/` only.
+> 使用 `bun run test:run` 而非 `bun test`，后者会同时扫描 `src/` 和 `dist/` 下的测试文件。
 
 ---
 
-## Contributing
+## 参与贡献
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines on issues, pull requests, and code style.
+请参阅 [CONTRIBUTING.md](docs/CONTRIBUTING.md) 了解提 issue、提 PR 和代码风格的规范。
 
 ---
 
-## Acknowledgements
+## 致谢
 
-The development for this project were made reference to the following open-source projects:
+感谢以下开源项目的贡献：
 
 - [guazi04/opencode-lark](https://github.com/guazi04/opencode-lark)
 - [op7418/Claude-to-IM-skill](https://github.com/op7418/Claude-to-IM-skill)

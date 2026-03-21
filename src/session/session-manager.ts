@@ -58,19 +58,38 @@ export function createSessionManager(
   try {
     db.exec("ALTER TABLE feishu_sessions ADD COLUMN model TEXT")
   } catch {
-    // Column already exists.
+
+    // Column already exists — safe to ignore
   }
 
-  const getStmt = db.prepare("SELECT * FROM feishu_sessions WHERE feishu_key = ?")
-  const upsertStmt = db.prepare(`
-    INSERT OR REPLACE INTO feishu_sessions
-      (feishu_key, session_id, agent, model, created_at, last_active, is_bound)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
-  const updateActiveStmt = db.prepare("UPDATE feishu_sessions SET last_active = ? WHERE feishu_key = ?")
-  const cleanupStmt = db.prepare("DELETE FROM feishu_sessions WHERE last_active < ?")
-  const deleteMappingStmt = db.prepare("DELETE FROM feishu_sessions WHERE feishu_key = ?")
-  const updateModelStmt = db.prepare("UPDATE feishu_sessions SET model = ?, last_active = ? WHERE feishu_key = ?")
+  const getStmt = db.prepare(
+    "SELECT * FROM feishu_sessions WHERE feishu_key = ?",
+  )
+
+  const upsertStmt = db.prepare(
+    `INSERT OR REPLACE INTO feishu_sessions
+       (feishu_key, session_id, agent, model, created_at, last_active, is_bound)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  )
+
+  const updateActiveStmt = db.prepare(
+    "UPDATE feishu_sessions SET last_active = ? WHERE feishu_key = ?",
+  )
+
+  const cleanupStmt = db.prepare(
+    "DELETE FROM feishu_sessions WHERE last_active < ?",
+  )
+
+  const deleteMappingStmt = db.prepare(
+    "DELETE FROM feishu_sessions WHERE feishu_key = ?",
+  )
+
+  const updateModelStmt = db.prepare(
+    "UPDATE feishu_sessions SET model = ?, last_active = ? WHERE feishu_key = ?",
+  )
+
+  /** Check whether a session ID actually exists on the opencode server.
+   *  Returns false ONLY on 404. All other errors (500, 429, network) return true (conservative). */
 
   async function sessionExistsOnServer(sessionId: string): Promise<boolean> {
     try {
@@ -135,14 +154,18 @@ export function createSessionManager(
       if (discovered) {
         const now = Date.now()
         upsertStmt.run(feishuKey, discovered.id, agentName, null, now, now, 1)
-        logger.info(`Bound to TUI session: ${feishuKey} -> ${discovered.id}`)
+
+        logger.info(`Bound to TUI session: ${feishuKey} → ${discovered.id}`)
+
         return discovered.id
       }
 
       const sessionId = await createNewSession(feishuKey)
       const now = Date.now()
       upsertStmt.run(feishuKey, sessionId, agentName, null, now, now, 0)
-      logger.info(`Session created: ${feishuKey} -> ${sessionId}`)
+
+      logger.info(`Session created: ${feishuKey} → ${sessionId}`)
+
       return sessionId
     },
 
@@ -167,11 +190,22 @@ export function createSessionManager(
       const existing = getStmt.get(feishuKey) as SessionMapping | null
       const sameSession = existing?.session_id === sessionId
       const agentName = agent ?? (sameSession ? existing?.agent : defaultAgent) ?? defaultAgent
-      const nextModel = sameSession ? (existing?.model ?? null) : null
+
       const now = Date.now()
+      const nextModel = existing?.model ?? null
+
       const result = upsertStmt.run(feishuKey, sessionId, agentName, nextModel, now, now, 1)
       if (result.changes > 0) {
         logger.info(`Set session mapping: ${feishuKey} -> ${sessionId}`)
+      }
+      return result.changes > 0
+    },
+
+    setModel(feishuKey, model) {
+      const now = Date.now()
+      const result = updateModelStmt.run(model, now, feishuKey)
+      if (result.changes > 0) {
+        logger.info(`Updated model mapping for ${feishuKey}: ${model ?? "(cleared)"}`)
       }
       return result.changes > 0
     },

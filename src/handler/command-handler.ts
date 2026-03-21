@@ -246,8 +246,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 - /compact: 压缩历史
 - /share: 分享会话
 - /abort: 中止任务
-        - /agent: list/switch agent
-        - /models: list/switch model
+- /agent: list/switch agent
+- /models: list/switch model
 - /cron: 计划任务管理
 - /help: 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
@@ -385,7 +385,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       .sort((a, b) => a.id.localeCompare(b.id))
   }
 
-  async function detectCurrentModel(mapping: SessionMapping | null): Promise<string | undefined> {
+  function detectCurrentModel(mapping: SessionMapping | null): string | undefined {
     return mapping?.model ?? undefined
   }
 
@@ -405,7 +405,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const models = await listModels()
     const targetRaw = args[0]
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
-      const currentModelId = await detectCurrentModel(mapping)
+      const currentModelId = detectCurrentModel(mapping)
 
       if (channelId === "feishu") {
         const card = buildModelSelectorCard(models, currentModelId)

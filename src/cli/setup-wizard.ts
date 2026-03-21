@@ -118,6 +118,7 @@ function readSecret(prompt: string): Promise<string> {
  */
 export async function pickConfig(): Promise<string | null> {
   const envFiles = listEnvFiles()
+    .sort((a, b) => a.appId.localeCompare(b.appId) || a.filePath.localeCompare(b.filePath))
 
   if (envFiles.length === 0) return null
 
@@ -130,7 +131,8 @@ export async function pickConfig(): Promise<string | null> {
       process.stdout.write(`Auto-selecting requested config: ${matched.appId}\n`)
       return matched.filePath
     }
-    process.stdout.write(red(`Requested config '${requestedAppId}' not found. Falling back to picker.\n`))
+    process.stdout.write(red(`Requested config '${requestedAppId}' not found.\n`))
+    throw new Error(`Requested config '${requestedAppId}' not found.`)
   }
 
   // 2. Check if a specific config is requested via ENV OPENCODE_IM_CONFIG
@@ -141,6 +143,8 @@ export async function pickConfig(): Promise<string | null> {
       process.stdout.write(`Auto-selecting requested config from ENV: ${matched.appId}\n`)
       return matched.filePath
     }
+    process.stdout.write(red(`Requested config from ENV '${envAppId}' not found.\n`))
+    throw new Error(`Requested config from ENV '${envAppId}' not found.`)
   }
 
   if (envFiles.length === 1 || !process.stdin.isTTY) {

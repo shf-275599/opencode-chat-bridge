@@ -42,6 +42,7 @@ pm2 save
 
 # Windows + 任务计划程序（管理员 PowerShell）
 schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\\path\\to\\bun.exe\" run \"C:\\path\\to\\your\\project\\src\\index.ts\""
+
 ```
 
 ```bash
@@ -116,6 +117,7 @@ pm2 save
 4. 操作：启动程序
    - 程序：`C:\path\to\bun.exe`
    - 参数：`run "C:\path\to\your\project\src\index.ts"`
+
 5. 完成
 
 ### Linux — 使用 systemd

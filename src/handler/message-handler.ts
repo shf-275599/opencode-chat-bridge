@@ -825,7 +825,7 @@ export function createMessageHandler(
     // Add platform context signature
     if (parts[0]) {
       const channelId = (event as any)._channelId || "feishu"
-      const plugin = deps.channelManager?.getChannel(channelId)
+      const platformPlugin = deps.channelManager?.getChannel(channelId)
       parts[0] = {
         type: "text",
         text: appendPlatformContextSignature(
@@ -833,7 +833,7 @@ export function createMessageHandler(
           sessionId,
           channelId,
           signedSessions,
-          plugin,
+          platformPlugin,
         ),
       }
     }

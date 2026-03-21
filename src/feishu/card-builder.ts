@@ -142,7 +142,7 @@ export function buildHelpCard(): Record<string, unknown> {
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "Model" },
+          text: { tag: "plain_text", content: "🧠 Model" },
           value: { action: "command_execute", command: "/models" },
         },
         {

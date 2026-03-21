@@ -620,7 +620,7 @@ export function mdToHtml(text: string): string {
     .replace(/~~([^~]+)~~/g, "<s>$1</s>")
     .replace(/__([^_]+)__/g, "<u>$1</u>")
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, "$1<i>$2</i>")
+    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
     .replace(/`([^`\n]+)`/g, "<code>$1</code>")
 
   html = html.replace(/\u0000(\d+)\u0000/g, (_match, index) => blocks[Number(index)] ?? "")

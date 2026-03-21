@@ -41,7 +41,7 @@ pm2 startup windows
 pm2 save
 
 # Windows + 任务计划程序（管理员 PowerShell）
-schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\Users\YourUser\\.bun\\bin\\bun.exe\" run \".\opencode-lark\src\index.ts\""
+schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\\path\\to\\bun.exe\" run \".\\opencode-im-bridge\\src\\index.ts\""
 ```
 
 ```bash

@@ -95,8 +95,14 @@ export interface StreamingSession {
   pendingUpdates: string[];
   /** Timestamp when session was created */
   createdAt: number;
+  /** Optional: last channel message ID used for streaming updates */
+  lastMessageId?: string | number;
+  /** Optional: last rendered content sent to the channel */
+  lastRenderedText?: string;
   /** Function to flush accumulated updates */
   flush: () => Promise<void>;
+  /** Optional: finalize the streaming session */
+  close?: (finalText?: string) => Promise<void>;
 }
 
 /**

@@ -48,8 +48,13 @@ const advanceTimers = async (ms: number) => {
 function createMockSessionManager(): SessionManager {
   return {
     getOrCreate: vi.fn().mockResolvedValue("session-123"),
+    getExisting: vi.fn().mockResolvedValue(undefined),
     getSession: vi.fn().mockReturnValue(null),
+    deleteMapping: vi.fn().mockReturnValue(true),
+    setMapping: vi.fn().mockReturnValue(true),
+    setModel: vi.fn().mockReturnValue(true),
     cleanup: vi.fn().mockReturnValue(0),
+    validateAndCleanupStale: vi.fn().mockResolvedValue(0),
   }
 }
 

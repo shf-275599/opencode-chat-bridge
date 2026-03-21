@@ -405,6 +405,7 @@ async function main(): Promise<void> {
       appConfig: config,
       logger,
       onMessage: handleMessage,
+      onCardAction: handleCardAction,
     })
     channelManager.register(telegramPlugin)
   }

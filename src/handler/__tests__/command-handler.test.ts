@@ -13,7 +13,9 @@ function createMockSessionManager(
     getExisting: vi.fn().mockResolvedValue(mapping?.session_id),
     deleteMapping: vi.fn().mockReturnValue(true),
     setMapping: vi.fn().mockReturnValue(true),
+    setModel: vi.fn().mockReturnValue(true),
     cleanup: vi.fn().mockReturnValue(0),
+    validateAndCleanupStale: vi.fn().mockResolvedValue(0),
   }
 }
 
@@ -175,6 +177,40 @@ describe("createCommandHandler", () => {
         content: JSON.stringify({ text: "暂无会话。" }),
       })
     })
+
+    it("sends Telegram inline keyboard when telegram channel supports cards", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([{ id: "ses-1", title: "Chat A" }]),
+      })
+
+      const sendCard = vi.fn().mockResolvedValue(undefined)
+      const handler = createCommandHandler({
+        serverUrl: "http://test:4096",
+        sessionManager: mockSessionManager,
+        feishuClient: mockFeishuClient,
+        logger: mockLogger,
+        channelManager: {
+          getChannel: vi.fn().mockReturnValue({
+            outbound: {
+              sendText: vi.fn(),
+              sendCard,
+            },
+          }),
+        } as any,
+      })
+
+      const result = await handler("chat-1", "chat-1", "msg-1", "/sessions", "telegram")
+
+      expect(result).toBe(true)
+      expect(sendCard).toHaveBeenCalled()
+      expect(sendCard.mock.calls[0]?.[1]).toMatchObject({
+        text: expect.stringContaining("Current session"),
+        reply_markup: {
+          inline_keyboard: expect.any(Array),
+        },
+      })
+    })
   })
 
   describe("/agent", () => {
@@ -216,6 +252,50 @@ describe("createCommandHandler", () => {
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
         content: expect.stringContaining("Agent"),
+      })
+    })
+  })
+
+  describe("/models", () => {
+    it("lists Telegram models with inline keyboard", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          {
+            id: "openai",
+            name: "OpenAI",
+            models: {
+              "gpt-4.1": { id: "openai/gpt-4.1", name: "GPT-4.1" },
+            },
+          },
+        ]),
+      })
+
+      const sendCard = vi.fn().mockResolvedValue(undefined)
+      const handler = createCommandHandler({
+        serverUrl: "http://test:4096",
+        sessionManager: mockSessionManager,
+        feishuClient: mockFeishuClient,
+        logger: mockLogger,
+        channelManager: {
+          getChannel: vi.fn().mockReturnValue({
+            outbound: {
+              sendText: vi.fn(),
+              sendCard,
+            },
+          }),
+        } as any,
+      })
+
+      const result = await handler("chat-1", "chat-1", "msg-1", "/models", "telegram")
+
+      expect(result).toBe(true)
+      expect(sendCard).toHaveBeenCalled()
+      expect(sendCard.mock.calls[0]?.[1]).toMatchObject({
+        text: expect.stringContaining("Current model"),
+        reply_markup: {
+          inline_keyboard: expect.any(Array),
+        },
       })
     })
   })

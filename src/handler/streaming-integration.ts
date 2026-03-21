@@ -10,6 +10,8 @@ import { addListener, removeListener } from "../utils/event-listeners.js"
 import { StreamingCardSession } from "../streaming/streaming-card.js"
 import { buildResponseCard } from "../feishu/card-builder.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
+import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
+import type { StreamingSession } from "../channel/types.js"
 
 // ── Types ──
 
@@ -63,12 +65,24 @@ export function createStreamingBridge(
     ): Promise<void> {
       let card: StreamingCardSession | null = null
       let cardStartPromise: Promise<void> | null = null
+      let streamSession: StreamingSession | null = null
 
       const plugin = channelManager?.getChannel(channelId)
       logger.info(`@@@@@ STREAMING BRIDGE V2 @@@@@ channelId=${channelId} plugin=${!!plugin}`)
       logger.info(`StreamingBridge handleMessage: sessionId=${sessionId}, channelId=${channelId}, pluginFound=${!!plugin}, outboundFound=${!!plugin?.outbound}`)
 
       const sendInteractiveCard = async (cardData: Record<string, unknown>): Promise<void> => {
+        if (channelId === "telegram") {
+          const keyboard = (cardData.reply_markup as { inline_keyboard?: unknown[] } | undefined)?.inline_keyboard
+          if (Array.isArray(keyboard) && keyboard.length > 0 && plugin?.outbound?.sendCard) {
+            await plugin.outbound.sendCard({ address: chatId }, cardData)
+            return
+          }
+          if (plugin?.outbound?.sendText && typeof cardData.text === "string") {
+            await plugin.outbound.sendText({ address: chatId }, cardData.text)
+            return
+          }
+        }
         if (plugin?.outbound?.sendCard) {
           await plugin.outbound.sendCard({ address: chatId }, cardData)
           return
@@ -84,7 +98,18 @@ export function createStreamingBridge(
       }
 
       const ensureCard = (): void => {
-        if (channelId !== "feishu") return // Only Feishu supports streaming cards currently
+        if (channelId !== "feishu") {
+          if (!streamSession && plugin?.streaming) {
+            streamSession = plugin.streaming.createStreamingSession({
+              address: chatId,
+              context: {
+                messageId,
+                streamMode: "edit",
+              },
+            })
+          }
+          return
+        }
         if (card || cardStartPromise) return
         if (!cardkitClient || !feishuClient) {
           logger.warn(`Cannot start streaming card for session ${sessionId}: missing cardkitClient or feishuClient`)
@@ -109,6 +134,10 @@ export function createStreamingBridge(
         let syncResponseBody = ""
         // Helper: send text reply and clean up reaction
         const sendFinalResponse = async (text: string, skipMessage = false): Promise<void> => {
+          if (streamSession?.close) {
+            await streamSession.close(text)
+            skipMessage = true
+          }
           if (!skipMessage) {
             if (plugin?.outbound?.sendText) {
               logger.info(`[StreamingBridge] Sending final response via plugin ${channelId} to ${chatId}`)
@@ -147,6 +176,13 @@ export function createStreamingBridge(
               textBuffer += action.text
               if (textBuffer.length > 102_400) {
                 textBuffer = textBuffer.slice(0, 102_400) + "\n\n...(内容过长，已截断)"
+              }
+              ensureCard()
+              if (streamSession) {
+                streamSession.pendingUpdates = [textBuffer]
+                streamSession.flush().catch((err) => {
+                  logger.warn(`streamSession.flush failed: ${err}`)
+                })
               }
               if (card) {
                 card.updateText(textBuffer).catch((err) => {
@@ -209,7 +245,9 @@ export function createStreamingBridge(
               if (seenInteractiveIds.has(action.requestId)) break
               seenInteractiveIds.add(action.requestId)
               logger.info(`Question event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
-              const questionCard = buildQuestionCard(action)
+              const questionCard = channelId === "telegram"
+                ? buildTelegramQuestionCard(action)
+                : buildQuestionCard(action)
               sendInteractiveCard(questionCard).catch((err) => {
                 logger.warn(`Question card send failed: ${err}`)
               })
@@ -220,7 +258,9 @@ export function createStreamingBridge(
               if (seenInteractiveIds.has(action.requestId)) break
               seenInteractiveIds.add(action.requestId)
               logger.info(`Permission event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
-              const permissionCard = buildPermissionCard(action)
+              const permissionCard = channelId === "telegram"
+                ? buildTelegramPermissionCard(action)
+                : buildPermissionCard(action)
               sendInteractiveCard(permissionCard).catch((err) => {
                 logger.warn(`Permission card send failed: ${err}`)
               })
@@ -239,7 +279,7 @@ export function createStreamingBridge(
               closeCard
                 .then(async () => {
                   try {
-                    await sendFinalResponse(responseText, !!card)
+                    await sendFinalResponse(responseText, !!card || !!streamSession)
                   } catch (err) {
                     logger.warn(`sendFinalResponse failed: ${err}`)
                   }
@@ -256,7 +296,7 @@ export function createStreamingBridge(
                 .catch(async (err) => {
                   logger.warn(`card.close() failed: ${err}`)
                   try {
-                    await sendFinalResponse(responseText)
+                    await sendFinalResponse(responseText, !!streamSession)
                   } catch (replyErr) {
                     logger.warn(`sendFinalResponse failed after card.close error: ${replyErr}`)
                   }
@@ -293,7 +333,7 @@ export function createStreamingBridge(
           }
           // Send fallback text as reply
           try {
-            await sendFinalResponse(fallbackText, !!card)
+            await sendFinalResponse(fallbackText, !!card || !!streamSession)
           } catch (err) {
             logger.warn(`sendFinalResponse in timeout fallback failed: ${err}`)
           }
@@ -487,4 +527,43 @@ export function buildPermissionCard(
       ],
     },
   }
+}
+
+export function buildTelegramQuestionCard(
+  action: QuestionAsked,
+): Record<string, unknown> {
+  const question = action.questions[0]
+  const text = question
+    ? `${question.header}\n${question.question}`
+    : "Question"
+
+  const rows = (question?.options ?? []).slice(0, 3).map((option) => [{
+    text: option.label,
+    payload: {
+      action: "qa" as const,
+      requestId: action.requestId,
+      answers: [[option.label]],
+    },
+  }])
+
+  return ((createTelegramInlineCard(text, rows) ?? {
+    text,
+    reply_markup: { inline_keyboard: [] },
+  }) as unknown) as Record<string, unknown>
+}
+
+export function buildTelegramPermissionCard(
+  action: PermissionRequested,
+): Record<string, unknown> {
+  return ((createTelegramInlineCard(
+    `Permission: ${action.permissionType}\n${action.title}`,
+    [[
+      { text: "Allow Once", payload: { action: "pr" as const, requestId: action.requestId, reply: "once" } },
+      { text: "Always Allow", payload: { action: "pr" as const, requestId: action.requestId, reply: "always" } },
+      { text: "Reject", payload: { action: "pr" as const, requestId: action.requestId, reply: "reject" } },
+    ]],
+  ) ?? {
+    text: action.title,
+    reply_markup: { inline_keyboard: [] },
+  }) as unknown) as Record<string, unknown>
 }

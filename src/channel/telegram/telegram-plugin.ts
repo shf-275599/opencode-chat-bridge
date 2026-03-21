@@ -523,15 +523,15 @@ export class TelegramPlugin extends BaseChannelPlugin {
         await this.safeAnswerCallbackQuery(query.id, "Submitted.")
         const value: Record<string, string> = payload.action === "qa"
           ? {
-              action: "question_answer",
-              requestId: payload.requestId ?? "",
-              answers: JSON.stringify(payload.answers ?? []),
-            }
+            action: "question_answer",
+            requestId: payload.requestId ?? "",
+            answers: JSON.stringify(payload.answers ?? []),
+          }
           : {
-              action: "permission_reply",
-              requestId: payload.requestId ?? "",
-              reply: payload.reply ?? "reject",
-            }
+            action: "permission_reply",
+            requestId: payload.requestId ?? "",
+            reply: payload.reply ?? "reject",
+          }
         await this.onCardAction({
           action: {
             tag: "button",
@@ -646,4 +646,3 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export { createTelegramInlineCard }

@@ -9,7 +9,8 @@
 import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
-import { buildResponseCard, buildProjectSelectorCard, buildHelpCard } from "../feishu/card-builder.js"
+import type { SessionMapping } from "../types.js"
+import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard } from "../feishu/card-builder.js"
 
 import type { ChannelManager } from "../channel/manager.js"
 import type { CronService } from "../cron/cron-service.js"
@@ -44,6 +45,13 @@ interface AgentInfo {
   name: string
   description?: string
   mode: "subagent" | "primary" | "all"
+}
+
+interface ProviderModelInfo {
+  id: string
+  providerId: string
+  providerName: string
+  modelName: string
 }
 
 // Card builders removed - used centralized card-builder.ts instead
@@ -240,7 +248,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 - /compact: 压缩历史
 - /share: 分享会话
 - /abort: 中止任务
-- /agent: ??/?? Agent
+- /agent: list/switch agent
+- /models: list/switch model
 - /cron: 计划任务管理
 - /help: 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
@@ -352,6 +361,100 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, `Agent switched to: ${matched}`, channelId)
   }
 
+  async function listModels(): Promise<ProviderModelInfo[]> {
+    const resp = await fetch(`${serverUrl}/provider`)
+    if (!resp.ok) {
+      throw new Error(`List models failed: HTTP ${resp.status}`)
+    }
+
+    const data = (await resp.json()) as {
+      all?: Array<{
+        id: string
+        name: string
+        models?: Record<string, { id?: string; name?: string }>
+      }>
+    }
+
+    return (data.all ?? [])
+      .flatMap((provider) =>
+        Object.entries(provider.models ?? {}).map(([modelKey, model]) => ({
+          id: `${provider.id}/${model.id ?? modelKey}`,
+          providerId: provider.id,
+          providerName: provider.name,
+          modelName: model.name ?? model.id ?? modelKey,
+        })),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))
+  }
+
+  function detectCurrentModel(mapping: SessionMapping | null): string | undefined {
+    return mapping?.model ?? undefined
+  }
+
+  async function handleModels(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    args: string[],
+  ): Promise<void> {
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, "No session bound yet. Use /sessions or /new first.", channelId)
+      return
+    }
+
+    const models = await listModels()
+    const targetRaw = args[0]
+    if (!targetRaw || targetRaw.toLowerCase() === "list") {
+      const currentModelId = detectCurrentModel(mapping)
+
+      if (channelId === "feishu") {
+        const card = buildModelSelectorCard(models, currentModelId)
+        await feishuClient.replyMessage(messageId, {
+          msg_type: "interactive",
+          content: JSON.stringify(card),
+        })
+        return
+      }
+
+      const listText = models.length
+        ? models
+            .map((model) => (model.id === currentModelId ? `* ${model.id}` : `- ${model.id}`))
+            .join("\n")
+        : "No models available"
+      await replyText(
+        chatId,
+        messageId,
+        `Current model: ${currentModelId ?? "unknown"}\n\nAvailable models:\n${listText}\n\nUsage: /models {provider/model}`,
+        channelId,
+      )
+      return
+    }
+
+    const matched = models.find((model) => model.id.toLowerCase() === targetRaw.toLowerCase())
+    if (!matched) {
+      const listText = models.length ? models.map((model) => model.id).join(", ") : "none"
+      await replyText(chatId, messageId, `Model not found: ${targetRaw}\nAvailable: ${listText}`, channelId)
+      return
+    }
+
+    const resp = await fetch(
+      `${serverUrl}/session/${mapping.session_id}/command`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "models", arguments: matched.id }),
+      },
+    )
+    if (!resp.ok) {
+      throw new Error(`Model switch failed: HTTP ${resp.status}`)
+    }
+
+    sessionManager.setModel(feishuKey, matched.id)
+    await replyText(chatId, messageId, `Model switch command sent: ${matched.id}`, channelId)
+  }
+
   return async function handleCommand(
     feishuKey: string,
     chatId: string,
@@ -400,6 +503,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/agent": {
           const args = parts.slice(1)
           await handleAgent(feishuKey, chatId, messageId, channelId, args)
+          return true
+        }
+
+        case "/models": {
+          const args = parts.slice(1)
+          await handleModels(feishuKey, chatId, messageId, channelId, args)
           return true
         }
 

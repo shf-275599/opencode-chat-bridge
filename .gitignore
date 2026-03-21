@@ -16,3 +16,4 @@ bin/
 temp-claude-to-im/
 video-intro/
 inferencesh-cli-windows-amd64.tar.gz
+.agents/workflows/publish.md

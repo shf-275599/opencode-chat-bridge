@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.36.3 (2026-03-21)
+
+### Improvements
+
+- **Models Command**: Added `/models` listing and management flow so chats can inspect and switch available models directly from the bridge.
+- **Cross-Platform Autostart**: Unified autostart setup across Windows/Linux/macOS with bridge startup helpers and updated deployment guidance for cross-platform channel deployments.
+
+### Bug Fixes
+
+- **Platform Context Signature**: `message-handler` now injects channel-aware context signatures. Feishu remains tagged as `[Lark]`, while QQ/Telegram/Discord receive their own platform tag so the agent no longer misidentifies non-Lark chats as Lark and incorrectly reaches for Lark MCP tooling.
+
 ## 0.36.2 (2026-03-20)
 
 ### Improvements

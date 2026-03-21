@@ -58,6 +58,7 @@ export interface SessionMapping {
   feishu_key: string
   session_id: string
   agent: string
+  model?: string | null
   created_at: number
   last_active: number
   is_bound?: number

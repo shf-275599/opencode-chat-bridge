@@ -180,7 +180,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const data = (await resp.json()) as { id: string }
     sessionManager.deleteMapping(feishuKey)
     logger.info(`/new: created session ${data.id}, unbound ${feishuKey}`)
-    await replyText(chatId, messageId, `宸插垱寤烘柊浼氳瘽: ${data.id}`, channelId)
+    await replyText(chatId, messageId, `已创建新会话: ${data.id}`, channelId)
   }
 
   async function handleAbort(
@@ -191,7 +191,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   ): Promise<void> {
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "褰撳墠娌℃湁缁戝畾鐨勪細璇濄€?", channelId)
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
       return
     }
 
@@ -201,7 +201,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/abort: aborted session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `宸蹭腑姝細璇? ${mapping.session_id}`, channelId)
+    await replyText(chatId, messageId, `已中止会话: ${mapping.session_id}`, channelId)
   }
 
   async function handleSessions(
@@ -217,7 +217,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     const sessions = (await resp.json()) as Session[]
     if (sessions.length === 0) {
-      await replyText(chatId, messageId, "鏆傛棤浼氳瘽銆?", channelId)
+      await replyText(chatId, messageId, "暂无会话。", channelId)
       return
     }
 
@@ -228,7 +228,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         const current = sessions.splice(existingIndex, 1)[0]
         if (current) sessions.unshift(current)
       } else {
-        sessions.unshift({ id: currentSessionId, title: "褰撳墠浼氳瘽" })
+        sessions.unshift({ id: currentSessionId, title: "当前会话" })
       }
     }
 
@@ -245,7 +245,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (channelId !== "feishu") {
       const sessionList = sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (${session.id})`).join("\n")
-      await replyText(chatId, messageId, `鏈€杩戜細璇濆垪琛細\n${sessionList}\n\n浣跨敤 /connect {id} 杩涜杩炴帴銆?`, channelId)
+      await replyText(chatId, messageId, `最近会话列表：\n${sessionList}\n\n使用 /connect {id} 进行连接。`, channelId)
       return
     }
 
@@ -265,7 +265,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   ): Promise<void> {
     const checkResp = await fetch(`${serverUrl}/session/${targetSessionId}`)
     if (!checkResp.ok) {
-      await replyText(chatId, messageId, "浼氳瘽涓嶅瓨鍦ㄣ€?", channelId)
+      await replyText(chatId, messageId, "会话不存在。", channelId)
       return
     }
 
@@ -275,7 +275,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/connect: bound ${feishuKey} to session ${targetSessionId}`)
-    await replyText(chatId, messageId, `宸茶繛鎺ュ埌浼氳瘽: ${targetSessionId}`, channelId)
+    await replyText(chatId, messageId, `已连接到会话: ${targetSessionId}`, channelId)
   }
 
   async function handleSessionCommand(
@@ -287,7 +287,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   ): Promise<void> {
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "褰撳墠娌℃湁缁戝畾鐨勪細璇濄€?", channelId)
+      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
       return
     }
 
@@ -301,7 +301,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/${command}: executed on session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `宸叉墽琛?/${command} (浼氳瘽: ${mapping.session_id})`, channelId)
+    await replyText(chatId, messageId, `已执行 /${command} (会话: ${mapping.session_id})`, channelId)
   }
 
   async function handleHelp(
@@ -310,7 +310,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string,
   ): Promise<void> {
     if (channelId !== "feishu") {
-      const helpText = `鍛戒护鑿滃崟:\n- /new: 鏂板缓浼氳瘽\n- /sessions: 杩炴帴浼氳瘽\n- /models: 鍒囨崲妯″瀷\n- /agent: 鍒囨崲 Agent\n- /compact: 鍘嬬缉鍘嗗彶\n- /share: 鍒嗕韩浼氳瘽\n- /abort: 涓浠诲姟\n- /help: 鏄剧ず姝ゅ府鍔?`
+      const helpText = `命令菜单:\n- /new: 新建会话\n- /sessions: 连接会话\n- /models: 切换模型\n- /agent: 切换 Agent\n- /compact: 压缩历史\n- /share: 分享会话\n- /abort: 中止任务\n- /help: 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
       return
     }
@@ -331,7 +331,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   ): Promise<void> {
     const cron = deps.cronService
     if (!cron) {
-      await replyText(chatId, messageId, "Cron 鏈嶅姟鏈惎鐢?", channelId)
+      await replyText(chatId, messageId, "Cron 服务未启用", channelId)
       return
     }
 
@@ -339,30 +339,30 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     if (sub === "list") {
       const jobs = cron.getJobs()
       if (jobs.length === 0) {
-        await replyText(chatId, messageId, "褰撳墠娌℃湁浠讳綍瀹氭椂浠诲姟銆?", channelId)
+        await replyText(chatId, messageId, "当前没有任何定时任务。", channelId)
         return
       }
 
       const lines = jobs.map((job) => {
-        const status = job.enabled !== false ? "[鍚敤]" : "[鍋滅敤]"
+        const status = job.enabled !== false ? "[启用]" : "[停用]"
         return `${status} ${job.id || job.name} | ${job.schedule}\n  text: ${job.prompt}\n  chat: ${job.chatId}`
       })
-      await replyText(chatId, messageId, `Cron 浠诲姟鍒楄〃:\n\n${lines.join("\n\n")}`, channelId)
+      await replyText(chatId, messageId, `🕒 运行时 Cron 任务列表：\n\n${lines.join("\n\n")}`, channelId)
       return
     }
 
     if (sub === "remove") {
       const jobId = args[1]
       if (!jobId) {
-        await replyText(chatId, messageId, "鐢ㄦ硶锛?cron remove <jobId>", channelId)
+        await replyText(chatId, messageId, "用法：/cron remove <jobId>", channelId)
         return
       }
       const success = await cron.removeJob(jobId)
-      await replyText(chatId, messageId, success ? `宸叉垚鍔熺Щ闄や换鍔? ${jobId}` : `鎵句笉鍒颁换鍔? ${jobId}`, channelId)
+      await replyText(chatId, messageId, success ? `已成功移除任务: ${jobId}` : `找不到任务: ${jobId}`, channelId)
       return
     }
 
-    await replyText(chatId, messageId, "鐩墠鏀寔鐨勫瓙鍛戒护锛?cron list, /cron remove <id>銆?", channelId)
+    await replyText(chatId, messageId, "目前支持的子命令：/cron list, /cron remove <id>。", channelId)
   }
 
   async function handleAgent(
@@ -547,7 +547,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/connect": {
           const targetSessionId = parts[1]
           if (!targetSessionId) {
-            await replyText(chatId, messageId, "鐢ㄦ硶: /connect {session_id}", channelId)
+            await replyText(chatId, messageId, "用法: /connect {session_id}", channelId)
             return true
           }
           await handleConnect(feishuKey, chatId, messageId, targetSessionId, channelId)
@@ -578,7 +578,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     } catch (err) {
       logger.error(`Command ${cmd} failed: ${err}`)
       try {
-        await replyText(chatId, messageId, `鍛戒护鎵ц澶辫触: ${err}`, channelId)
+        await replyText(chatId, messageId, `命令执行失败: ${err}`, channelId)
       } catch (replyErr) {
         logger.error(`Failed to send error reply: ${replyErr}`)
       }

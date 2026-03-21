@@ -106,7 +106,7 @@ pm2 save
 3. 触发器：计算机启动时
 4. 操作：启动程序
    - 程序：`C:\Users\YourUser\.bun\bin\bun.exe`
-   - 参数：`startup "D:\Project\PRwithAI\opencode-lark\start.sh"`
+   - 参数：`run "C:\\path\\to\\your\\project\\opencode-im-bridge\\src\\index.ts"`
 5. 完成
 
 ### Linux — 使用 systemd

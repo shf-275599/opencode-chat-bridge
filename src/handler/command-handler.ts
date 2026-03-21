@@ -188,10 +188,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    // Unbind current mapping if exists
-    sessionManager.deleteMapping(feishuKey)
-
-    // Set new mapping
+    // Replace the existing mapping in place so session-scoped metadata such as
+    // the selected model can be preserved across reconnects.
     const success = sessionManager.setMapping(feishuKey, targetSessionId)
     if (success) {
       logger.info(`/connect: bound ${feishuKey} to session ${targetSessionId}`)

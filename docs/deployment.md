@@ -72,11 +72,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps
 # 注册“系统启动时自动启动”
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Trigger Startup
 
+# 自定义计划任务名
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -TaskName "opencode-im-bridge-dev"
+
+# 指定仓库根目录（适合从其他目录执行脚本）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -RepoRoot "C:\Path\To\opencode-im-bridge"
+
 # 绑定多份配置中的指定配置以跳过终端交互
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -ConfigId my_config_name
 
-# 指定 bun 路径
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -BunPath "C:\Users\YourUser\.bun\bin\bun.exe"
+# 当 bun 不在 PATH 中时，显式指定 bun 路径
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -RepoRoot "C:\Path\To\opencode-im-bridge" -BunPath "C:\Path\To\bun.exe"
 
 # 移除自启动
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Remove
@@ -84,7 +90,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps
 
 说明：
 - `scripts/setup-autostart.ps1` 负责注册/移除 Windows 计划任务
-- `scripts/windows-start-bridge.ps1` 负责在正确的仓库目录中启动 `bun run src/index.ts`
+- `-TaskName` 用于自定义计划任务名称，便于区分生产/测试等不同任务
+- `-RepoRoot` 用于显式指定仓库根目录；`scripts/windows-start-bridge.ps1` 会读取它，并在该目录中执行 `bun run src/index.ts`
+- `-BunPath` 可用于指定一个不在 PATH 中的 bun 可执行文件；如果省略，`setup-autostart.ps1` 会依赖系统 PATH 查找 `bun`，找不到时会直接报错
+- `scripts/windows-start-bridge.ps1` 依赖传入的 `RepoRoot` 和 `BunPath`，确保桥接服务总是在正确仓库目录中由正确的 bun 启动
 - 默认使用 `Logon` 触发器，更适合依赖当前用户环境的本地部署
 
 ### Windows — 使用 PM2 Startup

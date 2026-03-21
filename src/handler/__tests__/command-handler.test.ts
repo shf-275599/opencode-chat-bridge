@@ -312,9 +312,8 @@ describe("createCommandHandler", () => {
       expect(result).toBe(true)
       // First fetch: validate session exists
       expect(mockFetch).toHaveBeenNthCalledWith(1, "http://test:4096/session/ses-456")
-      // deleteMapping called
-      expect(mockSessionManager.deleteMapping).toHaveBeenCalledWith("chat-1")
-      // setMapping called
+      // setMapping replaces the binding in place so metadata can be preserved
+      expect(mockSessionManager.deleteMapping).not.toHaveBeenCalled()
       expect(mockSessionManager.setMapping).toHaveBeenCalledWith("chat-1", "ses-456")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",

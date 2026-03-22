@@ -44,7 +44,8 @@ export async function needsSetup(): Promise<boolean> {
   const hasQq = !!(process.env.QQ_APP_ID && process.env.QQ_SECRET)
   const hasTelegram = !!process.env.TELEGRAM_BOT_TOKEN
   const hasDiscord = !!process.env.DISCORD_BOT_TOKEN
-  if (hasFeishu || hasQq || hasTelegram || hasDiscord) {
+  const hasWechat = process.env.WECHAT_ENABLED === "true"
+  if (hasFeishu || hasQq || hasTelegram || hasDiscord || hasWechat) {
     return false
   }
 
@@ -209,13 +210,15 @@ export async function runSetupWizard(): Promise<void> {
     let setupQq = false
     let setupTelegram = false
     let setupDiscord = false
-    while (!setupFeishu && !setupQq && !setupTelegram && !setupDiscord) {
-      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, telegram, discord, all]: ")).trim().toLowerCase()
+    let setupWechat = false
+    while (!setupFeishu && !setupQq && !setupTelegram && !setupDiscord && !setupWechat) {
+      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, telegram, discord, wechat, all]: ")).trim().toLowerCase()
       if (choice === "feishu" || choice === "all") setupFeishu = true
       if (choice === "qq" || choice === "all") setupQq = true
       if (choice === "telegram" || choice === "all") setupTelegram = true
       if (choice === "discord" || choice === "all") setupDiscord = true
-      if (!setupFeishu && !setupQq && !setupTelegram && !setupDiscord) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
+      if (choice === "wechat" || choice === "all") setupWechat = true
+      if (!setupFeishu && !setupQq && !setupTelegram && !setupDiscord && !setupWechat) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
     }
 
     let feishuAppId = "", feishuAppSecret = ""
@@ -303,6 +306,13 @@ export async function runSetupWizard(): Promise<void> {
       }
     }
 
+    // WeChat uses QR code login, no credentials needed
+    if (setupWechat) {
+      process.stdout.write("\n" + dim("--- WeChat Configuration ---") + "\n")
+      process.stdout.write(dim("  WeChat uses QR code login on first run.") + "\n")
+      process.stdout.write(dim("  Enable WeChat by setting WECHAT_ENABLED=true") + "\n")
+    }
+
     // Re-create rl for the remaining prompts
     const rl2 = readline.createInterface({
       input: process.stdin,
@@ -342,7 +352,7 @@ export async function runSetupWizard(): Promise<void> {
       process.stdout.write(dim("Step 3/3: Save Configuration") + "\n")
 
       ensureConfigDir()
-      const mainId = feishuAppId || qqAppId || "bot"
+      const mainId = feishuAppId || qqAppId || telegramBotToken || discordBotToken || "bot"
       const envPath = path.join(CONFIG_DIR, `.env.${mainId}`)
 
       // Build .env content
@@ -377,6 +387,9 @@ export async function runSetupWizard(): Promise<void> {
         }
       } else {
         lines.push(`DISCORD_BOT_TOKEN=`)
+      }
+      if (setupWechat) {
+        lines.push(`WECHAT_ENABLED=true`)
       }
 
       if (serverUrl !== DEFAULT_URL) {
@@ -420,6 +433,9 @@ export async function runSetupWizard(): Promise<void> {
         }
       } else {
         delete process.env.DISCORD_BOT_TOKEN
+      }
+      if (setupWechat) {
+        process.env.WECHAT_ENABLED = "true"
       }
       if (serverUrl !== DEFAULT_URL) {
         process.env.OPENCODE_SERVER_URL = serverUrl

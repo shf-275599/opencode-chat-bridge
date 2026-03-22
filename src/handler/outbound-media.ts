@@ -10,8 +10,8 @@
  * silently if the plugin does not implement the required method.
  */
 
-import { stat, realpath } from "node:fs/promises"
-import { resolve } from "node:path"
+import { stat, realpath, readdir } from "node:fs/promises"
+import { resolve, join } from "node:path"
 import { homedir } from "node:os"
 import type { ChannelOutboundAdapter, OutboundTarget } from "../channel/types.js"
 import type { Logger } from "../utils/logger.js"
@@ -27,6 +27,7 @@ export interface OutboundMediaDeps {
 
 export interface OutboundMediaHandler {
   sendDetectedFiles(target: OutboundTarget, text: string, outboundAdapter?: ChannelOutboundAdapter): Promise<void>
+  snapshotAttachments(targetAddress: string): Promise<void>
 }
 
 // ── Constants ──
@@ -34,7 +35,9 @@ export interface OutboundMediaHandler {
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 const IMAGE_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp)$/i
-const FILE_EXTENSIONS = /\.(pdf|doc|docx|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py|svg)$/i
+const AUDIO_EXTENSIONS = /\.(opus|mp3|wav|m4a|ogg|flac)$/i
+const VIDEO_EXTENSIONS = /\.(mp4|mov|avi|webm|mkv)$/i
+const FILE_EXTENSIONS = /\.(pdf|doc|docx|xls|xlsx|csv|zip|tar|gz|txt|md|json|yaml|yml|html|css|js|ts|py|svg)$/i
 
 // ── Path extraction ──
 
@@ -51,12 +54,17 @@ function normalizePath(p: string): string {
 
 const EXT_REGEX = /\.(png|jpg|jpeg|gif|webp|pdf|svg|doc|docx|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py)$/i
 
+// Control chars + Windows illegal chars except slashes (slashes are path separators)
+const WIN_PATH_REGEX = /([A-Za-z]:[/\\][^\x00-\x1f<>:"\|?*]+)/g
+// Unix path: starts at string beginning or after newline, then /~ + path
+const UNIX_PATH_REGEX = /^(?![A-Za-z]:)[/~][^\x00-\x1f<>:"\\|?*]+/gm
+
 export function extractFilePaths(text: string): string[] {
   const seen = new Set<string>()
   const results: string[] = []
 
-  for (const match of text.matchAll(/([A-Za-z]:[/\\][^ "'`<>|*?:]+)/g)) {
-    const raw = match[1]
+  for (const match of text.matchAll(WIN_PATH_REGEX)) {
+    const raw = match[1] ?? match[0]
     if (!raw || !EXT_REGEX.test(raw)) continue
     const normalized = normalizePath(raw)
     if (!seen.has(normalized)) {
@@ -65,8 +73,8 @@ export function extractFilePaths(text: string): string[] {
     }
   }
 
-  for (const match of text.matchAll(/([/~][^ "'`<>|*?:\\]+)/g)) {
-    const raw = match[1]
+  for (const match of text.matchAll(UNIX_PATH_REGEX)) {
+    const raw = match[1] ?? match[0]
     if (!raw || !EXT_REGEX.test(raw)) continue
     const expanded = expandTilde(raw)
     const normalized = normalizePath(expanded)
@@ -77,7 +85,7 @@ export function extractFilePaths(text: string): string[] {
   }
 
   for (const match of text.matchAll(/`file:(\/[^`]+)`/g)) {
-    const raw = match[1]
+    const raw = match[1] ?? match[0]
     if (!raw || !EXT_REGEX.test(raw)) continue
     const expanded = expandTilde(raw)
     const normalized = normalizePath(expanded)
@@ -94,8 +102,26 @@ function isImageFile(filePath: string): boolean {
   return IMAGE_EXTENSIONS.test(filePath)
 }
 
+function isAudioFile(filePath: string): boolean {
+  return AUDIO_EXTENSIONS.test(filePath)
+}
+
+function isVideoFile(filePath: string): boolean {
+  return VIDEO_EXTENSIONS.test(filePath)
+}
+
 function isDocumentFile(filePath: string): boolean {
   return FILE_EXTENSIONS.test(filePath)
+}
+
+type FileType = "image" | "audio" | "video" | "file"
+
+function classifyFile(filePath: string): FileType | null {
+  if (isImageFile(filePath)) return "image"
+  if (isAudioFile(filePath)) return "audio"
+  if (isVideoFile(filePath)) return "video"
+  if (isDocumentFile(filePath)) return "file"
+  return null
 }
 
 // ── Allowlist helpers ──
@@ -151,7 +177,47 @@ export function createOutboundMediaHandler(
   const { outbound, logger } = deps
   const allowlist = buildAllowlist(deps.allowedUploadDirs)
 
+  // Snapshot of files per chat/target — used to detect agent-created files
+  const dirSnapshots = new Map<string, Set<string>>()
+
+  async function scanNewFiles(target: OutboundTarget, adapter: ChannelOutboundAdapter): Promise<void> {
+    const snapshot = dirSnapshots.get(target.address)
+    if (!snapshot) return
+
+    for (const dir of allowlist) {
+      let entries: string[]
+      try {
+        entries = await readdir(dir)
+      } catch {
+        continue
+      }
+
+      for (const fileName of entries) {
+        if (snapshot.has(fileName)) continue
+        const filePath = join(dir, fileName)
+        const type = classifyFile(fileName)
+        if (type) {
+          await processFile(filePath, target, adapter, type, logger, allowlist)
+        }
+      }
+    }
+  }
+
   return {
+    async snapshotAttachments(targetAddress: string): Promise<void> {
+      const snapshot = new Set<string>()
+      for (const dir of allowlist) {
+        try {
+          const entries = await readdir(dir)
+          for (const f of entries) snapshot.add(f)
+        } catch {
+          // Directory may not exist yet
+        }
+      }
+      dirSnapshots.set(targetAddress, snapshot)
+      logger.debug(`Attachments snapshot taken for ${targetAddress}: ${snapshot.size} files`)
+    },
+
     async sendDetectedFiles(target: OutboundTarget, text: string, outboundAdapter?: ChannelOutboundAdapter): Promise<void> {
       const adapter = outboundAdapter ?? outbound
       if (!adapter) {
@@ -160,15 +226,22 @@ export function createOutboundMediaHandler(
       }
 
       const paths = [...new Set(extractFilePaths(text))]
-      if (paths.length === 0) {
+      const hasTextPaths = paths.length > 0
+      const hasSnapshot = dirSnapshots.has(target.address)
+
+      if (!hasTextPaths && !hasSnapshot) {
         logger.debug(`No file paths detected in response text (${text.length} chars)`)
         return
       }
 
       const imagePaths: string[] = []
+      const audioPaths: string[] = []
+      const videoPaths: string[] = []
       const filePaths: string[] = []
       for (const p of paths) {
         if (isImageFile(p)) imagePaths.push(p)
+        else if (isAudioFile(p)) audioPaths.push(p)
+        else if (isVideoFile(p)) videoPaths.push(p)
         else if (isDocumentFile(p)) filePaths.push(p)
       }
 
@@ -179,11 +252,30 @@ export function createOutboundMediaHandler(
         }
       }
 
+      if (audioPaths.length > 0 && adapter.sendAudio) {
+        logger.info(`Detected ${audioPaths.length} audio path(s) in agent reply, attempting send`)
+        for (const filePath of audioPaths) {
+          await processFile(filePath, target, adapter, "audio", logger, allowlist)
+        }
+      }
+
+      if (videoPaths.length > 0 && adapter.sendVideo) {
+        logger.info(`Detected ${videoPaths.length} video path(s) in agent reply, attempting send`)
+        for (const filePath of videoPaths) {
+          await processFile(filePath, target, adapter, "video", logger, allowlist)
+        }
+      }
+
       if (filePaths.length > 0 && adapter.sendFile) {
         logger.info(`Detected ${filePaths.length} file path(s) in agent reply, attempting send`)
         for (const filePath of filePaths) {
           await processFile(filePath, target, adapter, "file", logger, allowlist)
         }
+      }
+
+      // Also scan directory for new files created by agent (if snapshot was taken)
+      if (hasSnapshot) {
+        await scanNewFiles(target, adapter)
       }
     },
   }
@@ -193,7 +285,7 @@ async function processFile(
   filePath: string,
   target: OutboundTarget,
   adapter: ChannelOutboundAdapter,
-  type: "image" | "file",
+  type: "image" | "audio" | "video" | "file",
   logger: Logger,
   allowlist: string[],
 ): Promise<void> {
@@ -216,6 +308,12 @@ async function processFile(
     if (type === "image" && adapter.sendImage) {
       await adapter.sendImage(target, realPath)
       logger.info(`Sent image via channel plugin: ${realPath}`)
+    } else if (type === "audio" && adapter.sendAudio) {
+      await adapter.sendAudio(target, realPath)
+      logger.info(`Sent audio via channel plugin: ${realPath}`)
+    } else if (type === "video" && adapter.sendVideo) {
+      await adapter.sendVideo(target, realPath)
+      logger.info(`Sent video via channel plugin: ${realPath}`)
     } else if (type === "file" && adapter.sendFile) {
       await adapter.sendFile(target, realPath)
       logger.info(`Sent file via channel plugin: ${realPath}`)

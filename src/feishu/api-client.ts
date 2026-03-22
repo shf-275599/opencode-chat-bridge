@@ -40,6 +40,8 @@ export interface FeishuApiClient {
   getBotInfo(): Promise<{ app_name: string; open_id: string }>
   uploadImage(imageData: Buffer, imageType?: string): Promise<string>
   uploadFile(fileData: Buffer, fileName: string, fileType?: string): Promise<string>
+  uploadAudio(audioData: Buffer, fileName: string): Promise<string>
+  uploadVideo(videoData: Buffer, fileName: string): Promise<string>
   sendTypingIndicator(chatId: string): Promise<FeishuApiResponse>
 }
 
@@ -315,6 +317,14 @@ export function createFeishuApiClient(options: FeishuApiClientOptions): FeishuAp
         throw new Error(`Feishu uploadFile error: ${data.code} - ${data.msg}`)
       }
       return (data.data?.file_key as string) ?? ""
+    },
+
+    async uploadAudio(audioData, fileName) {
+      return this.uploadFile(audioData, fileName, "opus")
+    },
+
+    async uploadVideo(videoData, fileName) {
+      return this.uploadFile(videoData, fileName, "mp4")
     },
 
     async sendTypingIndicator(chatId) {

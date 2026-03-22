@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.37.0 (2026-03-22)
+
+### Features
+
+- **飞书发送图片**：新增 `sendImage` 方法，支持 agent 回复中的图片路径自动上传并以飞书内嵌图片消息发送
+- **飞书发送文件**：新增 `sendFile` 方法，支持 PDF、DOCX、XLSX、ZIP 等文档作为附件发送
+- **飞书发送音视频**：`ChannelOutboundAdapter` 新增 `sendAudio`/`sendVideo` 方法，配合 `uploadAudio`(opus) / `uploadVideo`(mp4) 接口，支持 mp3/wav/mp4 等格式作为内嵌播放器发送（需实际环境验证）
+- **自动文件检测**：新增目录快照机制（`snapshotAttachments`），在 agent 响应结束时自动扫描 attachments 目录增量文件，无需 agent 在回复中输出文件路径即可自动发送新增的媒体文件
+- **Telegram MarkdownV2**：解析模式从 HTML mode 更改为 MarkdownV2，修复下划线样式处理，防止 `_italic_` 中的下划线被错误转义
+
+### Bug Fixes
+
+- **Windows 路径支持**：修复 Windows 路径正则，移除空格、中文字符排除限制，修复含空格/中文路径无法被 `extractFilePaths` 正确识别的问题
+
+### Documentation
+
+- README.md 消息类型表格更新：image/file ✅，audio/video ✅
+
 ## 0.36.3 (2026-03-21)
 
 ### Improvements

@@ -605,12 +605,12 @@ export function mdToMarkdownV2(text: string): string {
 
   remaining = remaining.replace(/```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
     const index = blocks.push(lang ? `\`\`\`${lang}\n${code.trimEnd()}\`\`\`` : `\`\`\`\n${code.trimEnd()}\`\`\``) - 1
-    return `\x00BLOCK${index}\x00`
+    return `\x02BLOCK${index}\x03`
   })
 
   remaining = remaining.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, text, url) => {
     const index = links.push(`[${text}](${url})`) - 1
-    return `\x00LINK${index}\x00`
+    return `\x02LINK${index}\x03`
   })
 
   let md = remaining
@@ -619,28 +619,29 @@ export function mdToMarkdownV2(text: string): string {
   md = md.replace(/^\s*\d+\.\s+(.*)$/gm, "$1")
   md = md.replace(/\|\|([^|]+)\|\|/g, "||$1||")
   md = md.replace(/~~([^~]+)~~/g, "~$1~")
-  md = md.replace(/`([^`\n]+)`/g, "\x00CODE$1\x00CODEE")
-  md = md.replace(/\*\*([^*]+)\*\*/g, "\x00BOLD$1\x00BOLDE")
-  md = md.replace(/__(?!_)([^_]+)__(?!_)/g, "\x00UNDER$1\x00UNDERE")
-  md = md.replace(/\x00CODE(.+?)\x00CODEE/g, "`$1`")
-  md = md.replace(/\x00BOLD(.+?)\x00BOLDE/g, "\x00STAR$1\x00STARE")
-  md = md.replace(/\x00UNDER(.+?)\x00UNDERE/g, "\x00USCORE$1\x00USCOREE")
-  md = md.replace(/\*([^*]+)\*/g, "\x00ITALIC$1\x00ITALICE")
-  md = md.replace(/\x00STAR(.+?)\x00STARE/g, "*$1*")
-  md = md.replace(/\x00USCORE(.+?)\x00USCOREE/g, "__$1__")
-  md = md.replace(/\x00ITALIC(.+?)\x00ITALICE/g, "_$1_")
+  md = md.replace(/`([^`\n]+)`/g, "\x02CODE$1\x03CODEE")
+  md = md.replace(/\*\*([^*]+)\*\*/g, "\x02BOLDSTART$1\x03BOLDEND")
+  md = md.replace(/__(?!_)([^_]+)__(?!_)/g, "\x02UNDERSTART$1\x03UNDEREND")
+  md = md.replace(/\x02CODE(.+?)\x03CODEE/g, "`$1`")
+  md = md.replace(/\*([^*]+)\*/g, "\x02ITALICSTART$1\x03ITALICEND")
+  md = md.replace(/_([^_\x02\x03]+)_/g, "\x02USCOREITALICSTART$1\x03USCOREITALICEND")
 
   md = escapeMarkdownV2(md)
 
-  md = md.replace(/\x00BLOCK(\d+)\x00/g, (_match, index) => blocks[Number(index)] ?? "")
-  md = md.replace(/\x00LINK(\d+)\x00/g, (_match, index) => links[Number(index)] ?? "")
+  md = md.replace(/\x02BOLDSTART([^\x02\x03]+)\x03BOLDEND/g, "*$1*")
+  md = md.replace(/\x02UNDERSTART([^\x02\x03]+)\x03UNDEREND/g, "__$1__")
+  md = md.replace(/\x02ITALICSTART([^\x02\x03]+)\x03ITALICEND/g, "_$1_")
+  md = md.replace(/\x02USCOREITALICSTART([^\x02\x03]+)\x03USCOREITALICEND/g, "_$1_")
+
+  md = md.replace(/\x02BLOCK(\d+)\x03/g, (_match, index) => blocks[Number(index)] ?? "")
+  md = md.replace(/\x02LINK(\d+)\x03/g, (_match, index) => links[Number(index)] ?? "")
 
   return md
 }
 
 function escapeMarkdownV2(text: string): string {
   let result = text.replace(/\\/g, "\\\\")
-  result = result.replace(/([#+\-=|{}.!])/g, "\\$1")
+  result = result.replace(/([_\*\[\]()~`>#+=|{}.!])/g, "\\$1")
   return result
 }
 

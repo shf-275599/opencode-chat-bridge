@@ -67,7 +67,8 @@ graph TD;
 | `post` | ✅ | 富文本 / 多段落消息 |
 | `image` | ✅ | 图片和截图 — 自动下载保存到本地 |
 | `file` | ✅ | 文档、代码文件等 — 自动下载保存到本地 |
-| `audio` / `video` / `sticker` | ❌ | 记录日志后跳过，不处理 |
+| `audio` / `video` | ✅ | 作为附件下载（mp3/wav/mp4 等格式） |
+| `sticker` | ❌ | 记录日志后跳过，不处理 |
 
 下载的文件保存在 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`（若该路径不可写则回退至系统临时目录）。
 

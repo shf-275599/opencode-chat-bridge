@@ -635,6 +635,9 @@ export function createMessageHandler(
       }
 
       try {
+        if (deps.outboundMedia) {
+          await deps.outboundMedia.snapshotAttachments(event.chat_id)
+        }
         await runStreamingBridge(sessionId)
         logger.info(`Response sent for session ${sessionId} (streaming bridge)`)
         return
@@ -663,6 +666,9 @@ export function createMessageHandler(
         // Sync fallback — reaction cleanup only here (not during 404 retry)
         if (reactionId) {
           await feishuClient.deleteReaction(event.message_id, reactionId).catch(() => { })
+        }
+        if (deps.outboundMedia) {
+          await deps.outboundMedia.snapshotAttachments(event.chat_id)
         }
         try {
           const rawText = await postWithRecovery()

@@ -71,6 +71,10 @@ export function createStreamingBridge(
       logger.info(`@@@@@ STREAMING BRIDGE V2 @@@@@ channelId=${channelId} plugin=${!!plugin}`)
       logger.info(`StreamingBridge handleMessage: sessionId=${sessionId}, channelId=${channelId}, pluginFound=${!!plugin}, outboundFound=${!!plugin?.outbound}`)
 
+      if (deps.outboundMedia) {
+        await deps.outboundMedia.snapshotAttachments(chatId)
+      }
+
       const sendInteractiveCard = async (cardData: Record<string, unknown>): Promise<void> => {
         if (channelId === "telegram") {
           const keyboard = (cardData.reply_markup as { inline_keyboard?: unknown[] } | undefined)?.inline_keyboard

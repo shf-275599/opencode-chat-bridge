@@ -176,6 +176,30 @@ export class FeishuPlugin extends BaseChannelPlugin {
         })
         this.logger.info(`[FeishuPlugin] File sent: ${fileKey}`)
       },
+
+      sendAudio: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[FeishuPlugin] Sending audio: ${filePath} to ${target.address}`)
+        const fileData = await readFile(filePath)
+        const fileName = basename(filePath)
+        const fileKey = await this.feishuClient.uploadAudio(fileData, fileName)
+        await this.feishuClient.sendMessage(target.address, {
+          msg_type: "audio",
+          content: JSON.stringify({ file_key: fileKey }),
+        })
+        this.logger.info(`[FeishuPlugin] Audio sent: ${fileKey}`)
+      },
+
+      sendVideo: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[FeishuPlugin] Sending video: ${filePath} to ${target.address}`)
+        const fileData = await readFile(filePath)
+        const fileName = basename(filePath)
+        const fileKey = await this.feishuClient.uploadVideo(fileData, fileName)
+        await this.feishuClient.sendMessage(target.address, {
+          msg_type: "video",
+          content: JSON.stringify({ file_key: fileKey }),
+        })
+        this.logger.info(`[FeishuPlugin] Video sent: ${fileKey}`)
+      },
     }
 
     // 5. Streaming adapter

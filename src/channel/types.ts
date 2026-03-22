@@ -197,6 +197,20 @@ export interface ChannelOutboundAdapter {
    * @param filePath Absolute path to the file (already validated and within allowlist)
    */
   sendFile?(target: OutboundTarget, filePath: string): Promise<void>;
+
+  /**
+   * Optional: Send audio file to a target (Feishu shows inline audio player)
+   * @param target Destination specification
+   * @param filePath Absolute path to the audio file (already validated and within allowlist)
+   */
+  sendAudio?(target: OutboundTarget, filePath: string): Promise<void>;
+
+  /**
+   * Optional: Send video file to a target (Feishu shows inline video player)
+   * @param target Destination specification
+   * @param filePath Absolute path to the video file (already validated and within allowlist)
+   */
+  sendVideo?(target: OutboundTarget, filePath: string): Promise<void>;
 }
 
 /**

@@ -43,46 +43,54 @@ export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 // SVG excluded — treated as a regular file, not an image
 const IMAGE_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp)$/i
 
-// Match absolute paths or tilde paths with file extensions.
-// Anchored to start-of-string, whitespace, or certain punctuation to avoid matching URL path components.
-const FILE_PATH_REGEX =
-  /(?:^|[\s"'`(,:;>}\]）：，；】》])((~\/|\/)([^\s"'`<>|*?\n]+\.(?:png|jpg|jpeg|gif|webp|pdf|svg|doc|docx|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py)))\b/gim
-
-// Also match backtick file: URI pattern
-const BACKTICK_FILE_REGEX = /`file:(\/[\w./-]+\.[\w.]+)`/gi
-
 // ── Path extraction ──
 
-function expandTilde(p: string): string {
+export function expandTilde(p: string): string {
   if (p.startsWith("~/")) {
     return resolve(homedir(), p.slice(2))
   }
   return p
 }
 
-function extractFilePaths(text: string): string[] {
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/")
+}
+
+const EXT_REGEX = /\.(png|jpg|jpeg|gif|webp|pdf|svg|doc|docx|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py)$/i
+
+export function extractFilePaths(text: string): string[] {
   const seen = new Set<string>()
   const results: string[] = []
 
-  // Pattern 1: absolute and tilde paths with known extensions
-  for (const match of text.matchAll(FILE_PATH_REGEX)) {
+  for (const match of text.matchAll(/([A-Za-z]:[/\\][^ "'`<>|*?:]+)/g)) {
     const raw = match[1]
-    if (!raw) continue
-    const expanded = expandTilde(raw.trim())
-    if (!seen.has(expanded)) {
-      seen.add(expanded)
-      results.push(expanded)
+    if (!raw || !EXT_REGEX.test(raw)) continue
+    const normalized = normalizePath(raw)
+    if (!seen.has(normalized)) {
+      seen.add(normalized)
+      results.push(normalized)
     }
   }
 
-  // Pattern 2: backtick file: URIs
-  for (const match of text.matchAll(BACKTICK_FILE_REGEX)) {
+  for (const match of text.matchAll(/([/~][^ "'`<>|*?:\\]+)/g)) {
     const raw = match[1]
-    if (!raw) continue
-    const expanded = expandTilde(raw.trim())
-    if (!seen.has(expanded)) {
-      seen.add(expanded)
-      results.push(expanded)
+    if (!raw || !EXT_REGEX.test(raw)) continue
+    const expanded = expandTilde(raw)
+    const normalized = normalizePath(expanded)
+    if (!seen.has(normalized)) {
+      seen.add(normalized)
+      results.push(normalized)
+    }
+  }
+
+  for (const match of text.matchAll(/`file:(\/[^`]+)`/g)) {
+    const raw = match[1]
+    if (!raw || !EXT_REGEX.test(raw)) continue
+    const expanded = expandTilde(raw)
+    const normalized = normalizePath(expanded)
+    if (!seen.has(normalized)) {
+      seen.add(normalized)
+      results.push(normalized)
     }
   }
 
@@ -100,10 +108,10 @@ function defaultAllowedDir(): string {
 }
 
 function buildAllowlist(extraDirs?: string[]): string[] {
-  const dirs = [defaultAllowedDir()]
+  const dirs = [normalizePath(defaultAllowedDir())]
   if (extraDirs) {
     for (const d of extraDirs) {
-      dirs.push(resolve(d))
+      dirs.push(normalizePath(resolve(d)))
     }
   }
   return dirs
@@ -128,7 +136,7 @@ async function resolveAllowedPath(
 
   for (const dir of allowlist) {
     if (real === dir || real.startsWith(dir + "/")) {
-      return real
+      return normalizePath(real)
     }
   }
   logger.warn(
@@ -172,7 +180,7 @@ export function createOutboundMediaHandler(
       for (const filePath of imagePaths) {
         try {
           // Cheap string prefilter — skip FS calls for paths clearly outside allowlist
-          const resolved = resolve(filePath)
+          const resolved = normalizePath(resolve(filePath))
           if (!allowlist.some((dir) => resolved === dir || resolved.startsWith(dir + "/"))) {
             logger.debug(`Skipped ${filePath}: outside allowed directories (prefilter)`)
             continue

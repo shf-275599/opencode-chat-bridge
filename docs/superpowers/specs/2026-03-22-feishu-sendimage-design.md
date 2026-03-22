@@ -120,4 +120,5 @@ adapter.sendImage() ← 这里就是新增的链路
 - [x] `setup.ts` 增加 `uploadImage` mock
 - [x] 单元测试（19 pass）
 - [x] 相关测试（65 pass across 5 files）
-- [ ] 手动验证（飞书/Telegram 实际发送）
+- [x] 代码已提交 git
+- [ ] 手动验证（重启 bridge 后实际发送）

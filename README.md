@@ -25,58 +25,33 @@
 
 ---
 
-## 架构概览
-
-```mermaid
-graph TD;
-    subgraph "IM 平台 (Client & Platform)"
-        Feishu[飞书 群聊/私信]
-        QQ[QQ 官方机器人平台]
-        WeChat[微信]
-    end
-
-    subgraph "opencode-im-bridge (Bridge Middleware)"
-        FeishuPlugin[Feishu Plugin]
-        QQPlugin[QQ Plugin]
-        WechatPlugin[Wechat Plugin]
-        
-        FeishuPlugin <--> ChannelManager
-        QQPlugin <--> ChannelManager
-        WechatPlugin <--> ChannelManager
-
-        ChannelManager <--> SessionManager[(SQLite 对话记忆 / Session映射)]
-    end
-    
-    subgraph "opencode Server"
-        Agent[opencode Agent Server / TUI]
-    end
-
-    Feishu <--> |Webhook/WebSocket| FeishuPlugin
-    QQ <--> |WebSocket| QQPlugin
-    WeChat <--> |HTTP 长轮询| WechatPlugin
-    ChannelManager <--> |HTTP POST + SSE 流式通信| Agent
-```
-
-> `opencode serve` 运行 HTTP server，在另一个终端用 `opencode attach` 查看 TUI 会话。
-
-**入站（飞书 → TUI）：** 飞书通过 WebSocket 发送消息，opencode-im-bridge 标准化处理后找到绑定的 session，拼接对话历史，POST 到 opencode API。TUI 即时收到消息。
-
-**出站（TUI → 飞书）：** opencode-im-bridge 订阅 opencode SSE 流。agent 输出文字时，`TextDelta` 事件累积并触发防抖卡片更新。`SessionIdle` 到达后，最终卡片推送到飞书。
-
 ### 支持的消息类型
 
-| 消息类型 | 飞书 | QQ | 说明 |
-|---|---|---|---|
-| `text` | ✅ | ✅ | 普通文字消息，支持 Markdown 渲染 |
-| `post` | ✅ | ✅ | 富文本 / 多段落消息 |
-| `image` | ✅ | ✅ | 图片和截图 — 自动下载保存到本地 |
-| `file` | ✅ | ✅ | 文档、代码文件等 — 自动下载保存到本地 |
-| `audio` / `video` | ✅ | ✅ | 作为附件下载（mp3/wav/mp4 等格式） |
-| `sticker` | ❌ | ❌ | 记录日志后跳过，不处理 |
+| 消息类型 | 飞书 | QQ | Telegram | Discord | 微信 | 说明 |
+|---|---|---|---|---|---|---|
+| `text` | ✅ | ✅ | ✅ | ✅ | ✅ | 普通文字消息 |
+| `post` | ✅ | ✅ | ❌ | ❌ | ❌ | 富文本 / 多段落消息 |
+| `image` | ✅ | ✅ | ✅ | ✅ | ✅ | 图片和截图 |
+| `file` | ✅ | ✅ | ✅ | ✅ | ⏳ | 文档、代码文件等 |
+| `audio` | ✅ | ✅ | ✅ | ✅ | ⏳ | 语音消息（带文字识别） |
+| `video` | ✅ | ✅ | ✅ | ✅ | ⏳ | 视频消息 |
+| `sticker` | ❌ | ❌ | ❌ | ❌ | ❌ | 不支持 |
+
+> ⏳ = 功能开发中
 
 下载的文件保存在 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`（若该路径不可写则回退至系统临时目录）。
 
-#### 斜杠命令 (Slash Commands)
+### 平台对比
+
+| 平台 | 通信协议 | 认证方式 | Markdown | 富媒体 | 流式输出 |
+|------|----------|----------|----------|--------|----------|
+| 飞书 | WebSocket | App ID + Secret | ✅ | ✅ 卡片 | ✅ 卡片 |
+| QQ | WebSocket | App ID + Secret | ✅ | ✅ | ❌ |
+| Telegram | HTTP Bot API | Bot Token | ✅ | ✅ | ❌ |
+| Discord | HTTP Bot API | Bot Token | ✅ | ✅ | ❌ |
+| 微信 | HTTP 长轮询 | 扫码登录 | ✅ | ⏳ | ⏳ |
+
+### 斜杠命令 (Slash Commands)
 
 在聊天窗口中输入斜杠命令可直接进行会话管理：
 - `/new`：新建会话（并自动绑定到当前聊天）
@@ -137,8 +112,8 @@ opencode-im-bridge
 ```
 
 首次运行无配置时，交互式向导将引导你完成：
-- 选择渠道（飞书、QQ 或 两者皆选）
-- 输入飞书/QQ的 App ID、App Secret/Token（密码遮蔽输入）
+- 选择渠道（飞书、QQ、Telegram、Discord、微信 或 全部）
+- 输入各渠道的 App ID、App Secret/Token（密码遮蔽输入）
 - 验证 opencode server 连通性
 
 配置完成后服务自动启动。
@@ -173,6 +148,10 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 | `FEISHU_APP_SECRET` | 否 | | 飞书应用 App Secret |
 | `QQ_APP_ID` | 否 | | QQ 应用 App ID |
 | `QQ_SECRET` | 否 | | QQ 应用 App Secret |
+| `TELEGRAM_BOT_TOKEN` | 否 | | Telegram Bot Token |
+| `DISCORD_BOT_TOKEN` | 否 | | Discord Bot Token |
+| `WECHAT_ENABLED` | 否 | | 设为 `true` 启用微信 |
+| `WECHAT_SESSION_FILE` | 否 | `.opencode-lark/wechat-session.json` | 微信登录态保存路径 |
 | `OPENCODE_SERVER_URL` | 否 | `http://localhost:4096` | opencode server 地址 |
 | `FEISHU_WEBHOOK_PORT` | 否 | `3001` | HTTP webhook 回退端口（仅在不使用 WebSocket 接收卡片回调时需要） |
 | `OPENCODE_CWD` | 否 | `process.cwd()` | 覆盖 session 发现目录 |
@@ -200,6 +179,11 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
     "secret": "${QQ_SECRET}",
     "sandbox": false
   },
+  // 可选：启用微信（扫码登录，无需 App ID）
+  "wechat": {
+    "enabled": true,
+    "sessionFile": "./data/wechat-session.json"
+  },
   // 默认 opencode agent 名称，需与 opencode 配置中的 agent 匹配。
   // 常见值："build"、"claude"、"code" — 请查看你的 opencode 配置。
   "defaultAgent": "build",
@@ -212,6 +196,33 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 ```
 
 支持 `${ENV_VAR}` 环境变量插值和 JSONC 注释。无配置文件时自动从 `.env` 构建默认配置。
+
+### 微信配置说明
+
+微信使用腾讯官方 **iLink Bot API**，认证方式与其他平台不同：
+
+**启用方式：**
+```bash
+export WECHAT_ENABLED=true
+# 或在配置文件中
+"wechat": { "enabled": true }
+```
+
+**登录流程：**
+1. 首次运行时会自动显示二维码
+2. 在微信中打开 **ClawBot 插件**（设置 → ClawBot）
+3. 点击"连接"扫描二维码
+4. 确认后自动登录，登录态保存到 `wechat-session.json`
+
+**技术特点：**
+- 使用 HTTP 长轮询（35秒超时）接收消息
+- `context_token` 用于消息关联和回复
+- 支持文本、图片、语音（带文字识别）、文件
+
+**注意事项：**
+- 需要微信版本支持 ClawBot 插件
+- 登录态有效期受腾讯政策限制
+- 群聊支持需要额外配置
 
 ---
 

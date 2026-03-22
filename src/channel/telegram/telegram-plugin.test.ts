@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { TelegramPlugin, mdToHtml, createTelegramInlineCard } from "./telegram-plugin.js"
+import { TelegramPlugin, mdToMarkdownV2, createTelegramInlineCard } from "./telegram-plugin.js"
 import { createMockLogger } from "../../__tests__/setup.js"
 
 function createPlugin(overrides: Partial<ConstructorParameters<typeof TelegramPlugin>[0]> = {}) {
@@ -160,11 +160,12 @@ describe("TelegramPlugin", () => {
     }))
   })
 
-  it("renders richer markdown to Telegram HTML", () => {
-    const html = mdToHtml("> quote\n- item\n[link](https://example.com)\n```ts\nconst x = 1\n```")
-    expect(html).toContain("<blockquote>quote</blockquote>")
-    expect(html).toContain("• item")
-    expect(html).toContain('<a href="https://example.com">link</a>')
-    expect(html).toContain('<pre><code class="language-ts">const x = 1</code></pre>')
+  it("renders markdown to Telegram MarkdownV2", () => {
+    const md = mdToMarkdownV2("**bold**\n_italic_\n[link](https://example.com)\n```ts\nconst x = 1\n```")
+    expect(md).toContain("*bold*")
+    expect(md).toContain("_italic_")
+    expect(md).toContain("[link](")
+    expect(md).toContain("```ts")
+    expect(md).toContain("const x = 1")
   })
 })

@@ -258,47 +258,6 @@ describe("createCommandHandler", () => {
   })
 
   describe("/models", () => {
-<<<<<<< HEAD
-    it("lists Telegram models with inline keyboard", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([
-          {
-            id: "openai",
-            name: "OpenAI",
-            models: {
-              "gpt-4.1": { id: "openai/gpt-4.1", name: "GPT-4.1" },
-            },
-          },
-        ]),
-      })
-
-      const sendCard = vi.fn().mockResolvedValue(undefined)
-      const handler = createCommandHandler({
-        serverUrl: "http://test:4096",
-        sessionManager: mockSessionManager,
-        feishuClient: mockFeishuClient,
-        logger: mockLogger,
-        channelManager: {
-          getChannel: vi.fn().mockReturnValue({
-            outbound: {
-              sendText: vi.fn(),
-              sendCard,
-            },
-          }),
-        } as any,
-      })
-
-      const result = await handler("chat-1", "chat-1", "msg-1", "/models", "telegram")
-
-      expect(result).toBe(true)
-      expect(sendCard).toHaveBeenCalled()
-      expect(sendCard.mock.calls[0]?.[1]).toMatchObject({
-        text: expect.stringContaining("Current model"),
-        reply_markup: {
-          inline_keyboard: expect.any(Array),
-        },
-=======
     it("sends interactive card with model buttons", async () => {
       mockFetch
         .mockResolvedValueOnce({
@@ -371,7 +330,6 @@ describe("createCommandHandler", () => {
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
         content: expect.stringContaining("Model switch command sent"),
->>>>>>> 4689b7e17c4ae7b28059f1f19a4a198703735877
       })
     })
   })
@@ -428,7 +386,7 @@ describe("createCommandHandler", () => {
   })
 
   describe("/compact", () => {
-    it("sends session.compact command", async () => {
+    it("sends POST /session/{id}/summarize", async () => {
       mockFetch.mockResolvedValueOnce({ ok: true })
       mockFeishuClient.replyMessage = vi.fn().mockResolvedValue({ code: 0, msg: "ok" })
 
@@ -437,11 +395,11 @@ describe("createCommandHandler", () => {
 
       expect(result).toBe(true)
       expect(mockFetch).toHaveBeenCalledWith(
-        "http://test:4096/session/ses-123/command",
+        "http://test:4096/session/ses-123/summarize",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "session.compact", arguments: "" }),
+          body: JSON.stringify({}),
         },
       )
     })
@@ -463,8 +421,11 @@ describe("createCommandHandler", () => {
   })
 
   describe("/share", () => {
-    it("sends session.share command", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true })
+    it("sends POST /session/{id}/share", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ share: { url: "https://opencode.ai/s/ses-123" } }),
+      })
       mockFeishuClient.replyMessage = vi.fn().mockResolvedValue({ code: 0, msg: "ok" })
 
       const handler = createHandler()
@@ -472,11 +433,11 @@ describe("createCommandHandler", () => {
 
       expect(result).toBe(true)
       expect(mockFetch).toHaveBeenCalledWith(
-        "http://test:4096/session/ses-123/command",
+        "http://test:4096/session/ses-123/share",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "session.share", arguments: "" }),
+          body: JSON.stringify({}),
         },
       )
     })

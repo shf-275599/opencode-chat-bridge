@@ -21,7 +21,7 @@ export interface TelegramInlineButton {
 
 export interface TelegramInlineCard {
   text: string
-  parse_mode?: "HTML"
+  parse_mode?: "HTML" | "MarkdownV2"
   reply_markup: {
     inline_keyboard: TelegramInlineButton[][]
   }
@@ -109,7 +109,7 @@ export function createTelegramInlineCard(
 
   return {
     text,
-    parse_mode: "HTML",
+    parse_mode: "MarkdownV2",
     reply_markup: {
       inline_keyboard,
     },

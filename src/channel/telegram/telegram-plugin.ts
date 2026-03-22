@@ -178,9 +178,10 @@ export class TelegramPlugin extends BaseChannelPlugin {
 
     this.outbound = {
       sendText: async (target: OutboundTarget, text: string): Promise<void> => {
-        const chunks = splitMessage(text, TELEGRAM_MAX_MESSAGE_LENGTH)
+        const converted = mdToMarkdownV2(text)
+        const chunks = splitMessage(converted, TELEGRAM_MAX_MESSAGE_LENGTH)
         for (const chunk of chunks) {
-          await this.sendHtmlMessage(target.address, chunk)
+          await this.sendMarkdownMessage(target.address, chunk)
         }
       },
 
@@ -189,7 +190,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
         await this.callApi("sendMessage", {
           chat_id: target.address,
           text: inlineCard.text,
-          parse_mode: inlineCard.parse_mode ?? "HTML",
+          parse_mode: inlineCard.parse_mode ?? "MarkdownV2",
           reply_markup: inlineCard.reply_markup,
         })
       },
@@ -273,14 +274,15 @@ export class TelegramPlugin extends BaseChannelPlugin {
             const content = (finalText ?? session.pendingUpdates.at(-1) ?? "").trim()
             if (!content) return
 
-            const chunks = splitMessage(content, TELEGRAM_MAX_MESSAGE_LENGTH)
+            const converted = mdToMarkdownV2(content)
+            const chunks = splitMessage(converted, TELEGRAM_MAX_MESSAGE_LENGTH)
             if (chunks.length === 0) return
 
             await this.upsertStreamingMessage(target.address, session, chunks[0]!)
-            session.lastRenderedText = content
+            session.lastRenderedText = converted
 
             for (const chunk of chunks.slice(1)) {
-              await this.sendHtmlMessage(target.address, chunk)
+              await this.sendMarkdownMessage(target.address, chunk)
             }
           },
         }
@@ -535,11 +537,11 @@ export class TelegramPlugin extends BaseChannelPlugin {
     return this.telegramConfig.allowedChatIds.length === 0 || this.telegramConfig.allowedChatIds.includes(chatId)
   }
 
-  private async sendHtmlMessage(chatId: string, html: string): Promise<void> {
+  private async sendMarkdownMessage(chatId: string, text: string): Promise<void> {
     await this.callApi("sendMessage", {
       chat_id: chatId,
-      text: html,
-      parse_mode: "HTML",
+      text,
+      parse_mode: "MarkdownV2",
     })
   }
 
@@ -558,13 +560,13 @@ export class TelegramPlugin extends BaseChannelPlugin {
         chat_id: chatId,
         message_id: session.lastMessageId,
         text,
-        parse_mode: "HTML",
+        parse_mode: "MarkdownV2",
       })
     } else {
       const result = await this.callApi<{ message_id: number }>("sendMessage", {
         chat_id: chatId,
         text,
-        parse_mode: "HTML",
+        parse_mode: "MarkdownV2",
       })
       if (result.result) {
         session.lastMessageId = String(result.result.message_id)
@@ -596,45 +598,50 @@ function splitMessage(text: string, maxLen: number): string[] {
   return chunks
 }
 
-export function mdToHtml(text: string): string {
+export function mdToMarkdownV2(text: string): string {
+  const links: string[] = []
   const blocks: string[] = []
   let remaining = text.replace(/\r\n/g, "\n")
 
   remaining = remaining.replace(/```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-    const index = blocks.push(renderCodeBlock(code, lang)) - 1
-    return `\u0000${index}\u0000`
+    const index = blocks.push(lang ? `\`\`\`${lang}\n${code.trimEnd()}\`\`\`` : `\`\`\`\n${code.trimEnd()}\`\`\``) - 1
+    return `\x00BLOCK${index}\x00`
   })
 
-  let html = escapeHtml(remaining)
-  html = html
-    .replace(/^&gt;\s?(.*)$/gm, "<blockquote>$1</blockquote>")
-    .replace(/^\s*-\s+(.*)$/gm, "• $1")
-    .replace(/^\s*\d+\.\s+(.*)$/gm, (_match, item) => `${item}.`)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/\|\|([^|]+)\|\|/g, "<tg-spoiler>$1</tg-spoiler>")
-    .replace(/~~([^~]+)~~/g, "<s>$1</s>")
-    .replace(/__([^_]+)__/g, "<u>$1</u>")
-    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
-    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+  remaining = remaining.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, text, url) => {
+    const index = links.push(`[${text}](${url})`) - 1
+    return `\x00LINK${index}\x00`
+  })
 
-  html = html.replace(/\u0000(\d+)\u0000/g, (_match, index) => blocks[Number(index)] ?? "")
-  return html
+  let md = remaining
+  md = md.replace(/^>\s?(.*)$/gm, "$1")
+  md = md.replace(/^\s*-\s+(.*)$/gm, "• $1")
+  md = md.replace(/^\s*\d+\.\s+(.*)$/gm, "$1")
+  md = md.replace(/\|\|([^|]+)\|\|/g, "||$1||")
+  md = md.replace(/~~([^~]+)~~/g, "~$1~")
+  md = md.replace(/`([^`\n]+)`/g, "\x00CODE$1\x00CODEE")
+  md = md.replace(/\*\*([^*]+)\*\*/g, "\x00BOLD$1\x00BOLDE")
+  md = md.replace(/__(?!_)([^_]+)__(?!_)/g, "\x00UNDER$1\x00UNDERE")
+  md = md.replace(/\x00CODE(.+?)\x00CODEE/g, "`$1`")
+  md = md.replace(/\x00BOLD(.+?)\x00BOLDE/g, "\x00STAR$1\x00STARE")
+  md = md.replace(/\x00UNDER(.+?)\x00UNDERE/g, "\x00USCORE$1\x00USCOREE")
+  md = md.replace(/\*([^*]+)\*/g, "\x00ITALIC$1\x00ITALICE")
+  md = md.replace(/\x00STAR(.+?)\x00STARE/g, "*$1*")
+  md = md.replace(/\x00USCORE(.+?)\x00USCOREE/g, "__$1__")
+  md = md.replace(/\x00ITALIC(.+?)\x00ITALICE/g, "_$1_")
+
+  md = escapeMarkdownV2(md)
+
+  md = md.replace(/\x00BLOCK(\d+)\x00/g, (_match, index) => blocks[Number(index)] ?? "")
+  md = md.replace(/\x00LINK(\d+)\x00/g, (_match, index) => links[Number(index)] ?? "")
+
+  return md
 }
 
-function renderCodeBlock(code: string, language?: string): string {
-  const escaped = escapeHtml(code.trimEnd())
-  if (language) {
-    return `<pre><code class="language-${escapeHtml(language)}">${escaped}</code></pre>`
-  }
-  return `<pre>${escaped}</pre>`
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
+function escapeMarkdownV2(text: string): string {
+  let result = text.replace(/\\/g, "\\\\")
+  result = result.replace(/([#+\-=|{}.!])/g, "\\$1")
+  return result
 }
 
 function sleep(ms: number): Promise<void> {

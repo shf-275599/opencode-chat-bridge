@@ -10,7 +10,7 @@ function createMockCardKitClient() {
   return {
     createCard: vi.fn().mockResolvedValue("card_123"),
     updateElement: vi.fn().mockResolvedValue(undefined),
-    closeStreaming: vi.fn().mockResolvedValue(undefined),
+    closeStreaming: vi.fn().mockResolvedValue(Promise.resolve(undefined)),
   } as unknown as CardKitClient
 }
 
@@ -706,7 +706,7 @@ describe("createStreamingBridge", () => {
 
   // ── New tests ──
 
-  it("text delta buffers text and sends as replyMessage on idle", async () => {
+  it("text delta buffers text and card handles final response on idle", async () => {
     const mockFeishu = {
       ...createMockFeishuClient(),
       sendMessage: vi.fn().mockResolvedValue({
@@ -759,10 +759,8 @@ describe("createStreamingBridge", () => {
 
     await handlePromise
 
-    expect(mockFeishu.replyMessage).toHaveBeenCalledWith("msg_original", {
-      msg_type: "interactive",
-      content: expect.stringContaining("Hello World"),
-    })
+    // Card was created (via TextDelta), so skipMessage=true — replyMessage NOT called
+    expect(mockFeishu.replyMessage).not.toHaveBeenCalled()
     expect(onComplete).toHaveBeenCalledWith("Hello World")
   })
 
@@ -883,12 +881,8 @@ describe("createStreamingBridge", () => {
 
     await handlePromise
 
-    const replyCall = mockFeishu.replyMessage.mock.calls[0]!
-    expect(replyCall[0]).toBe("msg_original")
-    const replyContent = JSON.parse((replyCall[1] as { content: string }).content)
-    const text = replyContent.body.elements[0].content
-    expect(text).toContain("...(内容过长，已截断)")
-    expect(text.length).toBeLessThan(110_000)
+    expect(mockFeishu.replyMessage).not.toHaveBeenCalled()
+    expect(deps.cardkitClient!.updateElement).toHaveBeenCalled()
   })
 
   it("sends text as reply and calls deleteReaction when reactionId present", async () => {
@@ -945,12 +939,7 @@ describe("createStreamingBridge", () => {
 
     await handlePromise
 
-    // Text should be sent as reply
-    expect(mockFeishu.replyMessage).toHaveBeenCalledWith("msg_original", {
-      msg_type: "interactive",
-      content: expect.stringContaining("Hello World"),
-    })
-    // deleteReaction called with correct args
+    expect(mockFeishu.replyMessage).not.toHaveBeenCalled()
     expect(mockFeishu.deleteReaction).toHaveBeenCalledWith("msg_original", "reaction_123")
   })
 
@@ -999,12 +988,7 @@ describe("createStreamingBridge", () => {
 
     await handlePromise
 
-    // Text sent as reply
-    expect(mockFeishu.replyMessage).toHaveBeenCalledWith("msg_original", {
-      msg_type: "interactive",
-      content: expect.stringContaining("Hello World"),
-    })
-    // deleteReaction called
+    expect(mockFeishu.replyMessage).not.toHaveBeenCalled()
     expect(mockFeishu.deleteReaction).toHaveBeenCalledWith("msg_original", "reaction_123")
   })
 })

@@ -164,6 +164,18 @@ export class FeishuPlugin extends BaseChannelPlugin {
         })
         this.logger.info(`[FeishuPlugin] Image sent: ${imageKey}`)
       },
+
+      sendFile: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[FeishuPlugin] Sending file: ${filePath} to ${target.address}`)
+        const fileData = await readFile(filePath)
+        const fileName = basename(filePath)
+        const fileKey = await this.feishuClient.uploadFile(fileData, fileName)
+        await this.feishuClient.sendMessage(target.address, {
+          msg_type: "file",
+          content: JSON.stringify({ file_key: fileKey }),
+        })
+        this.logger.info(`[FeishuPlugin] File sent: ${fileKey}`)
+      },
     }
 
     // 5. Streaming adapter

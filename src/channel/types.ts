@@ -190,6 +190,13 @@ export interface ChannelOutboundAdapter {
    * @param filePath Absolute path to the image file (already validated and within allowlist)
    */
   sendImage?(target: OutboundTarget, filePath: string): Promise<void>;
+
+  /**
+   * Optional: Send document/file to a target
+   * @param target Destination specification
+   * @param filePath Absolute path to the file (already validated and within allowlist)
+   */
+  sendFile?(target: OutboundTarget, filePath: string): Promise<void>;
 }
 
 /**

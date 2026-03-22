@@ -1,13 +1,13 @@
 /**
  * Outbound media handler — detects file paths in agent replies
- * and sends them to the target channel as image messages.
+ * and sends them to the target channel as image or file messages.
  *
  * Security: only files within allowed directories may be uploaded.
  * Symlinks are resolved via fs.realpath to prevent escaping the allowlist.
  *
- * Design: uses ChannelOutboundAdapter.sendImage (optional) so each channel
- * plugin is responsible for its own upload/send logic. Falls back silently
- * if the plugin does not implement sendImage.
+ * Design: uses ChannelOutboundAdapter.sendImage/sendFile (optional) so each
+ * channel plugin is responsible for its own upload/send logic. Falls back
+ * silently if the plugin does not implement the required method.
  */
 
 import { stat, realpath } from "node:fs/promises"
@@ -40,8 +40,8 @@ export interface OutboundMediaHandler {
 
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-// SVG excluded — treated as a regular file, not an image
 const IMAGE_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp)$/i
+const FILE_EXTENSIONS = /\.(pdf|doc|docx|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py|svg)$/i
 
 // ── Path extraction ──
 
@@ -101,6 +101,10 @@ function isImageFile(filePath: string): boolean {
   return IMAGE_EXTENSIONS.test(filePath)
 }
 
+function isDocumentFile(filePath: string): boolean {
+  return FILE_EXTENSIONS.test(filePath)
+}
+
 // ── Allowlist helpers ──
 
 function defaultAllowedDir(): string {
@@ -157,9 +161,8 @@ export function createOutboundMediaHandler(
   return {
     async sendDetectedFiles(target: OutboundTarget, text: string, outboundAdapter?: ChannelOutboundAdapter): Promise<void> {
       const adapter = outboundAdapter ?? outbound
-      // Skip entirely if no outbound adapter or it doesn't support sendImage
-      if (!adapter?.sendImage) {
-        logger.debug("Channel plugin not provided or does not implement sendImage, skipping media detection")
+      if (!adapter) {
+        logger.debug("Channel plugin not provided, skipping media detection")
         return
       }
 
@@ -169,42 +172,62 @@ export function createOutboundMediaHandler(
         return
       }
 
-      // Filter to image files only
-      const imagePaths = paths.filter(isImageFile)
-      if (imagePaths.length === 0) {
-        logger.debug("No image file paths detected in response text")
-        return
+      const imagePaths: string[] = []
+      const filePaths: string[] = []
+      for (const p of paths) {
+        if (isImageFile(p)) imagePaths.push(p)
+        else if (isDocumentFile(p)) filePaths.push(p)
       }
 
-      logger.info(`Detected ${imagePaths.length} image path(s) in agent reply, attempting send`)
+      if (imagePaths.length > 0 && adapter.sendImage) {
+        logger.info(`Detected ${imagePaths.length} image path(s) in agent reply, attempting send`)
+        for (const filePath of imagePaths) {
+          await processFile(filePath, target, adapter, "image", logger, allowlist)
+        }
+      }
 
-      for (const filePath of imagePaths) {
-        try {
-          // Cheap string prefilter — skip FS calls for paths clearly outside allowlist
-          const resolved = normalizePath(resolve(filePath))
-          if (!allowlist.some((dir) => resolved === dir || resolved.startsWith(dir + "/"))) {
-            logger.debug(`Skipped ${filePath}: outside allowed directories (prefilter)`)
-            continue
-          }
-
-          // Security: resolve symlinks and verify path is within allowlist
-          const realPath = await resolveAllowedPath(filePath, allowlist, logger)
-          if (!realPath) continue
-
-          // Check file size using resolved path
-          const fileStat = await stat(realPath)
-          if (fileStat.size > MAX_UPLOAD_BYTES) {
-            logger.warn(`Skipping ${realPath}: exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024}MB size limit`)
-            continue
-          }
-
-          // Delegate to channel plugin — it owns the upload/send implementation
-          await adapter.sendImage(target, realPath)
-          logger.info(`Sent image via channel plugin: ${realPath}`)
-        } catch (err) {
-          logger.warn(`Failed to send image ${filePath}: ${err}`)
+      if (filePaths.length > 0 && adapter.sendFile) {
+        logger.info(`Detected ${filePaths.length} file path(s) in agent reply, attempting send`)
+        for (const filePath of filePaths) {
+          await processFile(filePath, target, adapter, "file", logger, allowlist)
         }
       }
     },
+  }
+}
+
+async function processFile(
+  filePath: string,
+  target: OutboundTarget,
+  adapter: ChannelOutboundAdapter,
+  type: "image" | "file",
+  logger: Logger,
+  allowlist: string[],
+): Promise<void> {
+  try {
+    const resolved = normalizePath(resolve(filePath))
+    if (!allowlist.some((dir) => resolved === dir || resolved.startsWith(dir + "/"))) {
+      logger.debug(`Skipped ${filePath}: outside allowed directories (prefilter)`)
+      return
+    }
+
+    const realPath = await resolveAllowedPath(filePath, allowlist, logger)
+    if (!realPath) return
+
+    const fileStat = await stat(realPath)
+    if (fileStat.size > MAX_UPLOAD_BYTES) {
+      logger.warn(`Skipping ${realPath}: exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024}MB size limit`)
+      return
+    }
+
+    if (type === "image" && adapter.sendImage) {
+      await adapter.sendImage(target, realPath)
+      logger.info(`Sent image via channel plugin: ${realPath}`)
+    } else if (type === "file" && adapter.sendFile) {
+      await adapter.sendFile(target, realPath)
+      logger.info(`Sent file via channel plugin: ${realPath}`)
+    }
+  } catch (err) {
+    logger.warn(`Failed to send ${type} ${filePath}: ${err}`)
   }
 }

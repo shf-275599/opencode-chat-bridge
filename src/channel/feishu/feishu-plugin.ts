@@ -3,6 +3,8 @@
  * Extends BaseChannelPlugin and implements all 6 adapters.
  */
 
+import { readFile } from "node:fs/promises"
+import { basename } from "node:path"
 import { BaseChannelPlugin } from "../base-plugin.js"
 import type {
   ChannelId,
@@ -150,6 +152,17 @@ export class FeishuPlugin extends BaseChannelPlugin {
           msg_type: "interactive",
           content: JSON.stringify(card),
         })
+      },
+
+      sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[FeishuPlugin] Sending image: ${filePath} to ${target.address}`)
+        const fileData = await readFile(filePath)
+        const imageKey = await this.feishuClient.uploadImage(fileData)
+        await this.feishuClient.sendMessage(target.address, {
+          msg_type: "image",
+          content: JSON.stringify({ image_key: imageKey }),
+        })
+        this.logger.info(`[FeishuPlugin] Image sent: ${imageKey}`)
       },
     }
 

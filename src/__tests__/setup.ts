@@ -56,6 +56,10 @@ export function createMockFeishuClient(): FeishuApiClient {
     deleteReaction: vi.fn(),
     getMessage: vi.fn().mockResolvedValue({ code: 0, msg: "ok", data: { items: [] } }),
     downloadResource: vi.fn().mockResolvedValue({ data: Buffer.from("mock-data"), filename: undefined }),
+    uploadImage: vi.fn().mockResolvedValue("mock_image_key_123"),
+    uploadFile: vi.fn().mockResolvedValue("mock_file_key_456"),
+    sendTypingIndicator: vi.fn(),
+    getBotInfo: vi.fn(),
   }
 }
 

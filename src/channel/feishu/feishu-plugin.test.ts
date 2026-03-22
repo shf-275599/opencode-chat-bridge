@@ -198,6 +198,33 @@ describe("FeishuPlugin", () => {
         expect.objectContaining({ msg_type: "interactive" }),
       )
     })
+
+    it("sendImage uploads and sends image to target", async () => {
+      // Mock fs.readFile to avoid real filesystem dependency
+      const originalReadFile = await import("node:fs/promises")
+      vi.spyOn(originalReadFile, "readFile").mockResolvedValue(Buffer.from("fake-image-data"))
+
+      const feishuClient = createMockFeishuClient()
+      const logger = createMockLogger()
+      const p = makeFeishuPlugin({ feishuClient, logger })
+
+      await p.outbound!.sendImage!(
+        { address: "chat_001" },
+        "/tmp/test.png",
+      )
+
+      expect(feishuClient.uploadImage).toHaveBeenCalledWith(Buffer.from("fake-image-data"))
+      expect(feishuClient.sendMessage).toHaveBeenCalledWith(
+        "chat_001",
+        {
+          msg_type: "image",
+          content: JSON.stringify({ image_key: "mock_image_key_123" }),
+        },
+      )
+      expect(logger.info).toHaveBeenCalled()
+
+      vi.restoreAllMocks()
+    })
   })
 
   // ── Streaming Adapter ──

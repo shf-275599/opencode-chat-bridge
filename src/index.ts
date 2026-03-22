@@ -40,6 +40,7 @@ import { createInteractivePoller } from "./handler/interactive-poller.js"
 import { createFeishuGateway } from "./feishu/webhook-server.js"
 import { FeishuPlugin } from "./channel/feishu/feishu-plugin.js"
 import { ChannelManager } from "./channel/manager.js"
+import type { ChannelId } from "./channel/types.js"
 import { CronService } from "./cron/cron-service.js"
 import { HeartbeatService } from "./cron/heartbeat.js"
 import { loadEnvFile } from "./utils/env-loader.js"
@@ -197,7 +198,10 @@ async function main(): Promise<void> {
 
   const subAgentTracker = new SubAgentTracker({ serverUrl })
 
-  const outboundMedia = createOutboundMediaHandler({ logger })
+  const outboundMedia = createOutboundMediaHandler({ 
+    logger,
+    outbound: channelManager?.getChannel("feishu" as ChannelId)?.outbound,
+  })
 
   const streamingBridge = createStreamingBridge({
     cardkitClient,

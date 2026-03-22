@@ -20,15 +20,8 @@ import { getAttachmentsDir } from "../utils/paths.js"
 // ── Public types ──
 
 export interface OutboundMediaDeps {
-  /**
-   * Channel outbound adapter that implements sendImage.
-   * Optional at construction time — sendDetectedFiles is a no-op when not provided.
-   * Callers (streaming-integration, message-handler) should inject the correct
-   * channel plugin's outbound adapter per message.
-   */
   outbound?: ChannelOutboundAdapter
   logger: Logger
-  /** Extra directories (absolute) from which uploads are allowed. */
   allowedUploadDirs?: string[]
 }
 

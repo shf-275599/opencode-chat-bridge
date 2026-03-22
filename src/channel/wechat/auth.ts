@@ -1,10 +1,9 @@
 import fs from "node:fs"
 import path from "node:path"
-import { homedir } from "node:os"
+import QRCode from "qrcode"
 import {
   ILINK_BASE_URL,
   type WechatSession,
-  type QrcodeResponse,
 } from "./types.js"
 import { getQrcode, getQrcodeStatus } from "./client.js"
 import { createLogger } from "../../utils/logger.js"
@@ -19,6 +18,10 @@ export function getDefaultSessionFile(): string {
 export function getDefaultDataDir(): string {
   const cwdBase = process.env["OPENCODE_CWD"] ?? process.cwd()
   return path.resolve(cwdBase, ".opencode-lark")
+}
+
+export function getDefaultQrcodeFile(): string {
+  return path.resolve(getDefaultDataDir(), "wechat-qrcode.png")
 }
 
 export function loadSession(sessionFile?: string): WechatSession | null {
@@ -61,6 +64,15 @@ export interface LoginCallbacks {
   onStatus?: (message: string) => void
 }
 
+async function renderQrToTerminal(url: string): Promise<void> {
+  try {
+    const str = await QRCode.toString(url, { type: "terminal", small: true })
+    process.stdout.write("\n" + str + "\n")
+  } catch {
+    // If terminal rendering fails, skip
+  }
+}
+
 export async function login(
   baseUrl: string,
   sessionFile: string | undefined,
@@ -71,7 +83,21 @@ export async function login(
   onStatus("开始微信扫码登录...")
 
   const qrResp = await getQrcode(baseUrl)
-  onStatus("请使用微信扫描二维码（5分钟内有效）")
+
+  const dataDir = getDefaultDataDir()
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true })
+  }
+
+  const qrFilePath = getDefaultQrcodeFile()
+  if (qrResp.qrcode_img_content) {
+    const imageBuffer = Buffer.from(qrResp.qrcode_img_content, "base64")
+    fs.writeFileSync(qrFilePath, imageBuffer)
+  }
+
+  await renderQrToTerminal(qrResp.qrcode)
+  onStatus("请使用微信扫描上方二维码（5分钟内有效）")
+  onStatus(`二维码图片已保存到: ${qrFilePath}`)
 
   if (callbacks.onQrcode && qrResp.qrcode_img_content) {
     callbacks.onQrcode(`data:image/png;base64,${qrResp.qrcode_img_content}`)
@@ -100,10 +126,15 @@ export async function login(
         onStatus(`二维码过期，正在刷新 (${refreshCount}/3)...`)
         const newQr = await getQrcode(baseUrl)
         currentQrcode = newQr.qrcode
+        if (newQr.qrcode_img_content) {
+          const imageBuffer = Buffer.from(newQr.qrcode_img_content, "base64")
+          fs.writeFileSync(qrFilePath, imageBuffer)
+        }
+        await renderQrToTerminal(newQr.qrcode)
         if (callbacks.onQrcode && newQr.qrcode_img_content) {
           callbacks.onQrcode(`data:image/png;base64,${newQr.qrcode_img_content}`)
         }
-        onStatus("请重新扫描新二维码")
+        onStatus("请重新扫描上方新二维码")
         break
       }
       case "confirmed": {

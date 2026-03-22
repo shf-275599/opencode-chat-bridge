@@ -264,9 +264,14 @@ export class TelegramPlugin extends BaseChannelPlugin {
             return pendingPromise
           },
           close: async (finalText?: string): Promise<void> => {
+            // Cancel any pending timer
             if (pendingTimer) {
               clearTimeout(pendingTimer)
               pendingTimer = null
+            }
+            // Wait for any in-progress flush to complete
+            if (pendingPromise) {
+              await pendingPromise.catch(() => {})
             }
             pendingPromise = null
             resolvePending = null
@@ -546,8 +551,9 @@ export class TelegramPlugin extends BaseChannelPlugin {
   }
 
   private buildStreamingPreview(text: string): string {
-    if (text.endsWith("\n")) return text + "▌"
-    return text + " ▌"
+    const converted = mdToMarkdownV2(text)
+    if (converted.endsWith("\n")) return converted + "▌"
+    return converted + " ▌"
   }
 
   private async upsertStreamingMessage(
@@ -599,18 +605,40 @@ function splitMessage(text: string, maxLen: number): string[] {
 }
 
 export function mdToMarkdownV2(text: string): string {
-  const links: string[] = []
-  const blocks: string[] = []
+  const links: { text: string; url: string }[] = []
+  const codeblocks: string[] = []
+  const inlinecodes: string[] = []
+  const bold: string[] = []
+  const italic: string[] = []
   let remaining = text.replace(/\r\n/g, "\n")
 
   remaining = remaining.replace(/```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-    const index = blocks.push(lang ? `\`\`\`${lang}\n${code.trimEnd()}\`\`\`` : `\`\`\`\n${code.trimEnd()}\`\`\``) - 1
-    return `\x02BLOCK${index}\x03`
+    const index = codeblocks.push((lang ? `\`\`\`${lang}\n` : "```\n") + `${code.trimEnd()}\n\`\`\``) - 1
+    return `\x02CODEBLOCK${index}\x03`
+  })
+
+  remaining = remaining.replace(/`([^`]+)`/g, (_match, code) => {
+    const index = inlinecodes.push(code) - 1
+    return `\x02INLINECODE${index}\x03`
   })
 
   remaining = remaining.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, text, url) => {
-    const index = links.push(`[${text}](${url})`) - 1
+    const index = links.push({ text, url }) - 1
     return `\x02LINK${index}\x03`
+  })
+
+  remaining = remaining.replace(/\*\*([^*]+)\*\*/g, (_match, content) => {
+    const index = bold.push(content) - 1
+    return `\x02BOLD${index}\x03`
+  })
+
+  remaining = remaining.replace(/\*([^*]+)\*/g, (_match, content) => {
+    const index = italic.push(content) - 1
+    return `\x02ITALIC${index}\x03`
+  })
+  remaining = remaining.replace(/_(?![\x02-\x03])([^_]+)_(?![\x02-\x03])/g, (_match, content) => {
+    const index = italic.push(content) - 1
+    return `\x02ITALIC${index}\x03`
   })
 
   let md = remaining
@@ -619,29 +647,35 @@ export function mdToMarkdownV2(text: string): string {
   md = md.replace(/^\s*\d+\.\s+(.*)$/gm, "$1")
   md = md.replace(/\|\|([^|]+)\|\|/g, "||$1||")
   md = md.replace(/~~([^~]+)~~/g, "~$1~")
-  md = md.replace(/`([^`\n]+)`/g, "\x02CODE$1\x03CODEE")
-  md = md.replace(/\*\*([^*]+)\*\*/g, "\x02BOLDSTART$1\x03BOLDEND")
-  md = md.replace(/__(?!_)([^_]+)__(?!_)/g, "\x02UNDERSTART$1\x03UNDEREND")
-  md = md.replace(/\x02CODE(.+?)\x03CODEE/g, "`$1`")
-  md = md.replace(/\*([^*]+)\*/g, "\x02ITALICSTART$1\x03ITALICEND")
-  md = md.replace(/_([^_\x02\x03]+)_/g, "\x02USCOREITALICSTART$1\x03USCOREITALICEND")
 
   md = escapeMarkdownV2(md)
 
-  md = md.replace(/\x02BOLDSTART([^\x02\x03]+)\x03BOLDEND/g, "*$1*")
-  md = md.replace(/\x02UNDERSTART([^\x02\x03]+)\x03UNDEREND/g, "__$1__")
-  md = md.replace(/\x02ITALICSTART([^\x02\x03]+)\x03ITALICEND/g, "_$1_")
-  md = md.replace(/\x02USCOREITALICSTART([^\x02\x03]+)\x03USCOREITALICEND/g, "_$1_")
-
-  md = md.replace(/\x02BLOCK(\d+)\x03/g, (_match, index) => blocks[Number(index)] ?? "")
-  md = md.replace(/\x02LINK(\d+)\x03/g, (_match, index) => links[Number(index)] ?? "")
+  md = md.replace(/\x02BOLD(\d+)\x03/g, (_match, index) => {
+    const content = bold[Number(index)]
+    return content ? `*${escapeMarkdownV2(content)}*` : ""
+  })
+  md = md.replace(/\x02ITALIC(\d+)\x03/g, (_match, index) => {
+    const content = italic[Number(index)]
+    return content ? `_${escapeMarkdownV2(content)}_` : ""
+  })
+  md = md.replace(/\x02LINK(\d+)\x03/g, (_match, index) => {
+    const link = links[Number(index)]
+    return link ? `[${escapeMarkdownV2(link.text)}](${escapeMarkdownV2(link.url)})` : ""
+  })
+  md = md.replace(/\x02INLINECODE(\d+)\x03/g, (_match, index) => {
+    const content = inlinecodes[Number(index)]
+    // Inside inline code, only ` and \ need escaping
+    const escaped = content ? content.replace(/([`\\])/g, "\\$1") : ""
+    return content ? `\`${escaped}\`` : ""
+  })
+  md = md.replace(/\x02CODEBLOCK(\d+)\x03/g, (_match, index) => codeblocks[Number(index)] ?? "")
 
   return md
 }
 
 function escapeMarkdownV2(text: string): string {
   let result = text.replace(/\\/g, "\\\\")
-  result = result.replace(/([_\*\[\]()~`>#+=|{}.!])/g, "\\$1")
+  result = result.replace(/([_\*\[\]()~`>#+\-=|{}.!])/g, "\\$1")
   return result
 }
 

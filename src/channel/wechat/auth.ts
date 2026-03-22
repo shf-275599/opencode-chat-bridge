@@ -111,6 +111,22 @@ export async function login(
   while (Date.now() < deadline) {
     const status = await getQrcodeStatus(baseUrl, currentQrcode)
 
+    log.info(`[DEBUG] QR status: ${JSON.stringify(status)}`)
+
+    if (status.status === "confirmed") {
+      onStatus("登录成功！")
+      const session: WechatSession = {
+        token: status.bot_token!,
+        baseUrl: status.baseurl || baseUrl,
+        accountId: status.ilink_bot_id!,
+        userId: status.ilink_user_id!,
+        savedAt: new Date().toISOString(),
+      }
+      saveSession(session, sessionFile)
+      log.info(`Bot ID: ${session.accountId}`)
+      return session
+    }
+
     switch (status.status) {
       case "wait":
         process.stdout.write(".")
@@ -137,19 +153,9 @@ export async function login(
         onStatus("请重新扫描上方新二维码")
         break
       }
-      case "confirmed": {
-        onStatus("登录成功！")
-        const session: WechatSession = {
-          token: status.bot_token!,
-          baseUrl: status.baseurl || baseUrl,
-          accountId: status.ilink_bot_id!,
-          userId: status.ilink_user_id!,
-          savedAt: new Date().toISOString(),
-        }
-        saveSession(session, sessionFile)
-        log.info(`Bot ID: ${session.accountId}`)
-        return session
-      }
+      default:
+        log.warn(`[DEBUG] Unknown status: ${status.status}`)
+        break
     }
 
     await new Promise((r) => setTimeout(r, 1000))

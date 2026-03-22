@@ -210,15 +210,6 @@ export function createSessionManager(
       return result.changes > 0
     },
 
-    setModel(feishuKey, model) {
-      const now = Date.now()
-      const result = updateModelStmt.run(model, now, feishuKey)
-      if (result.changes > 0) {
-        logger.info(`Updated model mapping for ${feishuKey}: ${model ?? "(cleared)"}`)
-      }
-      return result.changes > 0
-    },
-
     cleanup(maxAgeMs = 30 * 60 * 1000) {
       const cutoff = Date.now() - maxAgeMs
       const result = cleanupStmt.run(cutoff)

@@ -64,9 +64,9 @@ export interface LoginCallbacks {
   onStatus?: (message: string) => void
 }
 
-async function renderQrToTerminal(url: string): Promise<void> {
+async function renderQrToTerminal(qrString: string): Promise<void> {
   try {
-    const str = await QRCode.toString(url, { type: "terminal", small: true })
+    const str = await QRCode.toString(qrString, { type: "terminal", small: true })
     process.stdout.write("\n" + str + "\n")
   } catch {
     // If terminal rendering fails, skip

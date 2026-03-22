@@ -205,7 +205,11 @@ export class StreamingCardSession {
   }
 
   private buildFullContent(): string {
-    const mainText = this.state?.currentText || ""
+    const mainText = (this.state?.currentText || "")
+      // Strip file:// URLs — Feishu clients can't access local paths and
+      // Feishu would interpret them as invalid image keys in card content.
+      .replace(/!?\[\]\(file:\/\/[^)]+\)/g, "")
+      .trim()
     const toolText = this.buildToolStatusText()
     const buttonText = this.buildButtonsText()
     return (mainText + toolText + buttonText).trim() || "🛠️ Processing..."

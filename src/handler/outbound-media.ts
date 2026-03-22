@@ -134,9 +134,10 @@ async function resolveAllowedPath(
     return null
   }
 
+  const normalizedReal = normalizePath(real)
   for (const dir of allowlist) {
-    if (real === dir || real.startsWith(dir + "/")) {
-      return normalizePath(real)
+    if (normalizedReal === dir || normalizedReal.startsWith(dir + "/")) {
+      return normalizedReal
     }
   }
   logger.warn(

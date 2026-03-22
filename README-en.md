@@ -2,7 +2,7 @@
 
 # opencode-im-bridge
 
-> Bridge Feishu\QQ\Telegram\Discord chats to opencode TUI sessions with real-time two-way messaging.
+> Bridge Feishu\QQ\Telegram\Discord\WeChat chats to opencode TUI sessions with real-time two-way messaging.
 
 ![CI](https://github.com/ET06731/opencode-im-bridge/actions/workflows/ci.yml/badge.svg)
 ![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
@@ -13,63 +13,43 @@
 ## Features
 
 - **Real-time bridging** — Messages sent in Feishu arrive in your opencode TUI instantly. Agent replies stream back as live-updating cards with **Markdown rendering support** (headings, lists, code blocks, etc.).
-- **Multi-channel support** — Now supports bridging QQ, Telegram, and Discord messages via their official platform APIs.
+- **Multi-channel support** — Now supports bridging QQ, Telegram, Discord, and WeChat messages via official platform APIs. WeChat uses Tencent's official iLink Bot API with QR code login.
 - **Interactive cards** — Agent questions and permission requests appear as clickable Feishu cards. Answer or approve directly from the chat — no need to switch to the TUI. (Currently supported primarily for Feishu)
 - **WebSocket connection** — Uses Feishu's long-lived WebSocket mode. No webhook polling, no public IP required.
 - **SSE streaming** — Consumes the opencode SSE event stream and debounces card updates to stay within rate limits.
 - **Conversation memory** — SQLite-backed per-thread history is prepended to each message, giving the agent context across turns.
 - **Session auto-discovery** — Finds and binds to the latest opencode TUI session for a working directory. Survives restarts.
 - **Graceful recovery** — Reconnects to the opencode server with exponential backoff (up to 10 attempts) on startup.
-- **Extensible channel layer** — `ChannelPlugin` interface lets you add Slack, Discord, or any other platform without touching core logic.
-- **File and image support** — Handles image and file messages from Feishu (not just text). Downloads attachments to `${OPENCODE_CWD}/.opencode-im-bridge/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
+- **Extensible channel layer** — `ChannelPlugin` interface lets you add any platform without touching core logic.
+- **File and image support** — Handles image and file messages (not just text). Downloads attachments to `${OPENCODE_CWD}/.opencode-im-bridge/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
 
 ---
 
-## Architecture
-
-```mermaid
-graph TD;
-    subgraph "IM Platform"
-        Feishu[Feishu Group/P2P]
-        QQ[QQ Official Bot Platform]
-    end
-
-    subgraph "opencode-im-bridge (Bridge Middleware)"
-        FeishuPlugin[Feishu Plugin]
-        QQPlugin[QQ Plugin]
-        
-        FeishuPlugin <--> ChannelManager
-        QQPlugin <--> ChannelManager
-
-        ChannelManager <--> SessionManager[(SQLite Memory / Session Map)]
-    end
-    
-    subgraph "opencode Server"
-        Agent[opencode Agent Server / TUI]
-    end
-
-    Feishu <--> |Webhook/WebSocket| FeishuPlugin
-    QQ <--> |WebSocket| QQPlugin
-    ChannelManager <--> |HTTP POST + SSE Streaming| Agent
-```
-
-> `opencode serve` runs the HTTP server. Use `opencode attach` in a separate terminal to view the session in TUI.
-
-**Inbound (Feishu → TUI):** Feishu sends a message over WebSocket. opencode-im-bridge normalizes it, resolves the bound session, prepends conversation history, then POSTs to the opencode API. The TUI sees the message immediately.
-
-**Outbound (TUI → Feishu):** opencode-im-bridge subscribes to the opencode SSE stream. As the agent produces text, `TextDelta` events accumulate and a debounced card update fires. Once `SessionIdle` arrives, the final card is flushed to Feishu.
-
 ### Supported Message Types
 
-| Message Type | Supported | Notes |
-|---|---|---|
-| `text` | ✅ | Plain text messages, supports Markdown rendering |
-| `post` | ✅ | Rich text / multi-paragraph messages |
-| `image` | ✅ | Photos and screenshots — downloaded and saved locally |
-| `file` | ✅ | Documents, code files, etc. — downloaded and saved locally |
-| `audio` / `video` / `sticker` | ❌ | Logged and skipped |
+| Message Type | Feishu | QQ | Telegram | Discord | WeChat | Notes |
+|---|---|---|---|---|---|---|
+| `text` | ✅ | ✅ | ✅ | ✅ | ✅ | Plain text messages |
+| `post` | ✅ | ✅ | ❌ | ❌ | ❌ | Rich text / multi-paragraph |
+| `image` | ✅ | ✅ | ✅ | ✅ | ✅ | Photos and screenshots |
+| `file` | ✅ | ✅ | ✅ | ✅ | ⏳ | Documents, code files |
+| `audio` | ✅ | ✅ | ✅ | ✅ | ⏳ | Voice messages with transcription |
+| `video` | ✅ | ✅ | ✅ | ✅ | ⏳ | Video messages |
+| `sticker` | ❌ | ❌ | ❌ | ❌ | ❌ | Not supported |
+
+> ⏳ = In development
 
 Downloaded files are saved to `${OPENCODE_CWD}/.opencode-lark/attachments/` (falls back to the system temp directory if that path isn't writable).
+
+### Platform Comparison
+
+| Platform | Protocol | Auth | Markdown | Rich Media | Streaming |
+|----------|----------|------|----------|------------|-----------|
+| Feishu | WebSocket | App ID + Secret | ✅ | ✅ Cards | ✅ Cards |
+| QQ | WebSocket | App ID + Secret | ✅ | ✅ | ❌ |
+| Telegram | HTTP Bot API | Bot Token | ✅ | ✅ | ❌ |
+| Discord | HTTP Bot API | Bot Token | ✅ | ✅ | ❌ |
+| WeChat | HTTP Long Polling | QR Code | ✅ | ⏳ | ⏳ |
 
 #### Slash Commands
 
@@ -143,8 +123,8 @@ opencode-im-bridge
 ```
 
 On first run with no configuration, an interactive setup wizard guides you through:
-- Selecting channels (Feishu, QQ, TTelegram, Discord or all)
-- Entering your Feishu/QQ App ID and App Secret/Token (masked input)
+- Selecting channels (Feishu, QQ, Telegram, Discord, WeChat, or all)
+- Entering your platform App ID and App Secret/Token (masked input)
 - Validating the opencode server connection
 - Saving credentials to corresponding `.env.{appId}` files
 
@@ -156,6 +136,8 @@ The service starts automatically after setup completes.
 > - Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
 > - QQ: `QQ_APP_ID`, `QQ_SECRET`
 > - Telegram: `TELEGRAM_BOT_TOKEN`
+> - Discord: `DISCORD_BOT_TOKEN`
+> - WeChat: `WECHAT_ENABLED=true`
 
 **4. Send a test message**
 
@@ -185,8 +167,14 @@ We support multiple platforms including Feishu, QQ, Telegram, and Discord.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `FEISHU_APP_ID` | yes | | Feishu App ID |
-| `FEISHU_APP_SECRET` | yes | | Feishu App Secret |
+| `FEISHU_APP_ID` | no | | Feishu App ID |
+| `FEISHU_APP_SECRET` | no | | Feishu App Secret |
+| `QQ_APP_ID` | no | | QQ App ID |
+| `QQ_SECRET` | no | | QQ App Secret |
+| `TELEGRAM_BOT_TOKEN` | no | | Telegram Bot Token |
+| `DISCORD_BOT_TOKEN` | no | | Discord Bot Token |
+| `WECHAT_ENABLED` | no | | Set to `true` to enable WeChat |
+| `WECHAT_SESSION_FILE` | no | `.opencode-lark/wechat-session.json` | WeChat session file path |
 | `OPENCODE_SERVER_URL` | no | `http://localhost:4096` | opencode server URL |
 | `FEISHU_WEBHOOK_PORT` | no | `3001` | HTTP webhook fallback port (only needed if not using WebSocket for card callbacks) |
 | `OPENCODE_CWD` | no | `process.cwd()` | Override session discovery directory |
@@ -208,6 +196,15 @@ We support multiple platforms including Feishu, QQ, Telegram, and Discord.
     "webhookPort": 3001,
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
+  "qq": {
+    "appId": "${QQ_APP_ID}",
+    "secret": "${QQ_SECRET}",
+    "sandbox": false
+  },
+  "wechat": {
+    "enabled": true,
+    "sessionFile": "./data/wechat-session.json"
+  },
   // Default opencode agent name. This should match an agent configured in your opencode setup.
   // Common values: "build", "claude", "code" — check your opencode config for available agents.
   "defaultAgent": "build",
@@ -216,17 +213,33 @@ We support multiple platforms including Feishu, QQ, Telegram, and Discord.
     "debounceMs": 500,
     "maxDebounceMs": 3000
   },
-  "messageDebounceMs": 10000,  // Debounce timer for batching rapid multi-message inputs (text=immediate, media=buffer)
-  // Optional: Enable QQ
-  "qq": {
-    "appId": "${QQ_APP_ID}",
-    "secret": "${QQ_SECRET}",
-    "sandbox": false
-  }
+  "messageDebounceMs": 10000
 }
 ```
 
 Supports `${ENV_VAR}` interpolation and JSONC comments. If no config file is found, the app builds a default config from `.env` values directly.
+
+### WeChat Configuration
+
+WeChat uses Tencent's official **iLink Bot API**, with a different authentication flow:
+
+**Enable WeChat:**
+```bash
+export WECHAT_ENABLED=true
+# or in config
+"wechat": { "enabled": true }
+```
+
+**Login Flow:**
+1. On first run, a QR code is displayed in the terminal
+2. Open WeChat → Settings → ClawBot
+3. Click "Connect" and scan the QR code
+4. Session is saved to `wechat-session.json`
+
+**Technical Details:**
+- HTTP long polling (35s timeout) for receiving messages
+- `context_token` for message correlation and replies
+- Supports text, images, voice (with transcription), files
 
 ---
 

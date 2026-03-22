@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.37.1 (2026-03-23)
+
+### Bug Fixes
+
+- **Telegram MarkdownV2 转义修复**：`mdToMarkdownV2` 重构处理流程，先提取 markdown 语法、转义内容、恢复时添加分隔符。修复流式消息中 `(`、`)`、`.` 等特殊字符未正确转义导致的 "Bad Request: can't parse entities" 错误
+- **流式预览转换**：`buildStreamingPreview` 现已正确调用 `mdToMarkdownV2`，确保流式更新消息的 markdown 格式正确
+- **关闭时等待 flush**：`close()` 方法现等待 pending flush 完成后再关闭，避免竞态条件
+
 ## 0.37.0 (2026-03-22)
 
 ### Features

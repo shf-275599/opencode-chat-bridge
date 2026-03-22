@@ -2,7 +2,7 @@
 
 # opencode-im-bridge
 
-> 将飞书\QQ\Telegram\Discord机器人与 opencode TUI session 打通，实现双向实时消息转发。
+> 将飞书\QQ\Telegram\Discord\微信机器人与 opencode TUI session 打通，实现双向实时消息转发。
 
 ![CI](https://github.com/ET06731/opencode-im-bridge/actions/workflows/ci.yml/badge.svg)
 ![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
@@ -13,7 +13,7 @@
 ## 功能特性
 
 - **实时桥接** — 飞书消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回飞书。支持 **Markdown 格式渲染**（标题、列表、代码块等）。
-- **多渠道支持** — 现在支持通过官方 Node SDK 桥接 QQ、Telegram 和 Discord 消息。QQ 渠道同样支持 Markdown 渲染。
+- **多渠道支持** — 现在支持通过官方 Node SDK 桥接 QQ、Telegram、Discord 和微信消息。微信使用腾讯官方 iLink Bot API，支持扫码登录。
 - **交互式卡片** — agent 的提问和权限请求以可点击的飞书卡片呈现，直接在聊天中回答或审批，无需切换到 TUI。(目前主要在飞书端支持)
 - **WebSocket 长连接** — 采用飞书 / QQ 的 WebSocket 长连接模式，无需公网 IP，无需轮询。
 - **SSE 流式输出** — 订阅 opencode SSE 事件流，防抖处理卡片更新，避免触发频率限制。
@@ -32,14 +32,17 @@ graph TD;
     subgraph "IM 平台 (Client & Platform)"
         Feishu[飞书 群聊/私信]
         QQ[QQ 官方机器人平台]
+        WeChat[微信]
     end
 
     subgraph "opencode-im-bridge (Bridge Middleware)"
         FeishuPlugin[Feishu Plugin]
         QQPlugin[QQ Plugin]
+        WechatPlugin[Wechat Plugin]
         
         FeishuPlugin <--> ChannelManager
         QQPlugin <--> ChannelManager
+        WechatPlugin <--> ChannelManager
 
         ChannelManager <--> SessionManager[(SQLite 对话记忆 / Session映射)]
     end
@@ -50,6 +53,7 @@ graph TD;
 
     Feishu <--> |Webhook/WebSocket| FeishuPlugin
     QQ <--> |WebSocket| QQPlugin
+    WeChat <--> |HTTP 长轮询| WechatPlugin
     ChannelManager <--> |HTTP POST + SSE 流式通信| Agent
 ```
 
@@ -61,14 +65,14 @@ graph TD;
 
 ### 支持的消息类型
 
-| 消息类型 | 支持 | 说明 |
-|---|---|---|
-| `text` | ✅ | 普通文字消息，支持 Markdown 渲染 |
-| `post` | ✅ | 富文本 / 多段落消息 |
-| `image` | ✅ | 图片和截图 — 自动下载保存到本地 |
-| `file` | ✅ | 文档、代码文件等 — 自动下载保存到本地 |
-| `audio` / `video` | ✅ | 作为附件下载（mp3/wav/mp4 等格式） |
-| `sticker` | ❌ | 记录日志后跳过，不处理 |
+| 消息类型 | 飞书 | QQ | 说明 |
+|---|---|---|---|
+| `text` | ✅ | ✅ | 普通文字消息，支持 Markdown 渲染 |
+| `post` | ✅ | ✅ | 富文本 / 多段落消息 |
+| `image` | ✅ | ✅ | 图片和截图 — 自动下载保存到本地 |
+| `file` | ✅ | ✅ | 文档、代码文件等 — 自动下载保存到本地 |
+| `audio` / `video` | ✅ | ✅ | 作为附件下载（mp3/wav/mp4 等格式） |
+| `sticker` | ❌ | ❌ | 记录日志后跳过，不处理 |
 
 下载的文件保存在 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`（若该路径不可写则回退至系统临时目录）。
 
@@ -93,7 +97,7 @@ graph TD;
 
 - **[Bun](https://bun.sh)**（必需运行时，本项目使用 `bun:sqlite`，仅 Bun 支持）
 - **[opencode](https://opencode.ai)** 已安装在本地
-- 已配置凭证的飞书开放平台应用 或 QQ、Telegram、Discord 等平台机器人（👉参见[《机器人配置指南》](docs/CONFIGURATION.zh-CN.md)）
+- 已配置凭证的飞书开放平台应用、QQ、Telegram、Discord 等平台机器人，或微信 ClawBot 插件（👉参见[《机器人配置指南》](docs/CONFIGURATION.zh-CN.md)）
 
 ### 步骤
 

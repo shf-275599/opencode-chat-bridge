@@ -25,6 +25,7 @@ import { writeFile, mkdir, access } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { randomBytes } from "node:crypto"
+import { downloadQQMedia, parseQQMediaMessage, type QQMediaMessage } from "../channel/qq/qq-api-client.js"
 
 // ── Dependency injection interface ──
 
@@ -158,6 +159,46 @@ async function handleFileOrImageMessage(
   logger.info(`Saved file to ${filepath}`)
 
   return `User sent a file: ${fileName}\nSaved to: ${filepath}\nPlease review this file.`
+}
+
+// ── Helper: handle QQ media messages ──
+
+async function handleQQMediaMessage(
+  content: string,
+  rawMessage: any[],
+  messageId: string,
+  logger: Logger,
+): Promise<string> {
+  let parsed: { media?: any[]; text?: string }
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    return content || ""
+  }
+
+  const mediaItems: any[] = parsed.media || parseQQMediaMessage(rawMessage)
+
+  if (mediaItems.length === 0) {
+    return parsed.text || content || ""
+  }
+
+  const results: string[] = []
+
+  for (const media of mediaItems) {
+    try {
+      const localPath = await downloadQQMedia(media, logger)
+      results.push(`User sent a ${media.type}: ${media.fileName || "unnamed"}\nSaved to: ${localPath}\nPlease look at this ${media.type}.`)
+    } catch (err) {
+      logger.error(`[QQPlugin] Failed to download ${media.type}: ${err}`)
+      results.push(`User sent a ${media.type} (${media.fileName || "unnamed"}) but download failed: ${err}`)
+    }
+  }
+
+  if (parsed.text) {
+    results.push(parsed.text)
+  }
+
+  return results.join("\n\n")
 }
 
 // ── Helper: extract text from Feishu post rich content ──
@@ -332,10 +373,14 @@ export function createMessageHandler(
 
     // ── 2. Handle message types ──
     const messageType = event.message.message_type
-    const supportedTypes = ["text", "post", "image", "file"]
+
+    const feishuSupportedTypes = ["text", "post", "image", "file"]
+    const qqSupportedTypes = ["text", "image", "file"]
+    const supportedTypes = channelId === "qq" ? qqSupportedTypes : feishuSupportedTypes
+
     if (!supportedTypes.includes(messageType)) {
       logger.info(
-        `Unsupported message type: ${messageType}, only text/post/image/file are supported`,
+        `Unsupported message type: ${messageType} for channel ${channelId}, only ${supportedTypes.join("/")} are supported`,
       )
       return
     }
@@ -344,16 +389,24 @@ export function createMessageHandler(
     let userText: string
     if (messageType === "image" || messageType === "file") {
       try {
-        userText = await handleFileOrImageMessage(
-          event.message.message_type as "image" | "file",
-          event.message.content,
-          event.message_id,
-          feishuClient,
-          logger,
-        )
+        if (channelId === "qq") {
+          userText = await handleQQMediaMessage(
+            event.message.content,
+            (event as any)._rawMessage || [],
+            event.message_id,
+            logger,
+          )
+        } else {
+          userText = await handleFileOrImageMessage(
+            event.message.message_type as "image" | "file",
+            event.message.content,
+            event.message_id,
+            feishuClient,
+            logger,
+          )
+        }
       } catch (err) {
-        logger.error(`Failed to handle ${messageType} message: ${err}`)
-        // Forward error context to opencode instead of silently skipping
+        logger.error(`Failed to handle ${messageType} message for ${channelId}: ${err}`)
         let fileKey = "unknown"
         try {
           const parsedContent = JSON.parse(event.message.content) as Record<string, string>
@@ -365,7 +418,7 @@ export function createMessageHandler(
           userText = `User sent file "${err.filename}" but it exceeds the 50MB size limit. Download skipped.`
         } else {
           const errMsg = err instanceof Error ? err.message : String(err)
-          userText = `User sent a file/image but download failed: ${errMsg}. Feishu message_id: ${event.message_id}, file_key: ${fileKey}`
+          userText = `User sent a ${messageType} but download failed: ${errMsg}. Message ID: ${event.message_id}`
         }
       }
     } else if (messageType === "post") {

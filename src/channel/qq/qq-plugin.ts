@@ -18,6 +18,7 @@ import type {
 import type { AppConfig } from "../../utils/config.js"
 import type { Logger } from "../../utils/logger.js"
 import { Bot, ReceiverMode, segment } from "qq-official-bot"
+import { parseQQMediaMessage } from "./qq-api-client.js"
 
 export interface QQPluginDeps {
     appConfig: AppConfig
@@ -122,6 +123,24 @@ export class QQPlugin extends BaseChannelPlugin {
                 this.qqBot.on("message.private", async (event) => {
                     this.logger.info(`QQ Gateway received message from ${event.user_id}`)
                     if (deps.onMessage) {
+                        const messageArray = Array.isArray(event.message) ? event.message : []
+                        const mediaItems = parseQQMediaMessage(messageArray)
+                        const hasMedia = mediaItems.length > 0
+
+                        let messageType = "text"
+                        let content: string
+
+                        if (hasMedia && mediaItems[0]) {
+                            const firstMedia = mediaItems[0]
+                            messageType = firstMedia.type === "image" ? "image" : "file"
+                            content = JSON.stringify({
+                                media: mediaItems,
+                                text: (event as any).raw_message || (event as any).content || "",
+                            })
+                        } else {
+                            content = JSON.stringify({ text: (event as any).raw_message || (event as any).content || "" })
+                        }
+
                         const syntheticEvent = {
                             event_id: event.id || event.message_id,
                             event_type: "message",
@@ -131,13 +150,14 @@ export class QQPlugin extends BaseChannelPlugin {
                             sender: {
                                 sender_id: { open_id: event.user_id },
                                 sender_type: "user",
-                                tenant_key: "qq"
+                                tenant_key: "qq",
                             },
                             message: {
-                                message_type: "text",
-                                content: JSON.stringify({ text: (event as any).raw_message || (event as any).content || "" })
+                                message_type: messageType,
+                                content: content,
                             },
                             _channelId: "qq",
+                            _rawMessage: messageArray,
                         }
                         await deps.onMessage(syntheticEvent as any)
                     }
@@ -177,30 +197,72 @@ export class QQPlugin extends BaseChannelPlugin {
 
         // 4. Outbound adapter
         this.outbound = {
-      sendText: async (target: OutboundTarget, text: string): Promise<void> => {
-        this.logger.info(`[QQPlugin] Attempting to send message to ${target.address}`)
-        try {
-          const res = await this.qqBot.messageService.sendPrivateMessage(target.address, [segment.markdown(text)])
-          this.logger.info(`[QQPlugin] Message sent successfully. Response: ${JSON.stringify(res)}`)
-        } catch (err) {
-          this.logger.error(`[QQPlugin] Failed to send message to ${target.address}: ${err}`)
-          throw err
-        }
-      },
+            sendText: async (target: OutboundTarget, text: string): Promise<void> => {
+                this.logger.info(`[QQPlugin] Attempting to send message to ${target.address}`)
+                try {
+                    const res = await this.qqBot.messageService.sendPrivateMessage(target.address, [segment.markdown(text)])
+                    this.logger.info(`[QQPlugin] Message sent successfully. Response: ${JSON.stringify(res)}`)
+                } catch (err) {
+                    this.logger.error(`[QQPlugin] Failed to send message to ${target.address}: ${err}`)
+                    throw err
+                }
+            },
 
-      sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
-        this.logger.info(`[QQPlugin] Attempting to send image to ${target.address}: ${filePath}`)
-        try {
-          const res = await this.qqBot.messageService.sendPrivateMessage(
-            target.address,
-            [segment.image(filePath)],
-          )
-          this.logger.info(`[QQPlugin] Image sent successfully. Response: ${JSON.stringify(res)}`)
-        } catch (err) {
-          this.logger.error(`[QQPlugin] Failed to send image to ${target.address}: ${err}`)
-          throw err
-        }
-      },
+            sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                this.logger.info(`[QQPlugin] Attempting to send image to ${target.address}: ${filePath}`)
+                try {
+                    const res = await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.image(filePath)],
+                    )
+                    this.logger.info(`[QQPlugin] Image sent successfully. Response: ${JSON.stringify(res)}`)
+                } catch (err) {
+                    this.logger.error(`[QQPlugin] Failed to send image to ${target.address}: ${err}`)
+                    throw err
+                }
+            },
+
+            sendFile: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                this.logger.info(`[QQPlugin] Attempting to send file to ${target.address}: ${filePath}`)
+                try {
+                    const res = await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.video(filePath)],
+                    )
+                    this.logger.info(`[QQPlugin] File sent successfully. Response: ${JSON.stringify(res)}`)
+                } catch (err) {
+                    this.logger.error(`[QQPlugin] Failed to send file to ${target.address}: ${err}`)
+                    throw err
+                }
+            },
+
+            sendAudio: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                this.logger.info(`[QQPlugin] Attempting to send audio to ${target.address}: ${filePath}`)
+                try {
+                    const res = await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.audio(filePath)],
+                    )
+                    this.logger.info(`[QQPlugin] Audio sent successfully. Response: ${JSON.stringify(res)}`)
+                } catch (err) {
+                    this.logger.error(`[QQPlugin] Failed to send audio to ${target.address}: ${err}`)
+                    throw err
+                }
+            },
+
+            sendVideo: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                this.logger.info(`[QQPlugin] Attempting to send video to ${target.address}: ${filePath}`)
+                try {
+                    const res = await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.video(filePath)],
+                    )
+                    this.logger.info(`[QQPlugin] Video sent successfully. Response: ${JSON.stringify(res)}`)
+                } catch (err) {
+                    this.logger.error(`[QQPlugin] Failed to send video to ${target.address}: ${err}`)
+                    throw err
+                }
+            },
         }
 
         // 5. Streaming adapter

@@ -73,6 +73,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string = "feishu",
   ): Promise<void> {
     const plugin = getPlugin(channelId)
+    if (channelId === "telegram" && plugin?.outbound?.sendPlainText) {
+      await plugin.outbound.sendPlainText({ address: chatId }, text)
+      return
+    }
     if (plugin?.outbound) {
       await plugin.outbound.sendText({ address: chatId }, text)
       return
@@ -174,13 +178,16 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/summarize`, {
+    await replyText(chatId, messageId, "正在压缩会话历史，请稍候...", channelId)
+
+    const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/prompt_async`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ parts: [{ type: "text", text: "/compact", role: "user" }] }),
     })
     if (!resp.ok) {
-      throw new Error(`Compact failed: HTTP ${resp.status}`)
+      const errText = await resp.text()
+      throw new Error(`Command compact failed: HTTP ${resp.status}, ${errText}`)
     }
 
     logger.info(`/compact: summarized session ${mapping.session_id}`)
@@ -377,8 +384,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 - /share: 分享会话
 - /unshare: 取消分享
 - /abort: 中止任务
-- /agent: list/switch agent
-- /models: list/switch model
+- /agent: 列出/切换智能体
+- /models: 列出/切换模型
 - /cron: 计划任务管理
 - /help: 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
@@ -461,8 +468,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
       const listText = names.length
-        ? names.map((name) => (name.toLowerCase() === current.toLowerCase() ? `* ${name}` : `- ${name}`)).join("\n")
-        : "No agents available"
+      ? names.map((name) => (name.toLowerCase() === current.toLowerCase() ? `✓ ${name}` : `- ${name}`)).join("\n")
+      : "No agents available"
 
       if (channelId === "telegram") {
         const telegramCard = buildTelegramAgentCard(current, names)

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.38.1 (2026-03-23)
+
+### Features
+
+- **`/model` Command Improvement**: Now shows only configured/available models instead of all possible models. Filters by `connected` providers from OpenCode API.
+- **`/agent` Interactive Cards**: Feishu now displays interactive button cards for agent selection instead of plain text.
+
+### Improvements
+
+- **Session Naming**: Session creation no longer forces a hardcoded title. OpenCode will auto-generate descriptive titles from the first message content.
+
 ## 0.38.0 (2026-03-23)
 
 ### Features

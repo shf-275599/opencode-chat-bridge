@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.38.0 (2026-03-23)
+
+### Features
+
+- **WeChat (微信) Experimental Support**: Added WeChat channel integration via Tencent iLink Bot API. Supports text, image, audio (with transcript), and file messages. Uses QR code login flow for authentication.
+- **QQ Media Support Enhanced**: Added image/file/audio/video send and receive support for QQ bot.
+- **Setup Wizard WeChat Option**: Setup wizard now includes WeChat channel selection.
+
+### Bug Fixes
+
+- **Agent Name Matching**: Fixed `/agent` command to handle agent names with parentheses like "Sisyphus (Ultraworker)". Now supports normalized matching - "SisyphusUltraworker" will match "Sisyphus (Ultraworker)".
+- **Platform Context Signature**: Channel-aware context signatures now properly injected. Feishu remains `[Lark]`, while QQ/Telegram/Discord receive their own platform tag.
+
+### Documentation
+
+- README.md and architecture docs updated with WeChat support and platform comparison table.
+
 ## 0.37.1 (2026-03-23)
 
 ### Bug Fixes

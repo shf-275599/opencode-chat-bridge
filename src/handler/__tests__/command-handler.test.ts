@@ -68,7 +68,7 @@ describe("createCommandHandler", () => {
       expect(mockFetch).toHaveBeenCalledWith("http://test:4096/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Feishu chat chat-1" }),
+        body: JSON.stringify({}),
       })
       expect(mockSessionManager.deleteMapping).toHaveBeenCalledWith("chat-1")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
@@ -233,9 +233,16 @@ describe("createCommandHandler", () => {
       expect(result).toBe(true)
       expect(mockFetch).toHaveBeenCalledWith("http://test:4096/agent")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
-        msg_type: "text",
-        content: expect.stringContaining("agent"),
+        msg_type: "interactive",
+        content: expect.any(String),
       })
+
+      const callArgs = mockFeishuClient.replyMessage.mock.calls[0]
+      const content = JSON.parse(callArgs?.[1]?.content as string)
+      expect(content.header?.title?.content).toContain("Agent")
+      const actionElements = content.body.elements?.filter((e: any) => e.tag === "button")
+      expect(actionElements).toHaveLength(2)
+      expect(actionElements[0]?.value?.command).toBe("/agent build")
     })
 
     it("switches to a valid agent", async () => {

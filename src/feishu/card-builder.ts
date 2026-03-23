@@ -166,6 +166,55 @@ export function buildHelpCard(): Record<string, unknown> {
   }
 }
 
+export function buildAgentSelectorCard(
+  agents: string[],
+  currentAgent?: string,
+): Record<string, unknown> {
+  const visibleAgents = agents.slice(0, 12)
+  const truncatedCount = Math.max(0, agents.length - visibleAgents.length)
+
+  return {
+    schema: "2.0",
+    config: { wide_screen_mode: true },
+    header: {
+      title: {
+        tag: "plain_text",
+        content: "🤖 Agent",
+      },
+      template: "blue",
+    },
+    body: {
+      elements: [
+        {
+          tag: "markdown",
+          content: currentAgent
+            ? `**Current agent:** \`${currentAgent}\`\n\nChoose an agent below.`
+            : "**Choose an agent below.**",
+        },
+        ...visibleAgents.map((agent) => {
+          const isCurrent = agent.toLowerCase() === currentAgent?.toLowerCase()
+          return {
+            tag: "button",
+            text: {
+              tag: "plain_text",
+              content: `${isCurrent ? "* " : ""}${agent}`,
+            },
+            type: isCurrent ? "primary" : "default",
+            value: { action: "command_execute", command: `/agent ${agent}` },
+          }
+        }),
+        ...(truncatedCount > 0
+          ? [{
+            tag: "markdown",
+            content: `And ${truncatedCount} more. Use \`/agent {name}\` to switch directly.`,
+          }]
+          : []),
+      ],
+    },
+  }
+}
+
+
 export function buildModelSelectorCard(
   models: Array<{ id: string; providerName: string; modelName: string }>,
   currentModelId?: string,

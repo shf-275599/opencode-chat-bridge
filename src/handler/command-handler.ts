@@ -10,7 +10,7 @@ import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
-import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard } from "../feishu/card-builder.js"
+import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard } from "../feishu/card-builder.js"
 import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
 
 import type { ChannelManager } from "../channel/manager.js"
@@ -149,7 +149,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const resp = await fetch(`${serverUrl}/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: `Feishu chat ${feishuKey}` }),
+      body: JSON.stringify({}),
     })
 
     if (!resp.ok) {
@@ -475,6 +475,15 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         }
       }
 
+      if (channelId === "feishu") {
+        const card = buildAgentSelectorCard(names, current)
+        await replyCard(chatId, messageId, {
+          text: listText,
+          card,
+        }, channelId)
+        return
+      }
+
       await replyText(
         chatId,
         messageId,
@@ -512,9 +521,18 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         name: string
         models?: Record<string, { id?: string; name?: string }>
       }>
+      connected?: string[]
     }
 
-    return (data.all ?? [])
+    const allProviders = data.all ?? []
+    const connectedIds = new Set(data.connected ?? [])
+
+    const availableProviders =
+      connectedIds.size > 0
+        ? allProviders.filter((provider) => connectedIds.has(provider.id))
+        : allProviders
+
+    return availableProviders
       .flatMap((provider) =>
         Object.entries(provider.models ?? {}).map(([modelKey, model]) => ({
           id: `${provider.id}/${model.id ?? modelKey}`,

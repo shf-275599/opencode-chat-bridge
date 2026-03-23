@@ -168,4 +168,23 @@ describe("TelegramPlugin", () => {
     expect(md).toContain("```ts")
     expect(md).toContain("const x = 1")
   })
+
+  it("sends file via sendDocument API", async () => {
+    const plugin = createPlugin()
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ ok: true, result: { message_id: 1 } }),
+    })
+
+    const mockReadFile = vi.fn().mockResolvedValue(new Uint8Array([0x50, 0x4b, 0x03, 0x04]))
+    vi.spyOn(await import("node:fs/promises"), "readFile").mockImplementation(mockReadFile)
+
+    await plugin.outbound.sendFile!({ address: "42" }, "F:/test/document.pdf")
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://api.telegram.org/bottoken/sendDocument",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    )
+  })
 })

@@ -234,6 +234,32 @@ export class TelegramPlugin extends BaseChannelPlugin {
           throw err
         }
       },
+
+      sendAudio: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[TelegramPlugin] Attempting to send audio to ${target.address}: ${filePath}`)
+        try {
+          const fileData = await readFile(filePath)
+          const fileName = basename(filePath)
+          await this.callApiMultipart("sendAudio", target.address, "audio", fileData, fileName)
+          this.logger.info(`[TelegramPlugin] Audio sent successfully: ${filePath}`)
+        } catch (err) {
+          this.logger.error(`[TelegramPlugin] Failed to send audio to ${target.address}: ${err}`)
+          throw err
+        }
+      },
+
+      sendVideo: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[TelegramPlugin] Attempting to send video to ${target.address}: ${filePath}`)
+        try {
+          const fileData = await readFile(filePath)
+          const fileName = basename(filePath)
+          await this.callApiMultipart("sendVideo", target.address, "video", fileData, fileName)
+          this.logger.info(`[TelegramPlugin] Video sent successfully: ${filePath}`)
+        } catch (err) {
+          this.logger.error(`[TelegramPlugin] Failed to send video to ${target.address}: ${err}`)
+          throw err
+        }
+      },
     }
 
     // Telegram 不支持消息编辑的流式传输，直接禁用

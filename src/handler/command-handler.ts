@@ -124,6 +124,31 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     )
   }
 
+  function buildDiscordSessionCard(sessions: Session[], currentSessionId?: string) {
+    const rows: Array<Array<{ text: string; command: string }>> = []
+    const sessionRows = sessions.slice(0, 8).map((session) => ({
+      text: session.id === currentSessionId ? `• ${session.title || session.id}` : (session.title || session.id),
+      command: `/connect ${session.id}`,
+    }))
+    if (sessionRows.length > 0) rows.push(sessionRows)
+    rows.push([{ text: "New Session", command: "/new" }])
+    return { text: `Current session: ${currentSessionId ?? "none"}\nChoose a session to connect:`, rows }
+  }
+
+  function buildDiscordAgentCard(currentAgent: string, names: string[]) {
+    return {
+      text: `Current agent: ${currentAgent}\nChoose the agent to use:`,
+      rows: names.slice(0, 8).map((name) => [{ text: name === currentAgent ? `• ${name}` : name, command: `/agent ${name}` }]),
+    }
+  }
+
+  function buildDiscordModelCard(currentModelId: string | null | undefined, models: ProviderModelInfo[]) {
+    return {
+      text: `Current model: ${currentModelId ?? "unknown"}\nChoose the model to use:`,
+      rows: models.slice(0, 8).map((model) => ({ text: model.id === currentModelId ? `• ${model.id}` : model.id, command: `/models ${model.id}` })),
+    }
+  }
+
   function buildTelegramAgentCard(currentAgent: string, names: string[]) {
     return createTelegramInlineCard(
       `Current agent: ${currentAgent}\nChoose the agent to use:`,
@@ -308,9 +333,18 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       }
     }
 
+    if (channelId === "discord") {
+      const discordCard = buildDiscordSessionCard(sessions, currentSessionId)
+      await replyCard(chatId, messageId, {
+        text: sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (${session.id})`).join("\n"),
+        card: discordCard,
+      }, channelId)
+      return
+    }
+
     if (channelId !== "feishu") {
-      const sessionList = sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (${session.id})`).join("\n")
-      await replyText(chatId, messageId, `最近会话列表：\n${sessionList}\n\n使用 /connect {id} 进行连接。`, channelId)
+      const sessionList = sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (\`${session.id}\`)`).join("\n")
+      await replyText(chatId, messageId, `**最近会话列表：**\n\n${sessionList}\n\n💡 使用 \`/connect {session_id}\` 进行连接`, channelId)
       return
     }
 
@@ -377,17 +411,18 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string,
   ): Promise<void> {
     if (channelId !== "feishu") {
-      const helpText = `⚡ 命令菜单：
-- /new: 新建会话
-- /sessions: 连接会话
-- /compact: 压缩历史
-- /share: 分享会话
-- /unshare: 取消分享
-- /abort: 中止任务
-- /agent: 列出/切换智能体
-- /models: 列出/切换模型
-- /cron: 计划任务管理
-- /help: 显示此帮助`
+      const helpText = `**⚡ 命令菜单**
+
+\`/new\` - 新建会话
+\`/sessions\` - 连接会话  
+\`/compact\` - 压缩历史
+\`/share\` - 分享会话
+\`/unshare\` - 取消分享
+\`/abort\` - 中止任务
+\`/agent\` - 列出/切换智能体
+\`/models\` - 列出/切换模型
+\`/cron\` - 计划任务管理
+\`/help\` - 显示此帮助`
       await replyText(chatId, messageId, helpText, channelId)
       return
     }
@@ -482,6 +517,15 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         }
       }
 
+      if (channelId === "discord") {
+        const discordCard = buildDiscordAgentCard(current, names)
+        await replyCard(chatId, messageId, {
+          text: `Current agent: ${current}\n\nAvailable agents:\n${listText}`,
+          card: discordCard,
+        }, channelId)
+        return
+      }
+
       if (channelId === "feishu") {
         const card = buildAgentSelectorCard(names, current)
         await replyCard(chatId, messageId, {
@@ -494,7 +538,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       await replyText(
         chatId,
         messageId,
-        `Current agent: ${current}\n\nAvailable agents:\n${listText}\n\nUsage: /agent {name}`,
+        `**Current agent:** ${current}\n\n**Available agents:**\n${listText}\n\n💡 Usage: \`/agent {name}\``,
         channelId,
       )
       return
@@ -586,6 +630,16 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         }
       }
 
+      if (channelId === "discord") {
+        const discordCard = buildDiscordModelCard(currentModelId, models)
+        const text = models.length ? models.map((model) => `- ${model.id}`).join("\n") : "No models available"
+        await replyCard(chatId, messageId, {
+          text: `Current model: ${currentModelId ?? "unknown"}\n\nAvailable models:\n${text}`,
+          card: discordCard,
+        }, channelId)
+        return
+      }
+
       if (channelId === "feishu") {
         const card = buildModelSelectorCard(models, currentModelId)
         await replyCard(chatId, messageId, {
@@ -603,7 +657,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       await replyText(
         chatId,
         messageId,
-        `Current model: ${currentModelId ?? "unknown"}\n\nAvailable models:\n${listText}\n\nUsage: /models {provider/model}`,
+        `**Current model:** ${currentModelId ?? "unknown"}\n\n**Available models:**\n${listText}\n\n💡 Usage: \`/models {provider/model}\``,
         channelId,
       )
       return

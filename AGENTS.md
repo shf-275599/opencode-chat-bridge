@@ -1,6 +1,8 @@
 # AGENTS.md — opencode-im-bridge
 
-Architecture guide for contributors. Covers module layout, key abstractions, data flow, and how to extend the system.
+**Generated:** 2026-03-23
+**Commit:** 896c349
+**Branch:** main
 
 ## What This Project Does
 

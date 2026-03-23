@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Message as DiscordMessage, TextChannel } from "discord.js"
+import { Client, GatewayIntentBits, Partials, Message as DiscordMessage, TextChannel, ButtonBuilder, ButtonStyle, ActionRowBuilder, AttachmentBuilder } from "discord.js"
 import { randomUUID } from "node:crypto"
 import {
     BaseChannelPlugin,
@@ -88,17 +88,14 @@ export class DiscordPlugin extends BaseChannelPlugin {
                 })
 
                 this.client.on("messageCreate", (msg: DiscordMessage) => {
-                    // Ignore own messages or other bots
                     if (msg.author.bot) return
 
-                    // Filter by allowed channel IDs if provided
                     if (this.discordConfig.allowedChannelIds && this.discordConfig.allowedChannelIds.length > 0) {
                         if (!this.discordConfig.allowedChannelIds.includes(msg.channelId)) {
                             return
                         }
                     }
 
-                    // Create synthetic event
                     const syntheticEvent = {
                         event_id: msg.id,
                         event_type: "message",
@@ -115,12 +112,46 @@ export class DiscordPlugin extends BaseChannelPlugin {
                             content: JSON.stringify({ text: msg.content }),
                         },
                         _channelId: "discord",
-                        msg: msg, // Original message for `normalizeInbound`
+                        msg: msg,
                     }
 
                     if (deps.onMessage) {
                         deps.onMessage(syntheticEvent).catch((err) => {
                             this.logger.error(`[Discord] Error handling message:`, err)
+                        })
+                    }
+                })
+
+                this.client.on("interactionCreate", async (interaction) => {
+                    if (!interaction.isButton()) return
+
+                    const customId = interaction.customId
+                    if (!customId.startsWith("cmd_")) return
+
+                    const command = customId.slice(4)
+                    await interaction.reply({ content: `Executing: ${command}`, ephemeral: true })
+
+                    const syntheticEvent = {
+                        event_id: `btn-${Date.now()}`,
+                        event_type: "message",
+                        chat_id: interaction.channelId,
+                        chat_type: "p2p" as const,
+                        message_id: interaction.message.id,
+                        sender: {
+                            sender_id: { open_id: interaction.user.id },
+                            sender_type: "user",
+                            tenant_key: "discord",
+                        },
+                        message: {
+                            message_type: "text",
+                            content: JSON.stringify({ text: command }),
+                        },
+                        _channelId: "discord",
+                    }
+
+                    if (deps.onMessage) {
+                        deps.onMessage(syntheticEvent).catch((err) => {
+                            this.logger.error(`[Discord] Error handling button click:`, err)
                         })
                     }
                 })
@@ -192,6 +223,96 @@ export class DiscordPlugin extends BaseChannelPlugin {
                     }
                 } catch (error) {
                     this.logger.error(`[Discord] Failed to send text:`, error)
+                }
+            },
+
+            sendCard: async (target: OutboundTarget, card: unknown): Promise<void> => {
+                if (!this.client) {
+                    this.logger.error("[Discord] Cannot send card, client not initialized")
+                    return
+                }
+
+                // Expected card structure from command-handler:
+                // { text: string, rows?: Array<Array<{ text: string, command: string }>> }
+                const cardData = card as { text?: string; rows?: Array<Array<{ text: string; command: string }>> }
+                if (!cardData) {
+                    this.logger.warn("[Discord] Invalid card data")
+                    return
+                }
+
+                try {
+                    const channel = await this.client.channels.fetch(target.address)
+                    if (!channel || !channel.isTextBased()) {
+                        this.logger.warn(`[Discord] Cannot send card, channel ${target.address} is not text-based or not found.`)
+                        return
+                    }
+
+                    // Build Discord message with components
+                    const messageOptions: { content: string; components?: ActionRowBuilder<ButtonBuilder>[] } = {
+                        content: cardData.text || "",
+                    }
+
+                    if (cardData.rows && cardData.rows.length > 0) {
+                        const components = cardData.rows.map((row) => {
+                            const actionRow = new ActionRowBuilder<ButtonBuilder>()
+                            for (const btn of row) {
+                                actionRow.addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId(`cmd_${btn.command}`)
+                                        .setLabel(btn.text)
+                                        .setStyle(ButtonStyle.Primary)
+                                )
+                            }
+                            return actionRow
+                        })
+                        messageOptions.components = components
+                    }
+
+                    await (<TextChannel>channel).send(messageOptions)
+                } catch (error) {
+                    this.logger.error(`[Discord] Failed to send card:`, error)
+                }
+            },
+
+            sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                if (!this.client) {
+                    this.logger.error("[Discord] Cannot send image, client not initialized")
+                    return
+                }
+
+                try {
+                    const channel = await this.client.channels.fetch(target.address)
+                    if (!channel || !channel.isTextBased()) {
+                        this.logger.warn(`[Discord] Cannot send image, channel ${target.address} is not text-based or not found.`)
+                        return
+                    }
+
+                    const attachment = new AttachmentBuilder(filePath)
+                    await (<TextChannel>channel).send({ files: [attachment] })
+                    this.logger.info(`[Discord] Image sent successfully: ${filePath}`)
+                } catch (error) {
+                    this.logger.error(`[Discord] Failed to send image:`, error)
+                }
+            },
+
+            sendFile: async (target: OutboundTarget, filePath: string): Promise<void> => {
+                if (!this.client) {
+                    this.logger.error("[Discord] Cannot send file, client not initialized")
+                    return
+                }
+
+                try {
+                    const channel = await this.client.channels.fetch(target.address)
+                    if (!channel || !channel.isTextBased()) {
+                        this.logger.warn(`[Discord] Cannot send file, channel ${target.address} is not text-based or not found.`)
+                        return
+                    }
+
+                    const attachment = new AttachmentBuilder(filePath)
+                    await (<TextChannel>channel).send({ files: [attachment] })
+                    this.logger.info(`[Discord] File sent successfully: ${filePath}`)
+                } catch (error) {
+                    this.logger.error(`[Discord] Failed to send file:`, error)
                 }
             },
         }

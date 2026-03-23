@@ -309,12 +309,8 @@ function appendPlatformContextSignature(
     if (signedSessions.size > 1000) signedSessions.clear()
     signedSessions.add(sessionId)
 
-    if (signatureLabel === "Lark") {
-      const attachDir = getAttachmentsDir()
-      return `${text}\n[Lark] Save files -> ${attachDir} (auto-sent to user). You can send files (images, PDFs, documents, etc.) to the user by saving them to this directory in your response.`
-    }
-
-    return `${text}\n[${signatureLabel}] Current platform is ${signatureLabel}. Do not assume Lark/Feishu MCP tools are available in this chat.`
+    const attachDir = getAttachmentsDir()
+    return `${text}\n[${signatureLabel}] Save files -> ${attachDir} (auto-send to user). You can send files (images, PDFs, documents, etc.) to the user by saving them to this directory in your response.`
   }
 
   return `${text}\n[${signatureLabel}]`

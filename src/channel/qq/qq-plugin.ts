@@ -62,6 +62,7 @@ export class QQPlugin extends BaseChannelPlugin {
             sandbox: this.appConfig.qq.sandbox,
             removeAt: true,
             logLevel: "info",
+            timeout: 60000,
             // Connection manager retry (Session/Connection)
             maxRetry: 10,
             // WebSocket receiver retry/backoff settings
@@ -211,11 +212,13 @@ export class QQPlugin extends BaseChannelPlugin {
             sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
                 this.logger.info(`[QQPlugin] Attempting to send image to ${target.address}: ${filePath}`)
                 try {
-                    const res = await this.qqBot.messageService.sendPrivateMessage(
-                        target.address,
-                        [segment.image(filePath)],
-                    )
-                    this.logger.info(`[QQPlugin] Image sent successfully. Response: ${JSON.stringify(res)}`)
+                    const uploadResult = await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                        targetId: target.address,
+                        targetType: 'user',
+                        fileType: 1,
+                        sendMessage: true,
+                    })
+                    this.logger.info(`[QQPlugin] Image upload+send result: ${JSON.stringify(uploadResult)}`)
                 } catch (err) {
                     this.logger.error(`[QQPlugin] Failed to send image to ${target.address}: ${err}`)
                     throw err
@@ -225,42 +228,134 @@ export class QQPlugin extends BaseChannelPlugin {
             sendFile: async (target: OutboundTarget, filePath: string): Promise<void> => {
                 this.logger.info(`[QQPlugin] Attempting to send file to ${target.address}: ${filePath}`)
                 try {
-                    const res = await this.qqBot.messageService.sendPrivateMessage(
-                        target.address,
-                        [segment.video(filePath)],
-                    )
-                    this.logger.info(`[QQPlugin] File sent successfully. Response: ${JSON.stringify(res)}`)
+                    const ext = filePath.toLowerCase().split('.').pop() || ''
+                    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+                    const audioExts = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'silk']
+                    const videoExts = ['mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv']
+
+                    if (imageExts.includes(ext)) {
+                        await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                            targetId: target.address,
+                            targetType: 'user',
+                            fileType: 1,
+                            sendMessage: true,
+                        })
+                        this.logger.info(`[QQPlugin] Image file sent.`)
+                        return
+                    } else if (audioExts.includes(ext)) {
+                        const uploadResult = await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                            targetId: target.address,
+                            targetType: 'user',
+                            fileType: 3,
+                            sendMessage: false,
+                        })
+                        const fileInfo = (uploadResult as any).file_info
+                        if (fileInfo) {
+                            await this.qqBot.request.post(`/v2/users/${target.address}/messages`, {
+                                msg_type: 7,
+                                content: " ",
+                                media: { file_info: fileInfo },
+                                msg_seq: Math.floor(Math.random() * 1000000),
+                            })
+                            this.logger.info(`[QQPlugin] Audio sent via two-step.`)
+                            return
+                        }
+                        this.logger.warn(`[QQPlugin] Audio upload succeeded but no file_info, falling back to text`)
+                    } else if (videoExts.includes(ext)) {
+                        const uploadResult = await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                            targetId: target.address,
+                            targetType: 'user',
+                            fileType: 2,
+                            sendMessage: false,
+                        })
+                        const fileInfo = (uploadResult as any).file_info
+                        if (fileInfo) {
+                            await this.qqBot.request.post(`/v2/users/${target.address}/messages`, {
+                                msg_type: 7,
+                                content: " ",
+                                media: { file_info: fileInfo },
+                                msg_seq: Math.floor(Math.random() * 1000000),
+                            })
+                            this.logger.info(`[QQPlugin] Video sent via two-step.`)
+                            return
+                        }
+                        this.logger.warn(`[QQPlugin] Video upload succeeded but no file_info, falling back to text`)
+                    } else {
+                        const fileName = filePath.split(/[\\/]/).pop() || filePath
+                        const res = await this.qqBot.messageService.sendPrivateMessage(
+                            target.address,
+                            [segment.text(`📎 文件已保存: ${fileName}\n路径: ${filePath}`)],
+                        )
+                        this.logger.info(`[QQPlugin] File info sent as text. Response: ${JSON.stringify(res)}`)
+                        return
+                    }
                 } catch (err) {
                     this.logger.error(`[QQPlugin] Failed to send file to ${target.address}: ${err}`)
-                    throw err
+                    const fileName = filePath.split(/[\\/]/).pop() || filePath
+                    await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.text(`📎 文件已保存: ${fileName}\n路径: ${filePath}`)],
+                    )
                 }
             },
 
             sendAudio: async (target: OutboundTarget, filePath: string): Promise<void> => {
                 this.logger.info(`[QQPlugin] Attempting to send audio to ${target.address}: ${filePath}`)
                 try {
-                    const res = await this.qqBot.messageService.sendPrivateMessage(
-                        target.address,
-                        [segment.audio(filePath)],
-                    )
-                    this.logger.info(`[QQPlugin] Audio sent successfully. Response: ${JSON.stringify(res)}`)
+                    const uploadResult = await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                        targetId: target.address,
+                        targetType: 'user',
+                        fileType: 3,
+                        sendMessage: false,
+                    })
+                    const fileInfo = (uploadResult as any).file_info
+                    if (!fileInfo) {
+                        throw new Error(`Audio upload succeeded but no file_info: ${JSON.stringify(uploadResult)}`)
+                    }
+                    await this.qqBot.request.post(`/v2/users/${target.address}/messages`, {
+                        msg_type: 7,
+                        content: " ",
+                        media: { file_info: fileInfo },
+                        msg_seq: Math.floor(Math.random() * 1000000),
+                    })
+                    this.logger.info(`[QQPlugin] Audio sent successfully.`)
                 } catch (err) {
                     this.logger.error(`[QQPlugin] Failed to send audio to ${target.address}: ${err}`)
-                    throw err
+                    const fileName = filePath.split(/[\\/]/).pop() || filePath
+                    await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.text(`📎 音频已保存: ${fileName}\n路径: ${filePath}`)],
+                    )
                 }
             },
 
             sendVideo: async (target: OutboundTarget, filePath: string): Promise<void> => {
                 this.logger.info(`[QQPlugin] Attempting to send video to ${target.address}: ${filePath}`)
                 try {
-                    const res = await this.qqBot.messageService.sendPrivateMessage(
-                        target.address,
-                        [segment.video(filePath)],
-                    )
-                    this.logger.info(`[QQPlugin] Video sent successfully. Response: ${JSON.stringify(res)}`)
+                    const uploadResult = await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                        targetId: target.address,
+                        targetType: 'user',
+                        fileType: 2,
+                        sendMessage: false,
+                    })
+                    const fileInfo = (uploadResult as any).file_info
+                    if (!fileInfo) {
+                        throw new Error(`Video upload succeeded but no file_info: ${JSON.stringify(uploadResult)}`)
+                    }
+                    await this.qqBot.request.post(`/v2/users/${target.address}/messages`, {
+                        msg_type: 7,
+                        content: " ",
+                        media: { file_info: fileInfo },
+                        msg_seq: Math.floor(Math.random() * 1000000),
+                    })
+                    this.logger.info(`[QQPlugin] Video sent successfully.`)
                 } catch (err) {
                     this.logger.error(`[QQPlugin] Failed to send video to ${target.address}: ${err}`)
-                    throw err
+                    const fileName = filePath.split(/[\\/]/).pop() || filePath
+                    await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.text(`📎 视频已保存: ${fileName}\n路径: ${filePath}`)],
+                    )
                 }
             },
         }

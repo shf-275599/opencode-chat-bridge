@@ -198,7 +198,7 @@ async function main(): Promise<void> {
 
   const subAgentTracker = new SubAgentTracker({ serverUrl })
 
-  const outboundMedia = createOutboundMediaHandler({ 
+  const outboundMedia = createOutboundMediaHandler({
     logger,
     outbound: channelManager?.getChannel("feishu" as ChannelId)?.outbound,
   })

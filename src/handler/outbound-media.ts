@@ -22,7 +22,6 @@ import { getAttachmentsDir } from "../utils/paths.js"
 export interface OutboundMediaDeps {
   outbound?: ChannelOutboundAdapter
   logger: Logger
-  allowedUploadDirs?: string[]
 }
 
 export interface OutboundMediaHandler {
@@ -130,14 +129,8 @@ function defaultAllowedDir(): string {
   return getAttachmentsDir()
 }
 
-function buildAllowlist(extraDirs?: string[]): string[] {
-  const dirs = [normalizePath(defaultAllowedDir())]
-  if (extraDirs) {
-    for (const d of extraDirs) {
-      dirs.push(normalizePath(resolve(d)))
-    }
-  }
-  return dirs
+function buildAllowlist(): string[] {
+  return [normalizePath(defaultAllowedDir())]
 }
 
 /**
@@ -175,7 +168,7 @@ export function createOutboundMediaHandler(
   deps: OutboundMediaDeps,
 ): OutboundMediaHandler {
   const { outbound, logger } = deps
-  const allowlist = buildAllowlist(deps.allowedUploadDirs)
+  const allowlist = buildAllowlist()
 
   // Snapshot of files per chat/target — used to detect agent-created files
   const dirSnapshots = new Map<string, Set<string>>()
@@ -194,10 +187,14 @@ export function createOutboundMediaHandler(
 
       for (const fileName of entries) {
         if (snapshot.has(fileName)) continue
+        logger.info(`[OutboundMedia] New file detected: ${fileName} (not in snapshot)`)
         const filePath = join(dir, fileName)
         const type = classifyFile(fileName)
         if (type) {
+          logger.info(`[OutboundMedia] Classified as type: ${type}`)
           await processFile(filePath, target, adapter, type, logger, allowlist)
+        } else {
+          logger.warn(`[OutboundMedia] File not classified: ${fileName}`)
         }
       }
     }
@@ -225,57 +222,29 @@ export function createOutboundMediaHandler(
         return
       }
 
-      const paths = [...new Set(extractFilePaths(text))]
-      const hasTextPaths = paths.length > 0
+      logger.info(`[OutboundMedia] sendDetectedFiles called for ${target.address}`)
+
+      // Extract file paths from text
+      const extractedPaths = extractFilePaths(text)
+      logger.info(`[OutboundMedia] Extracted ${extractedPaths.length} paths from text: ${JSON.stringify(extractedPaths)}`)
+
+      // Snapshot-based detection
       const hasSnapshot = dirSnapshots.has(target.address)
+      logger.info(`[OutboundMedia] Snapshot exists: ${hasSnapshot}, target in map: ${dirSnapshots.has(target.address)}`)
 
-      if (!hasTextPaths && !hasSnapshot) {
-        logger.debug(`No file paths detected in response text (${text.length} chars)`)
-        return
-      }
-
-      const imagePaths: string[] = []
-      const audioPaths: string[] = []
-      const videoPaths: string[] = []
-      const filePaths: string[] = []
-      for (const p of paths) {
-        if (isImageFile(p)) imagePaths.push(p)
-        else if (isAudioFile(p)) audioPaths.push(p)
-        else if (isVideoFile(p)) videoPaths.push(p)
-        else if (isDocumentFile(p)) filePaths.push(p)
-      }
-
-      if (imagePaths.length > 0 && adapter.sendImage) {
-        logger.info(`Detected ${imagePaths.length} image path(s) in agent reply, attempting send`)
-        for (const filePath of imagePaths) {
-          await processFile(filePath, target, adapter, "image", logger, allowlist)
-        }
-      }
-
-      if (audioPaths.length > 0 && adapter.sendAudio) {
-        logger.info(`Detected ${audioPaths.length} audio path(s) in agent reply, attempting send`)
-        for (const filePath of audioPaths) {
-          await processFile(filePath, target, adapter, "audio", logger, allowlist)
-        }
-      }
-
-      if (videoPaths.length > 0 && adapter.sendVideo) {
-        logger.info(`Detected ${videoPaths.length} video path(s) in agent reply, attempting send`)
-        for (const filePath of videoPaths) {
-          await processFile(filePath, target, adapter, "video", logger, allowlist)
-        }
-      }
-
-      if (filePaths.length > 0 && adapter.sendFile) {
-        logger.info(`Detected ${filePaths.length} file path(s) in agent reply, attempting send`)
-        for (const filePath of filePaths) {
-          await processFile(filePath, target, adapter, "file", logger, allowlist)
-        }
-      }
-
-      // Also scan directory for new files created by agent (if snapshot was taken)
       if (hasSnapshot) {
         await scanNewFiles(target, adapter)
+      }
+
+      // Also process extracted paths from text
+      for (const filePath of extractedPaths) {
+        const type = classifyFile(filePath)
+        if (type) {
+          logger.info(`[OutboundMedia] Processing extracted path: ${filePath}, type: ${type}`)
+          await processFile(filePath, target, adapter, type, logger, allowlist)
+        } else {
+          logger.warn(`[OutboundMedia] Extracted path not classified: ${filePath}`)
+        }
       }
     },
   }
@@ -305,18 +274,25 @@ async function processFile(
       return
     }
 
+    logger.debug(`processFile: type=${type}, file=${filePath}, sendImage=${!!adapter.sendImage}, sendFile=${!!adapter.sendFile}`)
     if (type === "image" && adapter.sendImage) {
+      logger.info(`[OutboundMedia] Sending image via plugin: ${realPath}`)
       await adapter.sendImage(target, realPath)
       logger.info(`Sent image via channel plugin: ${realPath}`)
     } else if (type === "audio" && adapter.sendAudio) {
+      logger.info(`[OutboundMedia] Sending audio via plugin: ${realPath}`)
       await adapter.sendAudio(target, realPath)
       logger.info(`Sent audio via channel plugin: ${realPath}`)
     } else if (type === "video" && adapter.sendVideo) {
+      logger.info(`[OutboundMedia] Sending video via plugin: ${realPath}`)
       await adapter.sendVideo(target, realPath)
       logger.info(`Sent video via channel plugin: ${realPath}`)
     } else if (type === "file" && adapter.sendFile) {
+      logger.info(`[OutboundMedia] Sending file via plugin: ${realPath}`)
       await adapter.sendFile(target, realPath)
       logger.info(`Sent file via channel plugin: ${realPath}`)
+    } else {
+      logger.warn(`[OutboundMedia] No suitable sender for type=${type}, file=${filePath}`)
     }
   } catch (err) {
     logger.warn(`Failed to send ${type} ${filePath}: ${err}`)

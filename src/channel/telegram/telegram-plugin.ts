@@ -104,7 +104,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
   override gateway: ChannelGatewayAdapter
   override messaging: ChannelMessagingAdapter
   override outbound: ChannelOutboundAdapter
-  override streaming: ChannelStreamingAdapter
+  override streaming?: ChannelStreamingAdapter | undefined
   override threading: ChannelThreadingAdapter
 
   private readonly threadMap = new Map<ThreadKey, string>()
@@ -186,7 +186,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
       },
 
       sendPlainText: async (target: OutboundTarget, text: string): Promise<void> => {
-        // 纯文本发送，不经过 Markdown 转换，避免特殊字符报错
+        await this.sendChatAction(target.address, "typing")
         const chunks = splitMessage(text, TELEGRAM_MAX_MESSAGE_LENGTH)
         for (const chunk of chunks) {
           await this.callApi("sendMessage", {
@@ -214,100 +214,31 @@ export class TelegramPlugin extends BaseChannelPlugin {
         try {
           const fileData = await readFile(filePath)
           const fileName = basename(filePath)
-          await this.callApiMultipart("sendPhoto", target.address, "photo", fileData, fileName)
+          await this.callApiMultipart("sendDocument", target.address, "document", fileData, fileName)
           this.logger.info(`[TelegramPlugin] Image sent successfully: ${filePath}`)
         } catch (err) {
           this.logger.error(`[TelegramPlugin] Failed to send image to ${target.address}: ${err}`)
           throw err
         }
       },
-    }
 
-    this.streaming = {
-      createStreamingSession: (target: StreamTarget): StreamingSession => {
-        const sessionId = `telegram_stream_${Date.now()}`
-        let lastFlushAt = 0
-        let pendingTimer: ReturnType<typeof setTimeout> | null = null
-        let pendingPromise: Promise<void> | null = null
-        let resolvePending: (() => void) | null = null
-        const session: StreamingSession = {
-          sessionId,
-          target,
-          pendingUpdates: [],
-          createdAt: Date.now(),
-          // Do NOT inherit lastMessageId from inbound message — we can only edit
-          // Bot-sent messages, not the user's original message that triggered streaming.
-          lastMessageId: undefined,
-          lastRenderedText: "",
-          flush: async (): Promise<void> => {
-            const performFlush = async (): Promise<void> => {
-              pendingTimer = null
-              pendingPromise = null
-              resolvePending = null
-              const nextText = session.pendingUpdates.at(-1)?.trim() ?? ""
-              if (!nextText || nextText === session.lastRenderedText) return
-              const streamingText = this.buildStreamingPreview(nextText)
-              await this.upsertStreamingMessage(target.address, session, streamingText)
-              session.lastRenderedText = nextText
-              lastFlushAt = Date.now()
-            }
-
-            const waitMs = Math.max(0, TELEGRAM_STREAM_THROTTLE_MS - (Date.now() - lastFlushAt))
-            if (pendingPromise) return pendingPromise
-
-            pendingPromise = new Promise<void>((resolve) => {
-              resolvePending = resolve
-            })
-
-            if (waitMs === 0) {
-              await performFlush().finally(() => {
-                resolvePending?.()
-              })
-              return
-            }
-
-            pendingTimer = setTimeout(() => {
-              performFlush()
-                .catch((err) => {
-                  this.logger.warn(`[TelegramPlugin] Streaming flush failed: ${err}`)
-                })
-                .finally(() => {
-                  resolvePending?.()
-                })
-            }, waitMs)
-            return pendingPromise
-          },
-          close: async (finalText?: string): Promise<void> => {
-            // Cancel any pending timer
-            if (pendingTimer) {
-              clearTimeout(pendingTimer)
-              pendingTimer = null
-            }
-            // Wait for any in-progress flush to complete
-            if (pendingPromise) {
-              await pendingPromise.catch(() => {})
-            }
-            pendingPromise = null
-            resolvePending = null
-
-            const content = (finalText ?? session.pendingUpdates.at(-1) ?? "").trim()
-            if (!content) return
-
-            const converted = mdToMarkdownV2(content)
-            const chunks = splitMessage(converted, TELEGRAM_MAX_MESSAGE_LENGTH)
-            if (chunks.length === 0) return
-
-            await this.upsertStreamingMessage(target.address, session, chunks[0]!)
-            session.lastRenderedText = converted
-
-            for (const chunk of chunks.slice(1)) {
-              await this.sendMarkdownMessage(target.address, chunk)
-            }
-          },
+      sendFile: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        this.logger.info(`[TelegramPlugin] Attempting to send file to ${target.address}: ${filePath}`)
+        try {
+          const fileData = await readFile(filePath)
+          const fileName = basename(filePath)
+          await this.callApiMultipart("sendDocument", target.address, "document", fileData, fileName)
+          this.logger.info(`[TelegramPlugin] File sent successfully: ${filePath}`)
+        } catch (err) {
+          this.logger.error(`[TelegramPlugin] Failed to send file to ${target.address}: ${err}`)
+          throw err
         }
-        return session
       },
     }
+
+    // Telegram 不支持消息编辑的流式传输，直接禁用
+    // 原因：多次发送 "▌" 导致消息混乱，直接发送完整消息更可靠
+    this.streaming = undefined
 
     this.threading = {
       resolveThread: (inbound: NormalizedMessage): ThreadKey => inbound.chatId as ThreadKey,
@@ -560,11 +491,21 @@ export class TelegramPlugin extends BaseChannelPlugin {
   }
 
   private async sendMarkdownMessage(chatId: string, text: string): Promise<void> {
+    await this.sendChatAction(chatId, "typing")
     await this.callApi("sendMessage", {
       chat_id: chatId,
       text,
       parse_mode: "MarkdownV2",
     })
+  }
+
+  private async sendChatAction(chatId: string, action: string): Promise<void> {
+    try {
+      await this.callApi("sendChatAction", {
+        chat_id: chatId,
+        action,
+      })
+    } catch {}
   }
 
   private buildStreamingPreview(text: string): string {

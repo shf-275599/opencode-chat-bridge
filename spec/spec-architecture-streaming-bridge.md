@@ -93,16 +93,42 @@ interface StreamingBridge {
 ### 基础建设生态圈依靠
 - **INF-001**: `CardKitClient` - 作为中间缓冲层，管理系统本地状态与远端卡片 API 之间的更新节流机制。
 
-## 9. 示例及边缘情况 (Edge Cases)
+## 9. 响应发送逻辑 (sendFinalResponse)
+
+### 9.1 平台差异化处理
+
+当收到 `SessionIdle` 事件时，StreamingBridge 调用 `sendFinalResponse` 发送最终响应。不同平台的处理逻辑如下：
+
+| 平台 | card 对象 | 流式会话 | 响应发送方式 |
+|------|-----------|----------|--------------|
+| Feishu | ✅ 有 | ✅ 有 | 通过 `card.close()` 发送，卡片自动更新 |
+| Telegram | ❌ 无 | ❌ 无 | 通过 `plugin.outbound.sendText()` 发送 |
+| QQ | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
+| Discord | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
+| Wechat | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
+
+### 9.2 skipMessage 逻辑
+
+`sendFinalResponse(text, skipMessage)` 的第二个参数控制是否跳过 `sendText` 调用：
+- `skipMessage = true`: 仅当 Feishu 卡片已存在时使用（`!!card`）
+- `skipMessage = false`: 所有其他平台均通过 `plugin.outbound.sendText()` 发送
+
+**历史 bug**: 曾错误地使用 `!!card || !!streamSession` 作为 `skipMessage` 参数，导致拥有流式会话但无卡片的平台（如 QQ、Discord）跳过了消息发送。
+
+### 9.3 流式会话的 flush
+
+对于非 Feishu 平台，流式会话的 `flush()` 方法是空操作（no-op），因为这些平台不支持消息编辑。文本缓冲在内存中累积，等待 `SessionIdle` 时一次性发送。
+
+## 10. 示例及边缘情况 (Edge Cases)
 
 ### 边缘情况：意外遗弃的数据流 (Abandoned Streams)
 如果底层事件流突然中断（例如由于本地 `opencode` 进程崩溃导致 OOM），`EventProcessor` 将不再发出任何信号。此时，同步的 POST 请求将捕获异常并介入处理。无论 Promise 被 Resolve 还是 Reject，与该会话相关的监听器都会被可靠地注销并清理其内存引用。
 
-## 10. 验证标准
+## 11. 验证标准
 
 - 必须严格限制文本长度在 102,400 字符内，以防止超长负载拒绝服务攻击导致的系统崩溃或 IM 被封禁限流。
 - 无论系统正常完成还是遇到严重异常捕获退出，系统都必须确保在最终状态中安全调用 `card.close()` 将响应式 UI 封存。
 - 杜绝循环触发的交互传递：通过收集并比对 `requestId` 来过滤交互事件请求，防止重复处理引发的混乱逻辑冲突或死锁。
 
-## 11. 相关规范与进一步阅读
+## 12. 相关规范与进一步阅读
 - [消息处理器架构规范](./spec-architecture-message-handler.md)

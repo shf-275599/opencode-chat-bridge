@@ -136,13 +136,43 @@ export function createStreamingBridge(
         let gotFirstEvent = false
         let settled = false
         let syncResponseBody = ""
+        let typingInterval: ReturnType<typeof setInterval> | null = null
+
+        const startTyping = (): void => {
+          if (channelId !== "telegram" || typingInterval) return
+          const sendTypingAction = async (): Promise<void> => {
+            try {
+              const cfg = plugin?.config?.resolveAccount?.()
+              const token = cfg?.botToken
+              if (!token) return
+              await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+              })
+            } catch {}
+          }
+          void sendTypingAction()
+          typingInterval = setInterval(() => void sendTypingAction(), 4000)
+        }
+
+        const stopTyping = (): void => {
+          if (typingInterval) {
+            clearInterval(typingInterval)
+            typingInterval = null
+          }
+        }
+
         // Helper: send text reply and clean up reaction
         const sendFinalResponse = async (text: string, skipMessage = false): Promise<void> => {
+          logger.info(`[StreamingBridge] sendFinalResponse called: text.length=${text.length}, skipMessage=${skipMessage}, streamSession.close exists=${!!streamSession?.close}, channelId=${channelId}`)
           if (streamSession?.close) {
+            logger.info(`[StreamingBridge] Calling streamSession.close(), setting skipMessage=true`)
             await streamSession.close(text)
             skipMessage = true
           }
           if (!skipMessage) {
+            logger.info(`[StreamingBridge] skipMessage=false, checking plugin.outbound: plugin=${!!plugin}, outbound=${!!plugin?.outbound}, sendText=${!!plugin?.outbound?.sendText}`)
             if (plugin?.outbound?.sendText) {
               logger.info(`[StreamingBridge] Sending final response via plugin ${channelId} to ${chatId}`)
               await plugin.outbound.sendText({ address: chatId }, text)
@@ -165,6 +195,14 @@ export function createStreamingBridge(
               logger.warn(`deleteReaction failed: ${err}`)
             }
           }
+
+          if (deps.outboundMedia && plugin?.outbound) {
+            try {
+              await deps.outboundMedia.sendDetectedFiles({ address: chatId }, text, plugin.outbound)
+            } catch (err) {
+              logger.warn(`StreamingBridge sendDetectedFiles failed: ${err}`)
+            }
+          }
         }
 
         // Named listener reference — stored for removeListener calls
@@ -174,6 +212,7 @@ export function createStreamingBridge(
           if (action.sessionId !== sessionId) return
 
           gotFirstEvent = true
+          startTyping()
 
           switch (action.type) {
             case "TextDelta": {
@@ -274,6 +313,7 @@ export function createStreamingBridge(
             case "SessionIdle": {
               if (settled) return
               settled = true
+              stopTyping()
               clearTimeout(firstEventTimer)
               removeListener(eventListeners, sessionId, myListener)
               const responseText = textBuffer.trim() || "（无回复）"
@@ -283,16 +323,9 @@ export function createStreamingBridge(
               closeCard
                 .then(async () => {
                   try {
-                    await sendFinalResponse(responseText, !!card || !!streamSession)
+                    await sendFinalResponse(responseText, !!card)
                   } catch (err) {
                     logger.warn(`sendFinalResponse failed: ${err}`)
-                  }
-                  if (deps.outboundMedia) {
-                    try {
-                      await deps.outboundMedia.sendDetectedFiles({ address: chatId }, responseText, plugin?.outbound)
-                    } catch (err) {
-                      logger.warn(`outboundMedia.sendDetectedFiles failed: ${err}`)
-                    }
                   }
                   onComplete(responseText)
                   resolve()
@@ -300,16 +333,9 @@ export function createStreamingBridge(
                 .catch(async (err) => {
                   logger.warn(`card.close() failed: ${err}`)
                   try {
-                    await sendFinalResponse(responseText, !!streamSession)
+                    await sendFinalResponse(responseText, false)
                   } catch (replyErr) {
                     logger.warn(`sendFinalResponse failed after card.close error: ${replyErr}`)
-                  }
-                  if (deps.outboundMedia) {
-                    try {
-                      await deps.outboundMedia.sendDetectedFiles({ address: chatId }, responseText, plugin?.outbound)
-                    } catch (mediaErr) {
-                      logger.warn(`outboundMedia.sendDetectedFiles failed: ${mediaErr}`)
-                    }
                   }
                   onComplete(responseText)
                   resolve()
@@ -325,6 +351,7 @@ export function createStreamingBridge(
         const firstEventTimer = setTimeout(async () => {
           if (gotFirstEvent || settled) return
           settled = true
+          stopTyping()
           removeListener(eventListeners, sessionId, myListener)
           logger.warn(
             `No SSE events received within ${FIRST_EVENT_TIMEOUT_MS}ms for ${sessionId}, falling back to sync response`,

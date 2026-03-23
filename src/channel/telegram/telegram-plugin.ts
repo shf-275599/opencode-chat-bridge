@@ -185,14 +185,28 @@ export class TelegramPlugin extends BaseChannelPlugin {
         }
       },
 
+      sendPlainText: async (target: OutboundTarget, text: string): Promise<void> => {
+        // 纯文本发送，不经过 Markdown 转换，避免特殊字符报错
+        const chunks = splitMessage(text, TELEGRAM_MAX_MESSAGE_LENGTH)
+        for (const chunk of chunks) {
+          await this.callApi("sendMessage", {
+            chat_id: target.address,
+            text: chunk,
+          })
+        }
+      },
+
       sendCard: async (target: OutboundTarget, card: unknown): Promise<void> => {
         const inlineCard = card as TelegramInlineCard
-        await this.callApi("sendMessage", {
+        const params: Record<string, unknown> = {
           chat_id: target.address,
           text: inlineCard.text,
-          parse_mode: inlineCard.parse_mode ?? "MarkdownV2",
           reply_markup: inlineCard.reply_markup,
-        })
+        }
+        if (inlineCard.parse_mode) {
+          params.parse_mode = inlineCard.parse_mode
+        }
+        await this.callApi("sendMessage", params)
       },
 
       sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
@@ -364,12 +378,15 @@ export class TelegramPlugin extends BaseChannelPlugin {
   private async registerCommands(): Promise<void> {
     const commands = [
       { command: "new", description: "新建会话" },
-      { command: "sessions", description: "查看/切换会话" },
-      { command: "abort", description: "中止当前任务" },
-      { command: "compact", description: "压缩历史记录" },
-      { command: "share", description: "分享会话链接" },
-      { command: "agent", description: "切换Agent" },
-      { command: "help", description: "显示帮助" },
+      { command: "sessions", description: "连接会话" },
+      { command: "compact", description: "压缩历史" },
+      { command: "share", description: "分享会话" },
+      { command: "unshare", description: "取消分享" },
+      { command: "abort", description: "中止任务" },
+      { command: "agent", description: "列出/切换智能体" },
+      { command: "models", description: "列出/切换模型" },
+      { command: "cron", description: "计划任务管理" },
+      { command: "help", description: "显示此帮助" },
     ]
     await this.callApi("setMyCommands", { commands })
     this.logger.info("[TelegramPlugin] Bot commands registered successfully")

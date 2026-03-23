@@ -178,6 +178,12 @@ export interface ChannelOutboundAdapter {
   sendText(target: OutboundTarget, text: string): Promise<void>;
 
   /**
+   * Optional: Send plain text without markdown conversion
+   * Useful for messages containing special characters that conflict with markdown parsing
+   */
+  sendPlainText?(target: OutboundTarget, text: string): Promise<void>;
+
+  /**
    * Optional: Send rich card/formatted message
    * @param target Destination specification
    * @param card Card object (channel-specific format)

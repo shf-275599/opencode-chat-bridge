@@ -4,7 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## 0.38.1 (2026-03-23)
+## 0.39.0 (2026-03-23)
+
+### Features
+
+- **File Auto-Send**: Agent saves files to attachments directory, system automatically detects and sends to user via snapshot mechanism. Supports images, audio, video, and documents (PDF/Word/Excel/PPT/ZIP).
+- **QQ C2C File Sending Fixed**: Resolved 850026 error by using `uploadMedia` with `sendMessage: true` for images, and two-step upload+send for audio/video/documents.
+- **Discord Button Support**: Added button interaction handling for Discord, enabling interactive cards similar to Feishu.
+
+### Bug Fixes
+
+- **Response Sending Logic**: Fixed `skipMessage` logic to use `!!card` instead of `!!card || !!streamSession`, ensuring QQ/Discord properly receive final responses.
+- **Telegram Streaming Disabled**: Disabled streaming for Telegram as multiple sends with "▌" preview cause message chaos. Now sends complete message directly.
+
+### Improvements
+
+- **Unified Platform Messages**: All platforms now show unified file save prompt ("Save files -> attachments directory").
+- **QQ Filename Hint**: Documents sent via QQ now include a follow-up text message with original filename (due to QQ platform stripping filenames).
 
 ### Features
 

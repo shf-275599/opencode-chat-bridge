@@ -232,6 +232,7 @@ export class QQPlugin extends BaseChannelPlugin {
                     const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
                     const audioExts = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'silk']
                     const videoExts = ['mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv']
+                    const docExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv', 'zip', 'rar', '7z', 'tar', 'gz']
 
                     if (imageExts.includes(ext)) {
                         await this.qqBot.fileProcessor.uploadMedia(filePath, {
@@ -280,15 +281,38 @@ export class QQPlugin extends BaseChannelPlugin {
                             return
                         }
                         this.logger.warn(`[QQPlugin] Video upload succeeded but no file_info, falling back to text`)
-                    } else {
+                    } else if (docExts.includes(ext)) {
                         const fileName = filePath.split(/[\\/]/).pop() || filePath
-                        const res = await this.qqBot.messageService.sendPrivateMessage(
-                            target.address,
-                            [segment.text(`📎 文件已保存: ${fileName}\n路径: ${filePath}`)],
-                        )
-                        this.logger.info(`[QQPlugin] File info sent as text. Response: ${JSON.stringify(res)}`)
-                        return
+                        const uploadResult = await this.qqBot.fileProcessor.uploadMedia(filePath, {
+                            targetId: target.address,
+                            targetType: 'user',
+                            fileType: 4 as 1 | 2 | 3,
+                            sendMessage: false,
+                        })
+                        const fileInfo = (uploadResult as any).file_info
+                        if (fileInfo) {
+                            await this.qqBot.request.post(`/v2/users/${target.address}/messages`, {
+                                msg_type: 7,
+                                content: " ",
+                                media: { file_info: fileInfo },
+                                msg_seq: Math.floor(Math.random() * 1000000),
+                            })
+                            await this.qqBot.messageService.sendPrivateMessage(
+                                target.address,
+                                [segment.text(`📎 原始文件名: ${fileName}`)],
+                            )
+                            this.logger.info(`[QQPlugin] Document sent with filename hint.`)
+                            return
+                        }
+                        this.logger.warn(`[QQPlugin] Document upload succeeded but no file_info, falling back to text`)
                     }
+                    const fileName = filePath.split(/[\\/]/).pop() || filePath
+                    const res = await this.qqBot.messageService.sendPrivateMessage(
+                        target.address,
+                        [segment.text(`📎 文件已保存: ${fileName}\n路径: ${filePath}`)],
+                    )
+                    this.logger.info(`[QQPlugin] File info sent as text. Response: ${JSON.stringify(res)}`)
+                    return
                 } catch (err) {
                     this.logger.error(`[QQPlugin] Failed to send file to ${target.address}: ${err}`)
                     const fileName = filePath.split(/[\\/]/).pop() || filePath

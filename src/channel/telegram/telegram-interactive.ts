@@ -109,7 +109,6 @@ export function createTelegramInlineCard(
 
   return {
     text,
-    parse_mode: "MarkdownV2",
     reply_markup: {
       inline_keyboard,
     },

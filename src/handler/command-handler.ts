@@ -484,7 +484,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const matched = names.find((name) => name.toLowerCase() === targetRaw.toLowerCase())
+    // Normalize: "Sisyphus (Ultraworker)" ↔ "SisyphusUltraworker" should match
+    const normalize = (n: string) => n.replace(/\s*\([^)]*\)/, "").replace(/\s+/g, " ").trim().toLowerCase()
+    const normalizedTarget = normalize(targetRaw)
+
+    const matched = names.find((name) => name.toLowerCase() === targetRaw.toLowerCase() || normalize(name) === normalizedTarget)
+
     if (!matched) {
       const listText = names.length ? names.join(", ") : "none"
       await replyText(chatId, messageId, `Agent not found: ${targetRaw}\nAvailable: ${listText}`, channelId)

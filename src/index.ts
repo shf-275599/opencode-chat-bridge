@@ -288,17 +288,24 @@ async function main(): Promise<void> {
     logger.info("Interactive poller started (interval=3000ms)")
   }
 
-  const handleCardAction = config.feishu
-    ? async (action: FeishuCardAction) => {
-      const actionType = action.action?.value?.action
+  // Handle card actions from all channels (Feishu, Telegram, etc.)
+  // question_answer and permission_reply are channel-agnostic - always route to interactiveHandler
+  // which POSTs to opencode server APIs directly
+  const handleCardAction = async (action: FeishuCardAction): Promise<void> => {
+    const actionType = action.action?.value?.action
+
+    // Channel-agnostic: always handle via interactiveHandler
+    if (actionType === "question_answer" || actionType === "permission_reply") {
+      return interactiveHandler(action)
+    }
+
+    // Feishu-specific handlers (only when Feishu is configured)
+    if (config.feishu) {
       if (actionType === "view_subagent") {
         return subAgentCardHandler2?.(action)
       }
-      if (actionType === "question_answer" || actionType === "permission_reply") {
-        return interactiveHandler(action)
-      }
       if (actionType === "command_execute") {
-        const cmd = action.action?.value?.command
+        const cmd = (action.action?.value as any)?.command
         if (cmd) {
           const chatId = action.open_chat_id
           const messageId = action.open_message_id
@@ -306,11 +313,23 @@ async function main(): Promise<void> {
         }
         return
       }
-      logger.warn(`Unknown card action type: ${actionType}`)
+      const rawVal = action.action?.value as any
+      if (typeof rawVal === "string" && rawVal.startsWith("/")) {
+        const chatId = action.open_chat_id
+        const messageId = action.open_message_id
+        await commandHandler(chatId, chatId, messageId, rawVal)
+        return
+      }
+      if (rawVal?.command && typeof rawVal.command === "string" && rawVal.command.startsWith("/")) {
+        const chatId = action.open_chat_id
+        const messageId = action.open_message_id
+        await commandHandler(chatId, chatId, messageId, rawVal.command)
+        return
+      }
     }
-    : async (_action: FeishuCardAction) => {
-      logger.warn("Received card action but Feishu is not configured")
-    }
+
+    logger.warn(`Unknown card action type: ${actionType}`)
+  }
 
   // ═══════════════════════════════════════════
   // Phase 5: Subscribe to Opencode Events (SSE)

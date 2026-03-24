@@ -15,6 +15,9 @@ import { createTelegramInlineCard } from "../channel/telegram/telegram-interacti
 
 import type { ChannelManager } from "../channel/manager.js"
 import type { CronService } from "../cron/cron-service.js"
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
+import { homedir } from "node:os"
 
 export interface CommandHandlerDeps {
   serverUrl: string
@@ -61,6 +64,14 @@ interface ReplyCardPayload {
 
 export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   const { serverUrl, sessionManager, feishuClient, logger } = deps
+
+  const recentProviders = new Map<string, string[]>()
+
+  function recordProviderUsage(feishuKey: string, providerId: string): void {
+    const recent = recentProviders.get(feishuKey) ?? []
+    const filtered = recent.filter((p) => p !== providerId)
+    recentProviders.set(feishuKey, [providerId, ...filtered].slice(0, 5))
+  }
 
   function getPlugin(channelId: string) {
     return deps.channelManager?.getChannel(channelId as any)
@@ -414,7 +425,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       const helpText = `**⚡ 命令菜单**
 
 \`/new\` - 新建会话
-\`/sessions\` - 连接会话  
+\`/sessions\` - 连接会话
+\`/status\` - 显示状态
 \`/compact\` - 压缩历史
 \`/share\` - 分享会话
 \`/unshare\` - 取消分享
@@ -560,7 +572,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, `Agent switched to: ${matched}`, channelId)
   }
 
-  async function listModels(): Promise<ProviderModelInfo[]> {
+  async function listModels(feishuKey: string): Promise<ProviderModelInfo[]> {
     const resp = await fetch(`${serverUrl}/provider`)
     if (!resp.ok) {
       throw new Error(`List models failed: HTTP ${resp.status}`)
@@ -578,10 +590,17 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const allProviders = data.all ?? []
     const connectedIds = new Set(data.connected ?? [])
 
-    const availableProviders =
+    let availableProviders =
       connectedIds.size > 0
         ? allProviders.filter((provider) => connectedIds.has(provider.id))
         : allProviders
+
+    const junkProviders = ["test", "mock", "fake", "dummy", "placeholder"]
+    availableProviders = availableProviders.filter(
+      (p) => !junkProviders.some((j) => p.id.toLowerCase().includes(j)),
+    )
+
+    const recent = recentProviders.get(feishuKey) ?? []
 
     return availableProviders
       .flatMap((provider) =>
@@ -592,11 +611,43 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           modelName: model.name ?? model.id ?? modelKey,
         })),
       )
-      .sort((a, b) => a.id.localeCompare(b.id))
+      .sort((a, b) => {
+        const aRecent = recent.indexOf(a.providerId)
+        const bRecent = recent.indexOf(b.providerId)
+        if (aRecent !== -1 && bRecent !== -1) return aRecent - bRecent
+        if (aRecent !== -1) return -1
+        if (bRecent !== -1) return 1
+        return a.providerName.localeCompare(b.providerName)
+      })
   }
 
   function detectCurrentModel(mapping: SessionMapping | null): string | undefined {
     return mapping?.model ?? undefined
+  }
+
+  async function getCurrentModelFromFile(): Promise<string | undefined> {
+    try {
+      const home = homedir()
+      const statePath = join(home, ".local", "state", "opencode", "model.json")
+
+      const content = await readFile(statePath, "utf-8")
+      const state = JSON.parse(content) as {
+        favorite?: Array<{ providerID?: string; modelID?: string }>
+        recent?: Array<{ providerID?: string; modelID?: string }>
+      }
+
+      const favorites = state?.favorite
+      if (favorites && favorites.length > 0 && favorites[0]?.providerID && favorites[0]?.modelID) {
+        return `${favorites[0].providerID}/${favorites[0].modelID}`
+      }
+      const recent = state?.recent
+      if (recent && recent.length > 0 && recent[0]?.providerID && recent[0]?.modelID) {
+        return `${recent[0].providerID}/${recent[0].modelID}`
+      }
+      return undefined
+    } catch {
+      return undefined
+    }
   }
 
   async function handleModels(
@@ -612,11 +663,13 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const models = await listModels()
+    const models = await listModels(feishuKey)
     const targetRaw = args[0]
 
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
-      const currentModelId = detectCurrentModel(mapping)
+      const fileModelId = await getCurrentModelFromFile()
+      const localModelId = detectCurrentModel(mapping)
+      const currentModelId = fileModelId ?? localModelId
 
       if (channelId === "telegram") {
         const telegramCard = buildTelegramModelCard(currentModelId, models)
@@ -675,7 +728,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "models", arguments: matched.id }),
+        body: JSON.stringify({ model: matched.id }),
       },
     )
     if (!resp.ok) {
@@ -683,7 +736,141 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     sessionManager.setModel(feishuKey, matched.id)
+    recordProviderUsage(feishuKey, matched.providerId)
     await replyText(chatId, messageId, `Model switch command sent: ${matched.id}`, channelId)
+  }
+
+  async function handleStatus(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+  ): Promise<void> {
+    const lines: string[] = []
+
+    // 1. Server health
+    let serverHealthy = false
+    try {
+      const healthResp = await fetch(`${serverUrl}/global/health`)
+      if (healthResp.ok) {
+        const data = (await healthResp.json()) as { healthy?: boolean; version?: string }
+        serverHealthy = data.healthy === true
+        lines.push(`🟢 服务器: ${serverHealthy ? "在线" : "异常"}`)
+        if (data.version) lines.push(`📦 版本: ${data.version}`)
+      } else {
+        lines.push("🔴 服务器: 无法连接")
+      }
+    } catch {
+      lines.push("🔴 服务器: 无法连接")
+    }
+
+    // 2. Current model (from model.json, fallback to env)
+    const modelStr = await getCurrentModelFromFile()
+    if (modelStr) {
+      lines.push(`🤖 模型: ${modelStr}`)
+    } else {
+      lines.push("🤖 模型: 未配置")
+    }
+
+    // 3. Session binding
+    const mapping = sessionManager.getSession(feishuKey)
+    if (mapping) {
+      lines.push(`💬 会话: ${mapping.session_id}`)
+      lines.push(`🔧 Agent: ${mapping.agent}`)
+
+      try {
+        const sessionResp = await fetch(`${serverUrl}/session/${mapping.session_id}`)
+        if (sessionResp.ok) {
+          const sessionData = (await sessionResp.json()) as {
+            title?: string
+          }
+          if (sessionData.title) lines.push(`📝 标题: ${sessionData.title}`)
+        }
+      } catch {
+        // Session info fetch failed — not critical
+      }
+
+      try {
+        const cwd = process.env.OPENCODE_CWD || process.cwd()
+        const msgsResp = await fetch(`${serverUrl}/session/${mapping.session_id}/message?limit=1000`, {
+          headers: { "x-opencode-directory": cwd },
+        })
+        logger.info(`[status] messages resp status: ${msgsResp.status}, directory: ${cwd}`)
+        const rawText = await msgsResp.text()
+        logger.info(`[status] raw: ${rawText.slice(0, 300)}`)
+        if (msgsResp.ok) {
+          const messages = JSON.parse(rawText) as Array<{
+            info?: {
+              role?: string
+              summary?: boolean
+              tokens?: {
+                input?: number
+                cache?: { read?: number }
+              }
+            }
+          }>
+          logger.info(`[status] messages count: ${messages.length}`)
+          let maxTokens = 0
+          for (const msg of messages) {
+            if (msg.info?.role === "assistant" && !msg.info?.summary) {
+              const tokens = msg.info?.tokens
+              if (tokens) {
+                const input = tokens.input ?? 0
+                const cacheRead = tokens.cache?.read ?? 0
+                const total = input + cacheRead
+                if (total > maxTokens) maxTokens = total
+                logger.info(`[status] found assistant with tokens: input=${input}, cacheRead=${cacheRead}, total=${total}`)
+              }
+            }
+          }
+          logger.info(`[status] maxTokens: ${maxTokens}`)
+          if (maxTokens > 0) {
+            lines.push(`📊 Context: ${maxTokens.toLocaleString()}`)
+          }
+        }
+      } catch (e) {
+        logger.info(`[status] token fetch error: ${e}`)
+      }
+
+      try {
+        const providerResp = await fetch(`${serverUrl}/provider`)
+        if (providerResp.ok) {
+          const providerData = (await providerResp.json()) as {
+            all?: Array<{
+              id?: string
+              models?: Record<string, { name?: string; limit?: { context?: number } }>
+            }>
+          }
+          const modelStr = await getCurrentModelFromFile()
+          if (modelStr) {
+            const parts = modelStr.split("/")
+            const provId = parts[0]
+            const modelId = parts[1]
+            if (provId && modelId) {
+              for (const prov of providerData.all ?? []) {
+                if (prov.id === provId) {
+                  const modelInfo = prov.models?.[modelId]
+                  if (modelInfo?.limit?.context) {
+                    lines.push(`📊 Context: ${modelInfo.limit.context.toLocaleString()}`)
+                  }
+                  break
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Not critical
+      }
+    } else {
+      lines.push("💬 会话: 未绑定")
+      lines.push("💡 发送 /new 或任意消息以开始")
+    }
+
+    lines.push(`📂 目录: ${process.env.OPENCODE_CWD || process.cwd()}`)
+
+    const statusText = lines.join("\n")
+    await replyText(chatId, messageId, statusText, channelId)
   }
 
   return async function handleCommand(
@@ -728,6 +915,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           await handleAgent(feishuKey, chatId, messageId, channelId, parts.slice(1))
           return true
         case "/models":
+        case "/model":
           await handleModels(feishuKey, chatId, messageId, channelId, parts.slice(1))
           return true
 
@@ -739,6 +927,9 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           return true
         case "/unshare":
           await handleUnshare(feishuKey, chatId, messageId, channelId)
+          return true
+        case "/status":
+          await handleStatus(feishuKey, chatId, messageId, channelId)
           return true
         case "/":
         case "/help":

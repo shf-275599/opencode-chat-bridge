@@ -137,6 +137,11 @@ export function buildHelpCard(): Record<string, unknown> {
         },
         {
           tag: "button",
+          text: { tag: "plain_text", content: "📊 状态" },
+          value: { action: "command_execute", command: "/status" },
+        },
+        {
+          tag: "button",
           text: { tag: "plain_text", content: "🤖 选择 Agent" },
           value: { action: "command_execute", command: "/agent" },
         },
@@ -219,8 +224,8 @@ export function buildModelSelectorCard(
   models: Array<{ id: string; providerName: string; modelName: string }>,
   currentModelId?: string,
 ): Record<string, unknown> {
-  const visibleModels = models.slice(0, 12)
-  const truncatedCount = Math.max(0, models.length - visibleModels.length)
+  const currentModel = models.find((m) => m.id === currentModelId)
+  const otherModels = models.filter((m) => m.id !== currentModelId)
 
   return {
     schema: "2.0",
@@ -228,34 +233,62 @@ export function buildModelSelectorCard(
     header: {
       title: {
         tag: "plain_text",
-        content: "Model",
+        content: "🧠 Model",
       },
       template: "indigo",
     },
     body: {
       elements: [
+        ...(currentModel
+          ? [{
+            tag: "div",
+            text: {
+              tag: "lark_md",
+              content: `**当前模型:** ${currentModel.providerName} / ${currentModel.modelName}`,
+            },
+          }]
+          : [{
+            tag: "div",
+            text: {
+              tag: "lark_md",
+              content: "**当前模型:** 点击按钮切换",
+            },
+          }]),
         {
           tag: "markdown",
-          content: currentModelId
-            ? `**Current model:** \`${currentModelId}\`\n\nChoose a model below.`
-            : "**Choose a model below.**",
+          content: otherModels.length > 0 ? "**选择要切换的模型：**" : "当前已是全部可用模型。",
         },
-        ...visibleModels.map((model) => {
-          const isCurrent = model.id === currentModelId
-          return {
-            tag: "button",
-            text: {
-              tag: "plain_text",
-              content: `${isCurrent ? "* " : ""}${model.providerName} / ${model.modelName}`,
-            },
-            type: isCurrent ? "primary" : "default",
-            value: { action: "command_execute", command: `/models ${model.id}` },
-          }
-        }),
-        ...(truncatedCount > 0
+        ...otherModels.slice(0, 8).map((model) => ({
+          tag: "button",
+          text: {
+            tag: "plain_text",
+            content: `${model.providerName} / ${model.modelName}`,
+          },
+          type: "default",
+          value: { action: "command_execute", command: `/models ${model.id}` },
+        })),
+        ...(otherModels.length > 8
+          ? [{
+            tag: "overflow",
+            options: otherModels.slice(8, 18).map((model) => ({
+              text: {
+                tag: "plain_text",
+                content: `${model.providerName} / ${model.modelName}`,
+              },
+              value: `/models ${model.id}`,
+            })),
+          }]
+          : []),
+        ...(otherModels.length > 18
           ? [{
             tag: "markdown",
-            content: `And ${truncatedCount} more. Use \`/models provider/model\` to switch directly.`,
+            content: `_还有 ${otherModels.length - 18} 个模型，使用 \`/models provider/model\` 直接切换_`,
+          }]
+          : []),
+        ...(otherModels.length === 0 && !currentModel
+          ? [{
+            tag: "markdown",
+            content: "暂无可用模型。",
           }]
           : []),
       ],

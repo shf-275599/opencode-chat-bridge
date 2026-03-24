@@ -331,7 +331,7 @@ describe("createCommandHandler", () => {
       expect(mockFetch).toHaveBeenNthCalledWith(2, "http://test:4096/session/ses-123/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "models", arguments: "openai/gpt-5" }),
+        body: JSON.stringify({ model: "openai/gpt-5" }),
       })
       expect(mockSessionManager.setModel).toHaveBeenCalledWith("chat-1", "openai/gpt-5")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
@@ -402,11 +402,11 @@ describe("createCommandHandler", () => {
 
       expect(result).toBe(true)
       expect(mockFetch).toHaveBeenCalledWith(
-        "http://test:4096/session/ses-123/summarize",
+        "http://test:4096/session/ses-123/prompt_async",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ parts: [{ type: "text", text: "/compact", role: "user" }] }),
         },
       )
     })

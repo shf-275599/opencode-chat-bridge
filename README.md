@@ -63,7 +63,12 @@
 - `/compact`：执行上下文历史压缩（对应 `session.compact`）
 - `/share`：分享当前会话（对应 `session.share`）
 - `/abort`：中止当前正在执行的任务
+- `/model` 或 `/models`：切换模型（飞书返回交互式卡片，支持下拉菜单翻页）
+- `/agent`：切换 Agent（飞书返回交互式卡片）
+- `/status`：查看当前状态（服务器、模型、会话、Context 用量等）
 - `/help` 或 `/`：查看命令帮助菜单
+
+![斜杠命令演示](screenshot/slash.png)
 
 ---
 

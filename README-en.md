@@ -60,7 +60,12 @@ Type slash commands directly in the chat to manage opencode sessions:
 - `/compact`: Compact context history (equivalent to `session.compact`)
 - `/share`: Share the current session (equivalent to `session.share`)
 - `/abort`: Abort the currently executing task
+- `/model` or `/models`: Switch model (Interactive card with dropdown pagination in Feishu)
+- `/agent`: Switch agent (Interactive card in Feishu)
+- `/status`: View current status (server, model, session, context usage, etc.)
 - `/help` or `/`: Show the command help menu
+
+![Slash Commands Demo](screenshot/slash.png)
 
 ---
 

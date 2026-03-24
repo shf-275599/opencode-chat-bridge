@@ -318,7 +318,7 @@ export function createStreamingBridge(
               removeListener(eventListeners, sessionId, myListener)
               const responseText = textBuffer.trim() || "（无回复）"
               const closeCard = card
-                ? (cardStartPromise ?? Promise.resolve()).then(() => card!.close())
+                ? (cardStartPromise ?? Promise.resolve()).then(() => card!.close(responseText))
                 : Promise.resolve()
               closeCard
                 .then(async () => {

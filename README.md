@@ -205,33 +205,6 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 
 支持 `${ENV_VAR}` 环境变量插值和 JSONC 注释。无配置文件时自动从 `.env` 构建默认配置。
 
-### 微信配置说明
-
-微信使用腾讯官方 **iLink Bot API**，认证方式与其他平台不同：
-
-**启用方式：**
-```bash
-export WECHAT_ENABLED=true
-# 或在配置文件中
-"wechat": { "enabled": true }
-```
-
-**登录流程：**
-1. 首次运行时会自动显示二维码
-2. 在微信中打开 **ClawBot 插件**（设置 → ClawBot）
-3. 点击"连接"扫描二维码
-4. 确认后自动登录，登录态保存到 `wechat-session.json`
-
-**技术特点：**
-- 使用 HTTP 长轮询（35秒超时）接收消息
-- `context_token` 用于消息关联和回复
-- 支持文本、图片、语音（带文字识别）、文件
-
-**注意事项：**
-- 需要微信版本支持 ClawBot 插件
-- 登录态有效期受腾讯政策限制
-- 群聊支持需要额外配置
-
 ---
 
 ## 项目结构

@@ -178,3 +178,43 @@
 7. 在 opencode-im-bridge 中（或 `.env` 文件）配置该 Token。
 
 > **提示**：你可以通过配置 `DISCORD_ALLOWED_CHANNEL_IDS` (逗号分隔的频道ID列表) 来限制机器人只在特定的频道中回复消息。
+
+---
+
+## 微信机器人配置
+
+微信使用腾讯官方 **iLink Bot API**，认证方式与其他平台不同。
+
+### 1. 启用微信
+
+**方式一：环境变量**
+```bash
+export WECHAT_ENABLED=true
+```
+
+**方式二：配置文件**
+```jsonc
+"wechat": {
+  "enabled": true,
+  "sessionFile": "./data/wechat-session.json"
+}
+```
+
+### 2. 登录流程
+
+1. 首次运行时会自动显示二维码
+2. 在微信中打开 **ClawBot 插件**（设置 → ClawBot）
+3. 点击"连接"扫描二维码
+4. 确认后自动登录，登录态保存到配置的文件路径
+
+### 3. 技术特点
+
+- 使用 HTTP 长轮询（35秒超时）接收消息
+- `context_token` 用于消息关联和回复
+- 支持文本、图片、语音（带文字识别）、文件
+
+### 4. 注意事项
+
+- 需要微信版本支持 ClawBot 插件
+- 登录态有效期受腾讯政策限制
+- 群聊支持需要额外配置

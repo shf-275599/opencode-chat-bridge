@@ -292,9 +292,8 @@ async function main(): Promise<void> {
   // question_answer and permission_reply are channel-agnostic - always route to interactiveHandler
   // which POSTs to opencode server APIs directly
   const handleCardAction = async (action: FeishuCardAction): Promise<void> => {
-    const actionType = action.action?.value?.action
-
     // Channel-agnostic: always handle via interactiveHandler
+    const actionType = action.action?.value?.action
     if (actionType === "question_answer" || actionType === "permission_reply") {
       return interactiveHandler(action)
     }
@@ -313,22 +312,24 @@ async function main(): Promise<void> {
         }
         return
       }
-      const rawVal = action.action?.value as any
+      // Handle string value directly (e.g., overflow options)
+      const rawVal = action.action?.value as unknown
       if (typeof rawVal === "string" && rawVal.startsWith("/")) {
         const chatId = action.open_chat_id
         const messageId = action.open_message_id
         await commandHandler(chatId, chatId, messageId, rawVal)
         return
       }
-      if (rawVal?.command && typeof rawVal.command === "string" && rawVal.command.startsWith("/")) {
+      // Handle object with command property
+      if (rawVal && typeof rawVal === "object" && "command" in rawVal && typeof (rawVal as any).command === "string" && (rawVal as any).command.startsWith("/")) {
         const chatId = action.open_chat_id
         const messageId = action.open_message_id
-        await commandHandler(chatId, chatId, messageId, rawVal.command)
+        await commandHandler(chatId, chatId, messageId, (rawVal as any).command)
         return
       }
     }
 
-    logger.warn(`Unknown card action type: ${actionType}`)
+    logger.warn(`Unknown card action type: ${actionType}, value: ${JSON.stringify(action.action?.value)?.slice(0, 100)}`)
   }
 
   // ═══════════════════════════════════════════

@@ -15,7 +15,7 @@ import { createTelegramInlineCard } from "../channel/telegram/telegram-interacti
 
 import type { ChannelManager } from "../channel/manager.js"
 import type { CronService } from "../cron/cron-service.js"
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
 
@@ -723,21 +723,34 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const resp = await fetch(
-      `${serverUrl}/session/${mapping.session_id}/command`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: matched.id }),
-      },
-    )
-    if (!resp.ok) {
-      throw new Error(`Model switch failed: HTTP ${resp.status}`)
+    // Write to model.json like external bot does
+    try {
+      const home = homedir()
+      const statePath = join(home, ".local", "state", "opencode", "model.json")
+      const stateContent = await readFile(statePath, "utf-8").catch(() => '{"favorite":[],"recent":[]}')
+      const state = JSON.parse(stateContent) as {
+        favorite?: Array<{ providerID: string; modelID: string }>
+        recent?: Array<{ providerID: string; modelID: string }>
+      }
+
+      const [providerID, modelID] = matched.id.split("/")
+      if (providerID && modelID) {
+        state.favorite = [{ providerID, modelID }]
+        state.recent = state.recent?.filter(
+          (m) => !(m.providerID === providerID && m.modelID === modelID),
+        ) ?? []
+        state.recent.unshift({ providerID, modelID })
+        state.recent = state.recent.slice(0, 10)
+
+        await writeFile(statePath, JSON.stringify(state, null, 2))
+      }
+    } catch (err) {
+      logger.warn(`Failed to write model.json: ${err}`)
     }
 
     sessionManager.setModel(feishuKey, matched.id)
     recordProviderUsage(feishuKey, matched.providerId)
-    await replyText(chatId, messageId, `Model switch command sent: ${matched.id}`, channelId)
+    await replyText(chatId, messageId, `Model switched to: ${matched.id}`, channelId)
   }
 
   async function handleStatus(
@@ -790,16 +803,16 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         // Session info fetch failed — not critical
       }
 
+      let contextUsed = 0
+      let contextLimit = 0
+
       try {
         const cwd = process.env.OPENCODE_CWD || process.cwd()
         const msgsResp = await fetch(`${serverUrl}/session/${mapping.session_id}/message?limit=1000`, {
           headers: { "x-opencode-directory": cwd },
         })
-        logger.info(`[status] messages resp status: ${msgsResp.status}, directory: ${cwd}`)
-        const rawText = await msgsResp.text()
-        logger.info(`[status] raw: ${rawText.slice(0, 300)}`)
         if (msgsResp.ok) {
-          const messages = JSON.parse(rawText) as Array<{
+          const messages = JSON.parse(await msgsResp.text()) as Array<{
             info?: {
               role?: string
               summary?: boolean
@@ -809,8 +822,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
               }
             }
           }>
-          logger.info(`[status] messages count: ${messages.length}`)
-          let maxTokens = 0
           for (const msg of messages) {
             if (msg.info?.role === "assistant" && !msg.info?.summary) {
               const tokens = msg.info?.tokens
@@ -818,18 +829,13 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
                 const input = tokens.input ?? 0
                 const cacheRead = tokens.cache?.read ?? 0
                 const total = input + cacheRead
-                if (total > maxTokens) maxTokens = total
-                logger.info(`[status] found assistant with tokens: input=${input}, cacheRead=${cacheRead}, total=${total}`)
+                if (total > contextUsed) contextUsed = total
               }
             }
           }
-          logger.info(`[status] maxTokens: ${maxTokens}`)
-          if (maxTokens > 0) {
-            lines.push(`📊 Context: ${maxTokens.toLocaleString()}`)
-          }
         }
-      } catch (e) {
-        logger.info(`[status] token fetch error: ${e}`)
+      } catch {
+        // Not critical
       }
 
       try {
@@ -851,7 +857,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
                 if (prov.id === provId) {
                   const modelInfo = prov.models?.[modelId]
                   if (modelInfo?.limit?.context) {
-                    lines.push(`📊 Context: ${modelInfo.limit.context.toLocaleString()}`)
+                    contextLimit = modelInfo.limit.context
                   }
                   break
                 }
@@ -861,6 +867,15 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         }
       } catch {
         // Not critical
+      }
+
+      if (contextUsed > 0 || contextLimit > 0) {
+        if (contextLimit > 0) {
+          const pct = Math.round((contextUsed / contextLimit) * 100)
+          lines.push(`📊 Context: ${contextUsed.toLocaleString()} / ${contextLimit.toLocaleString()} (${pct}%)`)
+        } else {
+          lines.push(`📊 Context: ${contextUsed.toLocaleString()}`)
+        }
       }
     } else {
       lines.push("💬 会话: 未绑定")

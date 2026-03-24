@@ -42,6 +42,11 @@ describe("createCommandHandler", () => {
     mockFetch = vi.fn()
     globalThis.fetch = mockFetch
     vi.clearAllMocks()
+    // Mock filesystem reads to return empty model state
+    vi.mock("node:fs/promises", () => ({
+      readFile: vi.fn().mockRejectedValue(new Error("ENOENT")),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+    }))
   })
 
   function createHandler(sm?: SessionManager) {
@@ -328,15 +333,10 @@ describe("createCommandHandler", () => {
       const result = await handler("chat-1", "chat-1", "msg-1", "/models openai/gpt-5")
 
       expect(result).toBe(true)
-      expect(mockFetch).toHaveBeenNthCalledWith(2, "http://test:4096/session/ses-123/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "openai/gpt-5" }),
-      })
       expect(mockSessionManager.setModel).toHaveBeenCalledWith("chat-1", "openai/gpt-5")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
-        content: expect.stringContaining("Model switch command sent"),
+        content: expect.stringContaining("Model switched to"),
       })
     })
   })

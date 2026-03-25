@@ -28,7 +28,7 @@ export function buildThinkingCard(): Record<string, unknown> {
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "🔄 切换项目" },
+          text: { tag: "plain_text", content: "🔄 切换会话" },
           type: "default",
           value: { action: "command_execute", command: "/sessions" },
         },
@@ -63,7 +63,7 @@ export function buildResponseCard(text: string): Record<string, unknown> {
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "🔄 切换项目" },
+          text: { tag: "plain_text", content: "🔄 切换会话" },
           type: "default",
           value: { action: "command_execute", command: "/sessions" },
         },
@@ -296,6 +296,60 @@ export function buildModelSelectorCard(
   }
 }
 
+
+export function buildProjectCard(
+  projects: Array<{ id: string; worktree: string; name?: string }>,
+  currentWorktree?: string,
+): Record<string, unknown> {
+  const normalizedCurrent = (currentWorktree || "").replace(/\\/g, "/").toLowerCase()
+  const visibleProjects = projects.slice(0, 10)
+  const truncatedCount = Math.max(0, projects.length - visibleProjects.length)
+
+  return {
+    schema: "2.0",
+    config: { wide_screen_mode: true },
+    header: {
+      title: {
+        tag: "plain_text",
+        content: "📂 项目列表",
+      },
+      template: "blue",
+    },
+    body: {
+      elements: [
+        {
+          tag: "markdown",
+          content: "**点击按钮切换到对应项目：**",
+        },
+        ...visibleProjects.map((p) => {
+          const name = p.name || p.worktree.split("/").pop() || p.worktree
+          const isCurrent = p.worktree.replace(/\\/g, "/").toLowerCase() === normalizedCurrent
+          return {
+            tag: "button",
+            text: {
+              tag: "plain_text",
+              content: `${isCurrent ? "✓ " : ""}${name}`,
+            },
+            type: isCurrent ? "primary" : "default",
+            value: { action: "command_execute", command: `/projects ${name}` },
+          }
+        }),
+        ...(truncatedCount > 0
+          ? [{
+            tag: "markdown",
+            content: `还有 ${truncatedCount} 个项目，使用 \`/projects <名称>\` 直接切换`,
+          }]
+          : []),
+        ...(projects.length === 0
+          ? [{
+            tag: "markdown",
+            content: "暂无可用项目。",
+          }]
+          : []),
+      ],
+    },
+  }
+}
 
 export function buildErrorCard(msg: string): Record<string, unknown> {
   return {

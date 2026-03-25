@@ -10,7 +10,7 @@ import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
-import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard } from "../feishu/card-builder.js"
+import { buildResponseCard, buildProjectSelectorCard, buildProjectCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard } from "../feishu/card-builder.js"
 import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
 import { t, getLocale } from "../i18n/index.js"
 
@@ -151,6 +151,28 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         }]),
         [{ text: "New Session", payload: { action: "cmd" as const, command: "/new" } }],
       ],
+    )
+  }
+
+  interface ProjectInfo {
+    id: string
+    worktree: string
+    name?: string
+  }
+
+  function buildTelegramProjectCard(projects: ProjectInfo[], currentWorktree?: string) {
+    const normalizedCurrent = (currentWorktree || "").replace(/\\/g, "/").toLowerCase()
+    const rows = projects.slice(0, 8).map((p) => {
+      const name = p.name || p.worktree.split("/").pop() || p.worktree
+      const isCurrent = p.worktree.replace(/\\/g, "/").toLowerCase() === normalizedCurrent
+      return [{
+        text: isCurrent ? `✓ ${name}` : name,
+        payload: { action: "cmd" as const, command: `/projects ${name}` },
+      }]
+    })
+    return createTelegramInlineCard(
+      `Projects (${projects.length}):`,
+      rows,
     )
   }
 
@@ -482,42 +504,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   ): Promise<void> {
     const locale = getLocale(channelId)
 
-    interface ProjectInfo {
-      id: string
-      worktree: string
-      name?: string
-    }
-
-    if (args[0]?.toLowerCase() === "list") {
-      const resp = await fetch(`${serverUrl}/project`)
-      if (!resp.ok) {
-        throw new Error(`List projects failed: HTTP ${resp.status}`)
-      }
-
-      const projects = (await resp.json()) as ProjectInfo[]
-      if (projects.length === 0) {
-        await replyText(chatId, messageId, t(locale, "command.noProjects"), channelId)
-        return
-      }
-
-      const currentWorktree = process.env.OPENCODE_CWD || process.cwd()
-      const normalizedCurrent = currentWorktree.replace(/\\/g, "/").toLowerCase()
-
-      const projectLines = projects.slice(0, 10).map((p) => {
-        const name = p.name || p.worktree.split("/").pop() || p.worktree
-        const isCurrent = p.worktree.replace(/\\/g, "/").toLowerCase() === normalizedCurrent
-        const marker = isCurrent ? "✓ " : "- "
-        return `${marker}${name}\n  📁 ${p.worktree}`
-      }).join("\n\n")
-
-      const selectText = channelId === "feishu"
-        ? `**${t(locale, "command.projectsTitle")}**\n\n${projectLines}\n\n💡 ${t(locale, "command.projectsUsage")}`
-        : `*${t(locale, "command.projectsTitle")}*\n\n${projectLines}\n\n💡 ${t(locale, "command.projectsUsage")}`
-
-      await replyText(chatId, messageId, selectText, channelId)
-      return
-    }
-
     if (args[0]) {
       const targetProjectArg = args.join(" ").trim()
       const resp = await fetch(`${serverUrl}/project`)
@@ -559,8 +545,42 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const helpText = `${t(locale, "command.projectsTitle")}\n\n${t(locale, "command.projectsHelp")}`
-    await replyText(chatId, messageId, helpText, channelId)
+    const resp = await fetch(`${serverUrl}/project`)
+    if (!resp.ok) {
+      throw new Error(`List projects failed: HTTP ${resp.status}`)
+    }
+
+    const projects = (await resp.json()) as ProjectInfo[]
+    if (projects.length === 0) {
+      await replyText(chatId, messageId, t(locale, "command.noProjects"), channelId)
+      return
+    }
+
+    const currentWorktree = process.env.OPENCODE_CWD || process.cwd()
+
+    if (channelId === "telegram") {
+      const telegramCard = buildTelegramProjectCard(projects, currentWorktree)
+      if (telegramCard) {
+        const projectList = projects.slice(0, 10).map((p) => {
+          const name = p.name || p.worktree.split("/").pop() || p.worktree
+          return `- ${name}`
+        }).join("\n")
+        await replyCard(chatId, messageId, {
+          text: `📂 *Projects*\n\n${projectList}\n\n💡 Tap a button to switch`,
+          card: telegramCard,
+        }, channelId)
+        return
+      }
+    }
+
+    const card = buildProjectCard(projects, currentWorktree)
+    await replyCard(chatId, messageId, {
+      text: projects.slice(0, 10).map((p) => {
+        const name = p.name || p.worktree.split("/").pop() || p.worktree
+        return `- ${name}`
+      }).join("\n"),
+      card,
+    }, channelId)
   }
 
   async function handleHelp(

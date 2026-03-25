@@ -305,12 +305,12 @@ function appendPlatformContextSignature(
 ): string {
   const signatureLabel = getPlatformSignatureLabel(channelId, plugin)
 
-  if (!signedSessions.has(sessionId)) {
+    if (!signedSessions.has(sessionId)) {
     if (signedSessions.size > 1000) signedSessions.clear()
     signedSessions.add(sessionId)
 
     const attachDir = getAttachmentsDir()
-    return `${text}\n[${signatureLabel}] Save files -> ${attachDir} (auto-send to user). You can send files (images, PDFs, documents, etc.) to the user by saving them to this directory in your response.`
+    return `${text}\n[${signatureLabel}] Save files -> ${attachDir} (auto-send to user). You can send files (images, PDFs, documents, etc.) to the user by saving them to this directory in your response.\n\nScheduled tasks: Edit ./data/scheduled-tasks.json to manage cron jobs.`
   }
 
   return `${text}\n[${signatureLabel}]`

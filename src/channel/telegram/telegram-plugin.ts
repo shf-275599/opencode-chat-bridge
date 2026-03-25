@@ -336,6 +336,7 @@ export class TelegramPlugin extends BaseChannelPlugin {
     const commands = [
       { command: "new", description: "新建会话" },
       { command: "sessions", description: "连接会话" },
+      { command: "projects", description: "切换项目" },
       { command: "status", description: "显示状态" },
       { command: "compact", description: "压缩历史" },
       { command: "share", description: "分享会话" },

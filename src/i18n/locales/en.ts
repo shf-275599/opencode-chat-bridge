@@ -36,7 +36,7 @@ export const en = {
     projectSwitchedNoSession: "Switched to project: {project}",
     projectsTitle: "📂 OpenCode Projects",
     projectsUsage: "Use /projects <name> to switch",
-    projectsHelp: "/projects list - List all projects\n/projects <name> - Switch to a project",
+    projectsHelp: "/projects - List all projects (interactive card)\n/projects <name> - Switch to a project",
   },
   help: {
     title: "⚡ Command Menu",

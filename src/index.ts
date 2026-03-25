@@ -11,7 +11,7 @@
  *   5. Create FeishuPlugin + ChannelManager
  *   6. Subscribe to opencode events (SSE)
  *   7. Route incoming messages via message handler
- *   8. Optionally start CronService + HeartbeatService
+ *   8. Optionally start HeartbeatService + ScheduledTaskRuntime
  *   9. Graceful shutdown
  */
 
@@ -41,8 +41,9 @@ import { createFeishuGateway } from "./feishu/webhook-server.js"
 import { FeishuPlugin } from "./channel/feishu/feishu-plugin.js"
 import { ChannelManager } from "./channel/manager.js"
 import type { ChannelId } from "./channel/types.js"
-import { CronService } from "./cron/cron-service.js"
 import { HeartbeatService } from "./cron/heartbeat.js"
+import { scheduledTaskRuntime } from "./scheduled-task/runtime.js"
+import type { TaskDelivery } from "./scheduled-task/types.js"
 import { loadEnvFile } from "./utils/env-loader.js"
 import { needsSetup, runSetupWizard, pickConfig } from "./cli/setup-wizard.js"
 
@@ -226,26 +227,12 @@ async function main(): Promise<void> {
     ? createSubAgentCardHandler({ subAgentTracker, feishuClient, logger })
     : undefined
 
-  let cronService: CronService | undefined
-  if (config.cron) {
-    logger.info("Initializing cron service...")
-    cronService = new CronService({
-      config: config.cron,
-      sessionManager,
-      feishuClient,
-      channelManager,
-      serverUrl,
-      logger,
-    })
-  }
-
   const commandHandler = createCommandHandler({
     serverUrl,
     sessionManager,
     feishuClient,
     logger,
     channelManager,
-    cronService,
   })
 
   const { handleMessage, dispose: disposeDebouncer } = createMessageHandler({
@@ -483,15 +470,9 @@ async function main(): Promise<void> {
   }
 
   // ═══════════════════════════════════════════
-  // Phase 8: Optional Services (Cron + Heartbeat)
+  // Phase 8: Optional Services (Heartbeat)
   // ═══════════════════════════════════════════
   let heartbeatService: HeartbeatService | undefined
-
-  if (cronService) {
-    cronService.start().catch((err: any) => {
-      logger.error(`Failed to start CronService: ${err}`)
-    })
-  }
 
   if (config.heartbeat) {
     logger.info("Starting heartbeat service...")
@@ -505,6 +486,27 @@ async function main(): Promise<void> {
     heartbeatService.start()
   }
 
+  const sendTaskDelivery: (delivery: TaskDelivery) => Promise<void> = async (delivery) => {
+    const plugin = channelManager?.getChannel(delivery.channelId as ChannelId)
+    if (plugin?.outbound) {
+      await plugin.outbound.sendText(
+        { address: delivery.chatId },
+        `🕒 **${delivery.scheduleSummary}**\n${delivery.messageText}`,
+      )
+    } else if (delivery.channelId === "feishu") {
+      await feishuClient.sendMessage(delivery.chatId, {
+        msg_type: "text",
+        content: JSON.stringify({ text: `🕒 [${delivery.scheduleSummary}] ${delivery.messageText}` }),
+      })
+    }
+  }
+
+  await scheduledTaskRuntime.initialize(sendTaskDelivery, {
+    serverUrl,
+    logger,
+  })
+  logger.info("Scheduled task runtime initialized")
+
   // ═══════════════════════════════════════════
   // Graceful Shutdown
   // ═══════════════════════════════════════════
@@ -514,8 +516,8 @@ async function main(): Promise<void> {
       abortController.abort()
       await channelManager.stopAll()
       if (webhookServer) await webhookServer.close()
-      cronService?.stop()
       heartbeatService?.stop()
+      await scheduledTaskRuntime.shutdown()
       interactivePoller?.stop()
       observer?.stop()
       disposeDebouncer()

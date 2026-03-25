@@ -36,7 +36,7 @@ export const zhCN = {
     projectSwitchedNoSession: "已切换到项目: {project}",
     projectsTitle: "📂 OpenCode 项目列表",
     projectsUsage: "使用 /projects <名称> 切换项目",
-    projectsHelp: "/projects list - 列出所有项目\n/projects <名称> - 切换到指定项目",
+    projectsHelp: "/projects - 列出所有项目（交互式卡片）\n/projects <名称> - 切换到指定项目",
   },
   help: {
     title: "⚡ 命令菜单",
@@ -98,7 +98,7 @@ export const zhCN = {
     lastRunNone: "上次: -",
     creation: {
       idle: "发送 /cron 管理任务。",
-      awaitingSchedule: "📋 创建新任务\n\n输入执行周期（例如 every 5m, daily 14:00, 0 * * * *）",
+      awaitingSchedule: "📋 创建新任务\n\n输入执行周期，例如：每天早上9点、每周五下午6点、每2小时\n（Cron 表达式也支持，如 every 5m、0 * * * *）",
       parsingSchedule: "正在解析周期: {scheduleText}...",
       awaitingPrompt: "⏰ 周期: {scheduleSummary}\n\n输入任务描述：",
       confirming: "确认创建任务？(y/n)",

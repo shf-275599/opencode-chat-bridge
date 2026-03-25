@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 0.42.0 (2026-03-26)
+
+### Refactor
+
+- **scheduled-task module**: Replace `cron-service.ts` with new `scheduled-task/` module containing runtime, executor, store, creation-manager, display, next-run, and schedule-parser
+- **Foreground state cleanup**: Remove dead busy-tracking code from `foregroundSessionState`
+- **Card builder**: Refactor for improved card construction
+- **Command handler**: Clean up command handling logic
+
+### Features
+
+- **Telegram plugin stub**: Added initial Telegram channel plugin structure
+
 ## 0.39.0 (2026-03-23)
 
 ### Features

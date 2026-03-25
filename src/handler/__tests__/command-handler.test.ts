@@ -127,7 +127,7 @@ describe("createCommandHandler", () => {
       expect(mockFetch).not.toHaveBeenCalled()
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
-        content: JSON.stringify({ text: "当前没有绑定的会话。" }),
+        content: JSON.stringify({ text: "当前没有绑定的会话。请使用 /sessions 或 /new 创建。" }),
       })
     })
   })
@@ -422,7 +422,7 @@ describe("createCommandHandler", () => {
       expect(mockFetch).not.toHaveBeenCalled()
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
-        content: JSON.stringify({ text: "当前没有绑定的会话。" }),
+        content: JSON.stringify({ text: "当前没有绑定的会话。请使用 /sessions 或 /new 创建。" }),
       })
     })
   })

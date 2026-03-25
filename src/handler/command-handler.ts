@@ -12,6 +12,7 @@ import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
 import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard } from "../feishu/card-builder.js"
 import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
+import { t, getLocale } from "../i18n/index.js"
 
 import type { ChannelManager } from "../channel/manager.js"
 import type { CronService } from "../cron/cron-service.js"
@@ -199,7 +200,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const data = (await resp.json()) as { id: string }
     sessionManager.setMapping(feishuKey, data.id)
     logger.info(`/new: created session ${data.id}, bound to ${feishuKey}`)
-    await replyText(chatId, messageId, `已创建新会话: ${data.id}`, channelId)
+    await replyText(chatId, messageId, t(getLocale(channelId), "command.newSession", { sessionId: data.id }), channelId)
   }
 
   async function handleCompact(
@@ -208,13 +209,14 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
-    await replyText(chatId, messageId, "正在压缩会话历史，请稍候...", channelId)
+    await replyText(chatId, messageId, t(locale, "command.compacting"), channelId)
 
     const resp = await fetch(`${serverUrl}/session/${mapping.session_id}/prompt_async`, {
       method: "POST",
@@ -227,7 +229,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/compact: summarized session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `已压缩会话历史 (会话: ${mapping.session_id})`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.compacted", { sessionId: mapping.session_id }), channelId)
   }
 
   async function handleShare(
@@ -236,9 +238,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
@@ -255,9 +258,9 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const shareUrl = data.share?.url
     logger.info(`/share: shared session ${mapping.session_id}, url: ${shareUrl}`)
     if (shareUrl) {
-      await replyText(chatId, messageId, `会话已分享: ${shareUrl}`, channelId)
+      await replyText(chatId, messageId, t(locale, "command.sessionShared", { url: shareUrl }), channelId)
     } else {
-      await replyText(chatId, messageId, `会话已分享 (会话: ${mapping.session_id})`, channelId)
+      await replyText(chatId, messageId, t(locale, "command.sessionSharedWithId", { sessionId: mapping.session_id }), channelId)
     }
   }
 
@@ -267,9 +270,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
@@ -281,7 +285,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/unshare: unshared session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `已取消分享会话 (会话: ${mapping.session_id})`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.shareCanceled", { sessionId: mapping.session_id }), channelId)
   }
 
   async function handleAbort(
@@ -290,9 +294,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
@@ -302,7 +307,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/abort: aborted session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `已中止会话: ${mapping.session_id}`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.sessionAborted", { sessionId: mapping.session_id }), channelId)
   }
 
   async function handleSessions(
@@ -311,6 +316,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const resp = await fetch(`${serverUrl}/session`)
     if (!resp.ok) {
       throw new Error(`List sessions failed: HTTP ${resp.status}`)
@@ -318,7 +324,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     const sessions = (await resp.json()) as Session[]
     if (sessions.length === 0) {
-      await replyText(chatId, messageId, "暂无会话。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessions"), channelId)
       return
     }
 
@@ -329,7 +335,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         const current = sessions.splice(existingIndex, 1)[0]
         if (current) sessions.unshift(current)
       } else {
-        sessions.unshift({ id: currentSessionId, title: "当前会话" })
+        sessions.unshift({ id: currentSessionId, title: t(locale, "status.session") })
       }
     }
 
@@ -355,7 +361,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (channelId !== "feishu") {
       const sessionList = sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (\`${session.id}\`)`).join("\n")
-      await replyText(chatId, messageId, `**最近会话列表：**\n\n${sessionList}\n\n💡 使用 \`/connect {session_id}\` 进行连接`, channelId)
+      await replyText(chatId, messageId, t(locale, "command.recentSessions", { sessions: sessionList }), channelId)
       return
     }
 
@@ -373,21 +379,20 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     targetSessionId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const checkResp = await fetch(`${serverUrl}/session/${targetSessionId}`)
     if (!checkResp.ok) {
-      await replyText(chatId, messageId, "会话不存在。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.sessionNotFound"), channelId)
       return
     }
 
-    // Replace the existing mapping in place so session-scoped metadata such as
-    // the selected model can be preserved across reconnects.
     const success = sessionManager.setMapping(feishuKey, targetSessionId)
     if (!success) {
       throw new Error("Failed to set session mapping")
     }
 
     logger.info(`/connect: bound ${feishuKey} to session ${targetSessionId}`)
-    await replyText(chatId, messageId, `已连接到会话: ${targetSessionId}`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.connectedToSession", { sessionId: targetSessionId }), channelId)
   }
 
   async function handleSessionCommand(
@@ -397,9 +402,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     command: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "当前没有绑定的会话。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
@@ -413,7 +419,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     logger.info(`/${command}: executed on session ${mapping.session_id}`)
-    await replyText(chatId, messageId, `已执行 /${command} (会话: ${mapping.session_id})`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.executing", { command, sessionId: mapping.session_id }), channelId)
   }
 
   async function handleHelp(
@@ -421,20 +427,21 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     if (channelId !== "feishu") {
-      const helpText = `**⚡ 命令菜单**
+      const helpText = `**${t(locale, "help.title")}**
 
-\`/new\` - 新建会话
-\`/sessions\` - 连接会话
-\`/status\` - 显示状态
-\`/compact\` - 压缩历史
-\`/share\` - 分享会话
-\`/unshare\` - 取消分享
-\`/abort\` - 中止任务
-\`/agent\` - 列出/切换智能体
-\`/models\` - 列出/切换模型
-\`/cron\` - 计划任务管理
-\`/help\` - 显示此帮助`
+\`/new\` - ${t(locale, "help.new")}
+\`/sessions\` - ${t(locale, "help.sessions")}
+\`/status\` - ${t(locale, "help.status")}
+\`/compact\` - ${t(locale, "help.compact")}
+\`/share\` - ${t(locale, "help.share")}
+\`/unshare\` - ${t(locale, "help.unshare")}
+\`/abort\` - ${t(locale, "help.abort")}
+\`/agent\` - ${t(locale, "help.agent")}
+\`/models\` - ${t(locale, "help.models")}
+\`/cron\` - ${t(locale, "help.cron")}
+\`/help\` - ${t(locale, "help.help")}`
       await replyText(chatId, messageId, helpText, channelId)
       return
     }
@@ -453,9 +460,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string,
     args: string[],
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const cron = deps.cronService
     if (!cron) {
-      await replyText(chatId, messageId, "Cron 服务未启用。", channelId)
+      await replyText(chatId, messageId, t(locale, "command.cronNotEnabled"), channelId)
       return
     }
 
@@ -463,7 +471,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     if (sub === "list") {
       const jobs = cron.getJobs()
       if (jobs.length === 0) {
-        await replyText(chatId, messageId, "当前没有任何定时任务。", channelId)
+        await replyText(chatId, messageId, t(locale, "command.noCronJobs"), channelId)
         return
       }
 
@@ -471,22 +479,22 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         const status = job.enabled !== false ? "[启用]" : "[停用]"
         return `${status} ${job.id || job.name} | ${job.schedule}\n  text: ${job.prompt}\n  chat: ${job.chatId}`
       })
-      await replyText(chatId, messageId, `Cron 任务列表:\n\n${lines.join("\n\n")}`, channelId)
+      await replyText(chatId, messageId, t(locale, "command.cronJobList", { jobs: lines.join("\n\n") }), channelId)
       return
     }
 
     if (sub === "remove") {
       const jobId = args[1]
       if (!jobId) {
-        await replyText(chatId, messageId, "用法：/cron remove <jobId>", channelId)
+        await replyText(chatId, messageId, t(locale, "command.cronUsage"), channelId)
         return
       }
       const success = await cron.removeJob(jobId)
-      await replyText(chatId, messageId, success ? `已成功移除任务: ${jobId}` : `找不到任务: ${jobId}`, channelId)
+      await replyText(chatId, messageId, t(locale, success ? "command.cronJobRemoved" : "command.cronJobNotFound", { jobId }), channelId)
       return
     }
 
-    await replyText(chatId, messageId, "目前支持的子命令：/cron list, /cron remove <id>。", channelId)
+    await replyText(chatId, messageId, t(locale, "command.cronSubcommands"), channelId)
   }
 
   async function handleAgent(
@@ -496,9 +504,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string,
     args: string[],
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "No session bound yet. Use /sessions or /new first.", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
@@ -556,7 +565,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    // Normalize: "Sisyphus (Ultraworker)" ↔ "SisyphusUltraworker" should match
     const normalize = (n: string) => n.replace(/\s*\([^)]*\)/, "").replace(/\s+/g, " ").trim().toLowerCase()
     const normalizedTarget = normalize(targetRaw)
 
@@ -564,12 +572,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (!matched) {
       const listText = names.length ? names.join(", ") : "none"
-      await replyText(chatId, messageId, `Agent not found: ${targetRaw}\nAvailable: ${listText}`, channelId)
+      await replyText(chatId, messageId, t(locale, "command.agentNotFound", { agent: targetRaw, list: listText }), channelId)
       return
     }
 
     sessionManager.setMapping(feishuKey, mapping.session_id, matched)
-    await replyText(chatId, messageId, `Agent switched to: ${matched}`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.agentSwitched", { agent: matched }), channelId)
   }
 
   async function listModels(feishuKey: string): Promise<ProviderModelInfo[]> {
@@ -657,9 +665,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string,
     args: string[],
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const mapping = sessionManager.getSession(feishuKey)
     if (!mapping) {
-      await replyText(chatId, messageId, "No session bound yet. Use /sessions or /new first.", channelId)
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
       return
     }
 
@@ -719,11 +728,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     const matched = models.find((model) => model.id.toLowerCase() === targetRaw.toLowerCase())
     if (!matched) {
       const listText = models.length ? models.map((model) => model.id).join(", ") : "none"
-      await replyText(chatId, messageId, `Model not found: ${targetRaw}\nAvailable: ${listText}`, channelId)
+      await replyText(chatId, messageId, t(locale, "command.modelNotFound", { model: targetRaw, list: listText }), channelId)
       return
     }
 
-    // Write to model.json like external bot does
     try {
       const home = homedir()
       const statePath = join(home, ".local", "state", "opencode", "model.json")
@@ -750,7 +758,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     sessionManager.setModel(feishuKey, matched.id)
     recordProviderUsage(feishuKey, matched.providerId)
-    await replyText(chatId, messageId, `Model switched to: ${matched.id}`, channelId)
+    await replyText(chatId, messageId, t(locale, "command.modelSwitched", { model: matched.id }), channelId)
   }
 
   async function handleStatus(
@@ -759,37 +767,35 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     messageId: string,
     channelId: string,
   ): Promise<void> {
+    const locale = getLocale(channelId)
     const lines: string[] = []
 
-    // 1. Server health
     let serverHealthy = false
     try {
       const healthResp = await fetch(`${serverUrl}/global/health`)
       if (healthResp.ok) {
         const data = (await healthResp.json()) as { healthy?: boolean; version?: string }
         serverHealthy = data.healthy === true
-        lines.push(`🟢 服务器: ${serverHealthy ? "在线" : "异常"}`)
-        if (data.version) lines.push(`📦 版本: ${data.version}`)
+        lines.push(serverHealthy ? t(locale, "status.serverOnline") : t(locale, "status.serverOffline"))
+        if (data.version) lines.push(t(locale, "status.serverVersion", { version: data.version }))
       } else {
-        lines.push("🔴 服务器: 无法连接")
+        lines.push(t(locale, "status.cannotConnect"))
       }
     } catch {
-      lines.push("🔴 服务器: 无法连接")
+      lines.push(t(locale, "status.cannotConnect"))
     }
 
-    // 2. Current model (from model.json, fallback to env)
     const modelStr = await getCurrentModelFromFile()
     if (modelStr) {
-      lines.push(`🤖 模型: ${modelStr}`)
+      lines.push(t(locale, "status.model", { model: modelStr }))
     } else {
-      lines.push("🤖 模型: 未配置")
+      lines.push(t(locale, "status.modelUnconfigured"))
     }
 
-    // 3. Session binding
     const mapping = sessionManager.getSession(feishuKey)
     if (mapping) {
-      lines.push(`💬 会话: ${mapping.session_id}`)
-      lines.push(`🔧 Agent: ${mapping.agent}`)
+      lines.push(t(locale, "status.sessionBound", { sessionId: mapping.session_id }))
+      lines.push(t(locale, "status.agent", { agent: mapping.agent }))
 
       try {
         const sessionResp = await fetch(`${serverUrl}/session/${mapping.session_id}`)
@@ -797,7 +803,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           const sessionData = (await sessionResp.json()) as {
             title?: string
           }
-          if (sessionData.title) lines.push(`📝 标题: ${sessionData.title}`)
+          if (sessionData.title) lines.push(t(locale, "status.title", { title: sessionData.title }))
         }
       } catch {
         // Session info fetch failed — not critical
@@ -872,17 +878,21 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       if (contextUsed > 0 || contextLimit > 0) {
         if (contextLimit > 0) {
           const pct = Math.round((contextUsed / contextLimit) * 100)
-          lines.push(`📊 Context: ${contextUsed.toLocaleString()} / ${contextLimit.toLocaleString()} (${pct}%)`)
+          lines.push(t(locale, "status.contextWithLimit", {
+            used: contextUsed.toLocaleString(),
+            limit: contextLimit.toLocaleString(),
+            pct: pct.toString(),
+          }))
         } else {
-          lines.push(`📊 Context: ${contextUsed.toLocaleString()}`)
+          lines.push(t(locale, "status.context", { used: contextUsed.toLocaleString() }))
         }
       }
     } else {
-      lines.push("💬 会话: 未绑定")
-      lines.push("💡 发送 /new 或任意消息以开始")
+      lines.push(t(locale, "status.sessionUnbound"))
+      lines.push(t(locale, "status.hintStart"))
     }
 
-    lines.push(`📂 目录: ${process.env.OPENCODE_CWD || process.cwd()}`)
+    lines.push(t(locale, "status.directory", { dir: process.env.OPENCODE_CWD || process.cwd() }))
 
     const statusText = lines.join("\n")
     await replyText(chatId, messageId, statusText, channelId)
@@ -917,7 +927,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/connect": {
           const targetSessionId = parts[1]
           if (!targetSessionId) {
-            await replyText(chatId, messageId, "用法: /connect {session_id}", channelId)
+            await replyText(chatId, messageId, t(getLocale(channelId), "command.connectUsage"), channelId)
             return true
           }
           await handleConnect(feishuKey, chatId, messageId, targetSessionId, channelId)
@@ -956,7 +966,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     } catch (err) {
       logger.error(`Command ${cmd} failed: ${err}`)
       try {
-        await replyText(chatId, messageId, `命令执行失败: ${err}`, channelId)
+        await replyText(chatId, messageId, t(getLocale(channelId), "command.commandFailed", { error: String(err) }), channelId)
       } catch (replyErr) {
         logger.error(`Failed to send error reply: ${replyErr}`)
       }

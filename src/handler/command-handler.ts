@@ -596,82 +596,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }, channelId)
   }
 
-  async function handleTaskConfirmation(
-    feishuKey: string,
-    chatId: string,
-    messageId: string,
-    channelId: string,
-    userInput: string,
-  ): Promise<boolean> {
-    const manager = creationManagers.get(feishuKey)
-    if (!manager) return false
-
-    const state = manager.getState()
-    if (!state) return false
-
-    if (state.stage !== "preview" && state.stage !== "confirming") return false
-
-    const normalized = userInput.trim().toLowerCase()
-    const isConfirm = normalized === "y" || normalized === "yes" || normalized === "确认" || normalized === "是"
-
-    if (!isConfirm) {
-      manager.clear()
-      creationManagers.delete(feishuKey)
-      await replyText(chatId, messageId, t(getLocale(channelId), "scheduledTask.creation.cancelled"), channelId)
-      return true
-    }
-
-    const locale = getLocale(channelId)
-    const parsedSchedule = state.parsedSchedule
-    const prompt = state.prompt
-
-    if (!parsedSchedule || !prompt) {
-      await replyText(chatId, messageId, "Missing schedule or prompt", channelId)
-      return true
-    }
-
-    try {
-      const cronJob = new CronJob(parsedSchedule.cronExpression, () => {})
-      const nextDate = cronJob.nextDate()
-      const nextRunAt = nextDate ? nextDate.toJSDate().toISOString() : null
-
-      const newTask = await addScheduledTask({
-        name: parsedSchedule.summary,
-        kind: parsedSchedule.kind,
-        prompt: prompt,
-        schedule: state.scheduleText || "",
-        scheduleSummary: parsedSchedule.summary,
-        cronExpression: parsedSchedule.cronExpression,
-        model: state.model,
-        agent: state.agent,
-        projectId: state.projectId,
-        projectWorktree: state.projectWorktree,
-        enabled: true,
-        sessionId: state.sessionId || undefined,
-        runAt: parsedSchedule.runAt || undefined,
-        nextRunAt: nextRunAt,
-        lastRunAt: null,
-        lastStatus: "idle",
-        lastError: null,
-        runCount: 0,
-        createdAt: new Date().toISOString(),
-      })
-
-      scheduledTaskRuntime.registerTask(newTask)
-
-      manager.clear()
-      creationManagers.delete(feishuKey)
-
-      await replyText(chatId, messageId, t(locale, "scheduledTask.creation.success", { name: newTask.name }), channelId)
-      logger.info(`[command-handler] Task created: ${newTask.id} - ${newTask.name}`)
-    } catch (err) {
-      logger.error(`[command-handler] Failed to create task:`, err)
-      await replyText(chatId, messageId, `Failed to create task: ${err}`, channelId)
-    }
-
-    return true
-  }
-
   async function handleCron(
     feishuKey: string,
     chatId: string,
@@ -787,8 +711,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
       const listText = names.length
-      ? names.map((name) => (name.toLowerCase() === current.toLowerCase() ? `✓ ${name}` : `- ${name}`)).join("\n")
-      : "No agents available"
+        ? names.map((name) => (name.toLowerCase() === current.toLowerCase() ? `✓ ${name}` : `- ${name}`)).join("\n")
+        : "No agents available"
 
       if (channelId === "telegram") {
         const telegramCard = buildTelegramAgentCard(current, names)
@@ -872,6 +796,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     )
 
     const recent = recentProviders.get(feishuKey) ?? []
+    const { favorites, recent: fileRecent } = await getFavoriteAndRecentFromFile()
 
     return availableProviders
       .flatMap((provider) =>
@@ -883,11 +808,25 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         })),
       )
       .sort((a, b) => {
-        const aRecent = recent.indexOf(a.providerId)
-        const bRecent = recent.indexOf(b.providerId)
+        // 1. Favorites from model.json first (preserve order)
+        const aFav = favorites.indexOf(a.id)
+        const bFav = favorites.indexOf(b.id)
+        if (aFav !== -1 && bFav !== -1) return aFav - bFav
+        if (aFav !== -1) return -1
+        if (bFav !== -1) return 1
+        // 2. Recent from model.json second (preserve order)
+        const aRecent = fileRecent.indexOf(a.id)
+        const bRecent = fileRecent.indexOf(b.id)
         if (aRecent !== -1 && bRecent !== -1) return aRecent - bRecent
         if (aRecent !== -1) return -1
         if (bRecent !== -1) return 1
+        // 3. Per-feishuKey recent usage third
+        const aRecentProvider = recent.indexOf(a.providerId)
+        const bRecentProvider = recent.indexOf(b.providerId)
+        if (aRecentProvider !== -1 && bRecentProvider !== -1) return aRecentProvider - bRecentProvider
+        if (aRecentProvider !== -1) return -1
+        if (bRecentProvider !== -1) return 1
+        // 4. Alphabetical by provider name
         return a.providerName.localeCompare(b.providerName)
       })
   }
@@ -896,29 +835,32 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     return mapping?.model ?? undefined
   }
 
-  async function getCurrentModelFromFile(): Promise<string | undefined> {
+  async function getFavoriteAndRecentFromFile(): Promise<{ favorites: string[], recent: string[] }> {
     try {
       const home = homedir()
       const statePath = join(home, ".local", "state", "opencode", "model.json")
-
       const content = await readFile(statePath, "utf-8")
       const state = JSON.parse(content) as {
         favorite?: Array<{ providerID?: string; modelID?: string }>
         recent?: Array<{ providerID?: string; modelID?: string }>
       }
-
-      const favorites = state?.favorite
-      if (favorites && favorites.length > 0 && favorites[0]?.providerID && favorites[0]?.modelID) {
-        return `${favorites[0].providerID}/${favorites[0].modelID}`
-      }
-      const recent = state?.recent
-      if (recent && recent.length > 0 && recent[0]?.providerID && recent[0]?.modelID) {
-        return `${recent[0].providerID}/${recent[0].modelID}`
-      }
-      return undefined
+      const favorites = (state?.favorite ?? [])
+        .map(f => f.providerID && f.modelID ? `${f.providerID}/${f.modelID}` : "")
+        .filter(Boolean)
+      const recent = (state?.recent ?? [])
+        .map(r => r.providerID && r.modelID ? `${r.providerID}/${r.modelID}` : "")
+        .filter(Boolean)
+      return { favorites, recent }
     } catch {
-      return undefined
+      return { favorites: [], recent: [] }
     }
+  }
+
+  async function getCurrentModelFromFile(): Promise<string | undefined> {
+    const { favorites, recent } = await getFavoriteAndRecentFromFile()
+    if (favorites.length > 0) return favorites[0]
+    if (recent.length > 0) return recent[0]
+    return undefined
   }
 
   async function handleModels(
@@ -976,8 +918,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
       const listText = models.length
         ? models
-            .map((model) => (model.id === currentModelId ? `* ${model.id}` : `- ${model.id}`))
-            .join("\n")
+          .map((model) => (model.id === currentModelId ? `* ${model.id}` : `- ${model.id}`))
+          .join("\n")
         : "No models available"
       await replyText(
         chatId,
@@ -1161,7 +1103,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, statusText, channelId)
   }
 
-  return async function handleCommand(
+  const handleCommand = async function handleCommand(
     feishuKey: string,
     chatId: string,
     messageId: string,
@@ -1278,7 +1220,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     try {
-      const cronJob = new CronJob(parsedSchedule.cronExpression, () => {})
+      const cronJob = new CronJob(parsedSchedule.cronExpression, () => { })
       const nextDate = cronJob.nextDate()
       const nextRunAt = nextDate ? nextDate.toJSDate().toISOString() : null
 
@@ -1293,6 +1235,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         agent: state.agent,
         projectId: state.projectId,
         projectWorktree: state.projectWorktree,
+        channelId,
+        chatId,
         enabled: true,
         sessionId: state.sessionId || undefined,
         runAt: parsedSchedule.runAt || undefined,
@@ -1319,10 +1263,9 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     return true
   }
 
-  const handlerEx: CommandHandlerEx = {
-    handler,
+  const handlerEx: CommandHandlerEx = Object.assign(handleCommand, {
     handleTaskConfirmation,
-  }
+  })
 
   return handlerEx
 }

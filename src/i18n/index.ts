@@ -2,12 +2,11 @@ import { en, type EnglishLocale } from "./locales/en.js"
 import { zhCN, type ChineseLocale } from "./locales/zh-CN.js"
 
 export type Locale = "en" | "zh-CN"
-export type LocaleStrings = EnglishLocale | ChineseLocale
 
-const locales: Record<Locale, LocaleStrings> = {
+const locales = {
   en,
   "zh-CN": zhCN,
-}
+} as const
 
 export const defaultLocale: Locale = "en"
 
@@ -19,16 +18,9 @@ export function getLocale(channelId?: string): Locale {
   return defaultLocale
 }
 
-type TranslateKey<S extends LocaleStrings, Path extends string> =
-  Path extends keyof S ? S[Path]
-    : Path extends `${infer K}.${infer Rest}`
-      ? K extends keyof S ? TranslateKey<S[K], Rest>
-      : never
-      : never
-
-export function t<Key extends string>(
+export function t(
   locale: Locale,
-  key: Key,
+  key: string,
   params?: Record<string, string | number>,
 ): string {
   const keys = key.split(".")

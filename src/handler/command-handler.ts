@@ -15,10 +15,27 @@ import { createTelegramInlineCard } from "../channel/telegram/telegram-interacti
 import { t, getLocale } from "../i18n/index.js"
 
 import type { ChannelManager } from "../channel/manager.js"
-import type { CronService } from "../cron/cron-service.js"
+
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
+
+import {
+  listScheduledTasks,
+  addScheduledTask,
+  removeScheduledTask,
+} from "../scheduled-task/store.js"
+import {
+  buildTaskListCard,
+  buildTaskListText,
+  buildTaskCreationCard,
+  buildTaskPreviewCard,
+} from "../scheduled-task/display.js"
+import { parseSchedule } from "../scheduled-task/schedule-parser.js"
+import { TaskCreationManager } from "../scheduled-task/creation-manager.js"
+import { scheduledTaskRuntime } from "../scheduled-task/runtime.js"
+import type { TaskDisplayItem, ScheduledTask } from "../scheduled-task/types.js"
+import { CronJob } from "cron"
 
 export interface CommandHandlerDeps {
   serverUrl: string
@@ -26,7 +43,6 @@ export interface CommandHandlerDeps {
   feishuClient: FeishuApiClient
   logger: Logger
   channelManager?: ChannelManager
-  cronService?: CronService
 }
 
 export type CommandHandler = (
@@ -67,6 +83,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   const { serverUrl, sessionManager, feishuClient, logger } = deps
 
   const recentProviders = new Map<string, string[]>()
+
+  const creationManagers = new Map<string, TaskCreationManager>()
 
   function recordProviderUsage(feishuKey: string, providerId: string): void {
     const recent = recentProviders.get(feishuKey) ?? []
@@ -288,6 +306,39 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, t(locale, "command.shareCanceled", { sessionId: mapping.session_id }), channelId)
   }
 
+  async function handleRename(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    args: string[],
+  ): Promise<void> {
+    const locale = getLocale(channelId)
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
+      return
+    }
+
+    const newName = args.join(" ").trim()
+    if (!newName) {
+      await replyText(chatId, messageId, t(locale, "command.renameUsage"), channelId)
+      return
+    }
+
+    const resp = await fetch(`${serverUrl}/session/${mapping.session_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newName }),
+    })
+    if (!resp.ok) {
+      throw new Error(`Rename failed: HTTP ${resp.status}`)
+    }
+
+    logger.info(`/rename: renamed session ${mapping.session_id} to "${newName}"`)
+    await replyText(chatId, messageId, t(locale, "command.renameSuccess", { name: newName }), channelId)
+  }
+
   async function handleAbort(
     feishuKey: string,
     chatId: string,
@@ -422,6 +473,96 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, t(locale, "command.executing", { command, sessionId: mapping.session_id }), channelId)
   }
 
+  async function handleProjects(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    args: string[],
+  ): Promise<void> {
+    const locale = getLocale(channelId)
+
+    interface ProjectInfo {
+      id: string
+      worktree: string
+      name?: string
+    }
+
+    if (args[0]?.toLowerCase() === "list") {
+      const resp = await fetch(`${serverUrl}/project`)
+      if (!resp.ok) {
+        throw new Error(`List projects failed: HTTP ${resp.status}`)
+      }
+
+      const projects = (await resp.json()) as ProjectInfo[]
+      if (projects.length === 0) {
+        await replyText(chatId, messageId, t(locale, "command.noProjects"), channelId)
+        return
+      }
+
+      const currentWorktree = process.env.OPENCODE_CWD || process.cwd()
+      const normalizedCurrent = currentWorktree.replace(/\\/g, "/").toLowerCase()
+
+      const projectLines = projects.slice(0, 10).map((p) => {
+        const name = p.name || p.worktree.split("/").pop() || p.worktree
+        const isCurrent = p.worktree.replace(/\\/g, "/").toLowerCase() === normalizedCurrent
+        const marker = isCurrent ? "✓ " : "- "
+        return `${marker}${name}\n  📁 ${p.worktree}`
+      }).join("\n\n")
+
+      const selectText = channelId === "feishu"
+        ? `**${t(locale, "command.projectsTitle")}**\n\n${projectLines}\n\n💡 ${t(locale, "command.projectsUsage")}`
+        : `*${t(locale, "command.projectsTitle")}*\n\n${projectLines}\n\n💡 ${t(locale, "command.projectsUsage")}`
+
+      await replyText(chatId, messageId, selectText, channelId)
+      return
+    }
+
+    if (args[0]) {
+      const targetProjectArg = args.join(" ").trim()
+      const resp = await fetch(`${serverUrl}/project`)
+      if (!resp.ok) {
+        throw new Error(`List projects failed: HTTP ${resp.status}`)
+      }
+
+      const projects = (await resp.json()) as ProjectInfo[]
+      const normalizedArg = targetProjectArg.replace(/\\/g, "/").toLowerCase()
+
+      const matched = projects.find((p) => {
+        const name = p.name || p.worktree.split("/").pop() || p.worktree
+        const normalizedName = name.replace(/\\/g, "/").toLowerCase()
+        const normalizedWorktree = p.worktree.replace(/\\/g, "/").toLowerCase()
+        return normalizedName === normalizedArg || normalizedWorktree === normalizedArg || p.id === normalizedArg
+      })
+
+      if (!matched) {
+        await replyText(chatId, messageId, t(locale, "command.projectNotFound", { project: targetProjectArg }), channelId)
+        return
+      }
+
+      process.env.OPENCODE_CWD = matched.worktree
+      logger.info(`/projects: switched to project "${matched.name || matched.worktree}" (${matched.worktree})`)
+
+      const newSessionResp = await fetch(`${serverUrl}/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: matched.id }),
+      })
+
+      if (newSessionResp.ok) {
+        const data = (await newSessionResp.json()) as { id: string }
+        sessionManager.setMapping(feishuKey, data.id)
+        await replyText(chatId, messageId, t(locale, "command.projectSwitched", { project: matched.name || matched.worktree, sessionId: data.id }), channelId)
+      } else {
+        await replyText(chatId, messageId, t(locale, "command.projectSwitchedNoSession", { project: matched.name || matched.worktree }), channelId)
+      }
+      return
+    }
+
+    const helpText = `${t(locale, "command.projectsTitle")}\n\n${t(locale, "command.projectsHelp")}`
+    await replyText(chatId, messageId, helpText, channelId)
+  }
+
   async function handleHelp(
     chatId: string,
     messageId: string,
@@ -433,10 +574,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
 \`/new\` - ${t(locale, "help.new")}
 \`/sessions\` - ${t(locale, "help.sessions")}
+\`/projects\` - ${t(locale, "help.projects")}
 \`/status\` - ${t(locale, "help.status")}
 \`/compact\` - ${t(locale, "help.compact")}
 \`/share\` - ${t(locale, "help.share")}
 \`/unshare\` - ${t(locale, "help.unshare")}
+\`/rename\` - ${t(locale, "help.rename")}
 \`/abort\` - ${t(locale, "help.abort")}
 \`/agent\` - ${t(locale, "help.agent")}
 \`/models\` - ${t(locale, "help.models")}
@@ -448,49 +591,169 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     const card = buildHelpCard()
     await replyCard(chatId, messageId, {
-      text: "Use /new, /sessions, /agent, /models, /compact, /share, /abort, /help",
+      text: "Use /new, /sessions, /projects, /agent, /models, /compact, /share, /abort, /help",
       card,
     }, channelId)
   }
 
+  async function handleTaskConfirmation(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    userInput: string,
+  ): Promise<boolean> {
+    const manager = creationManagers.get(feishuKey)
+    if (!manager) return false
+
+    const state = manager.getState()
+    if (!state) return false
+
+    if (state.stage !== "preview" && state.stage !== "confirming") return false
+
+    const normalized = userInput.trim().toLowerCase()
+    const isConfirm = normalized === "y" || normalized === "yes" || normalized === "确认" || normalized === "是"
+
+    if (!isConfirm) {
+      manager.clear()
+      creationManagers.delete(feishuKey)
+      await replyText(chatId, messageId, t(getLocale(channelId), "scheduledTask.creation.cancelled"), channelId)
+      return true
+    }
+
+    const locale = getLocale(channelId)
+    const parsedSchedule = state.parsedSchedule
+    const prompt = state.prompt
+
+    if (!parsedSchedule || !prompt) {
+      await replyText(chatId, messageId, "Missing schedule or prompt", channelId)
+      return true
+    }
+
+    try {
+      const cronJob = new CronJob(parsedSchedule.cronExpression, () => {})
+      const nextDate = cronJob.nextDate()
+      const nextRunAt = nextDate ? nextDate.toJSDate().toISOString() : null
+
+      const newTask = await addScheduledTask({
+        name: parsedSchedule.summary,
+        kind: parsedSchedule.kind,
+        prompt: prompt,
+        schedule: state.scheduleText || "",
+        scheduleSummary: parsedSchedule.summary,
+        cronExpression: parsedSchedule.cronExpression,
+        model: state.model,
+        agent: state.agent,
+        projectId: state.projectId,
+        projectWorktree: state.projectWorktree,
+        enabled: true,
+        sessionId: state.sessionId || undefined,
+        runAt: parsedSchedule.runAt || undefined,
+        nextRunAt: nextRunAt,
+        lastRunAt: null,
+        lastStatus: "idle",
+        lastError: null,
+        runCount: 0,
+        createdAt: new Date().toISOString(),
+      })
+
+      scheduledTaskRuntime.registerTask(newTask)
+
+      manager.clear()
+      creationManagers.delete(feishuKey)
+
+      await replyText(chatId, messageId, t(locale, "scheduledTask.creation.success", { name: newTask.name }), channelId)
+      logger.info(`[command-handler] Task created: ${newTask.id} - ${newTask.name}`)
+    } catch (err) {
+      logger.error(`[command-handler] Failed to create task:`, err)
+      await replyText(chatId, messageId, `Failed to create task: ${err}`, channelId)
+    }
+
+    return true
+  }
+
   async function handleCron(
-    _feishuKey: string,
+    feishuKey: string,
     chatId: string,
     messageId: string,
     channelId: string,
     args: string[],
   ): Promise<void> {
     const locale = getLocale(channelId)
-    const cron = deps.cronService
-    if (!cron) {
-      await replyText(chatId, messageId, t(locale, "command.cronNotEnabled"), channelId)
-      return
-    }
-
     const sub = args[0]?.toLowerCase()
-    if (sub === "list") {
-      const jobs = cron.getJobs()
-      if (jobs.length === 0) {
-        await replyText(chatId, messageId, t(locale, "command.noCronJobs"), channelId)
-        return
-      }
 
-      const lines = jobs.map((job) => {
-        const status = job.enabled !== false ? "[启用]" : "[停用]"
-        return `${status} ${job.id || job.name} | ${job.schedule}\n  text: ${job.prompt}\n  chat: ${job.chatId}`
-      })
-      await replyText(chatId, messageId, t(locale, "command.cronJobList", { jobs: lines.join("\n\n") }), channelId)
+    if (sub === "list") {
+      const tasks = await listScheduledTasks()
+      const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
+        id: task.id,
+        name: task.name,
+        scheduleSummary: task.scheduleSummary,
+        nextRunAt: task.nextRunAt,
+        lastRunAt: task.lastRunAt,
+        lastStatus: task.lastStatus,
+        enabled: task.enabled,
+      }))
+
+      const text = channelId === "feishu"
+        ? buildTaskListCard(displayItems, locale)
+        : buildTaskListText(displayItems, locale)
+      await replyText(chatId, messageId, text, channelId)
       return
     }
 
     if (sub === "remove") {
-      const jobId = args[1]
-      if (!jobId) {
+      const taskId = args[1]
+      if (!taskId) {
         await replyText(chatId, messageId, t(locale, "command.cronUsage"), channelId)
         return
       }
-      const success = await cron.removeJob(jobId)
-      await replyText(chatId, messageId, t(locale, success ? "command.cronJobRemoved" : "command.cronJobNotFound", { jobId }), channelId)
+      const success = await removeScheduledTask(taskId)
+      scheduledTaskRuntime.removeTask(taskId)
+      await replyText(chatId, messageId, t(locale, success ? "command.cronJobRemoved" : "command.cronJobNotFound", { jobId: taskId }), channelId)
+      return
+    }
+
+    if (sub === "add") {
+      const mapping = sessionManager.getSession(feishuKey)
+      if (!mapping) {
+        await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
+        return
+      }
+
+      let manager = creationManagers.get(feishuKey)
+      if (!manager) {
+        manager = new TaskCreationManager(logger)
+        creationManagers.set(feishuKey, manager)
+      }
+
+      const projectId = process.env.OPENCODE_CWD || "default"
+      const model = mapping.model ? { providerID: mapping.model.split("/")[0] || "", modelID: mapping.model.split("/")[1] || "" } : { providerID: "", modelID: "" }
+      manager.start(projectId, projectId, model, mapping.agent || "build", mapping.session_id)
+
+      const state = manager.getState()
+      if (state) {
+        const text = buildTaskCreationCard(state.stage, state, locale)
+        await replyText(chatId, messageId, text, channelId)
+      }
+      return
+    }
+
+    if (sub === undefined) {
+      const tasks = await listScheduledTasks()
+      const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
+        id: task.id,
+        name: task.name,
+        scheduleSummary: task.scheduleSummary,
+        nextRunAt: task.nextRunAt,
+        lastRunAt: task.lastRunAt,
+        lastStatus: task.lastStatus,
+        enabled: task.enabled,
+      }))
+
+      const text = channelId === "feishu"
+        ? buildTaskListCard(displayItems, locale)
+        : buildTaskListText(displayItems, locale)
+      await replyText(chatId, messageId, text, channelId)
       return
     }
 
@@ -803,7 +1066,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
           const sessionData = (await sessionResp.json()) as {
             title?: string
           }
-          if (sessionData.title) lines.push(t(locale, "status.title", { title: sessionData.title }))
+          if (sessionData.title) lines.push(t(locale, "status.sessionTitle", { title: sessionData.title }))
         }
       } catch {
         // Session info fetch failed — not critical
@@ -924,6 +1187,9 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/sessions":
           await handleSessions(feishuKey, chatId, messageId, channelId)
           return true
+        case "/projects":
+          await handleProjects(feishuKey, chatId, messageId, channelId, parts.slice(1))
+          return true
         case "/connect": {
           const targetSessionId = parts[1]
           if (!targetSessionId) {
@@ -953,6 +1219,9 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/unshare":
           await handleUnshare(feishuKey, chatId, messageId, channelId)
           return true
+        case "/rename":
+          await handleRename(feishuKey, chatId, messageId, channelId, parts.slice(1))
+          return true
         case "/status":
           await handleStatus(feishuKey, chatId, messageId, channelId)
           return true
@@ -973,4 +1242,97 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return true
     }
   }
+
+  async function handleTaskConfirmation(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    userInput: string,
+  ): Promise<boolean> {
+    const manager = creationManagers.get(feishuKey)
+    if (!manager) return false
+
+    const state = manager.getState()
+    if (!state) return false
+
+    if (state.stage !== "preview" && state.stage !== "confirming") return false
+
+    const normalized = userInput.trim().toLowerCase()
+    const isConfirm = normalized === "y" || normalized === "yes" || normalized === "确认" || normalized === "是"
+
+    if (!isConfirm) {
+      manager.clear()
+      creationManagers.delete(feishuKey)
+      await replyText(chatId, messageId, t(getLocale(channelId), "scheduledTask.creation.cancelled"), channelId)
+      return true
+    }
+
+    const locale = getLocale(channelId)
+    const parsedSchedule = state.parsedSchedule
+    const prompt = state.prompt
+
+    if (!parsedSchedule || !prompt) {
+      await replyText(chatId, messageId, "Missing schedule or prompt", channelId)
+      return true
+    }
+
+    try {
+      const cronJob = new CronJob(parsedSchedule.cronExpression, () => {})
+      const nextDate = cronJob.nextDate()
+      const nextRunAt = nextDate ? nextDate.toJSDate().toISOString() : null
+
+      const newTask = await addScheduledTask({
+        name: parsedSchedule.summary,
+        kind: parsedSchedule.kind,
+        prompt: prompt,
+        schedule: state.scheduleText || "",
+        scheduleSummary: parsedSchedule.summary,
+        cronExpression: parsedSchedule.cronExpression,
+        model: state.model,
+        agent: state.agent,
+        projectId: state.projectId,
+        projectWorktree: state.projectWorktree,
+        enabled: true,
+        sessionId: state.sessionId || undefined,
+        runAt: parsedSchedule.runAt || undefined,
+        nextRunAt: nextRunAt,
+        lastRunAt: null,
+        lastStatus: "idle",
+        lastError: null,
+        runCount: 0,
+        createdAt: new Date().toISOString(),
+      })
+
+      scheduledTaskRuntime.registerTask(newTask)
+
+      manager.clear()
+      creationManagers.delete(feishuKey)
+
+      await replyText(chatId, messageId, t(locale, "scheduledTask.creation.success", { name: newTask.name }), channelId)
+      logger.info(`[command-handler] Task created: ${newTask.id} - ${newTask.name}`)
+    } catch (err) {
+      logger.error(`[command-handler] Failed to create task:`, err)
+      await replyText(chatId, messageId, `Failed to create task: ${err}`, channelId)
+    }
+
+    return true
+  }
+
+  const handlerEx: CommandHandlerEx = {
+    handler,
+    handleTaskConfirmation,
+  }
+
+  return handlerEx
+}
+
+export type CommandHandlerEx = CommandHandler & {
+  handleTaskConfirmation: (
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    userInput: string,
+  ) => Promise<boolean>
 }

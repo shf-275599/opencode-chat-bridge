@@ -138,7 +138,7 @@ export class StreamingCardSession {
     }
     this.closed = true
     await this.queue
-    // Final content: use finalText override, tool status content, or "Done" fallback
+    // Final content: use finalText, or build from currentText + tool status, or "Done" fallback
     const text = finalText ?? (this.toolStatuses.length > 0 ? this.buildFullContent() : "✅ Done")
     // Only send final update if content differs from what was last sent
     if (text && text !== this.lastSentContent) {

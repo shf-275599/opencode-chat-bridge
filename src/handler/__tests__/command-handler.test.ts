@@ -59,7 +59,7 @@ describe("createCommandHandler", () => {
   }
 
   describe("/new", () => {
-    it("creates a new session and unbinds the mapping", async () => {
+    it("creates a new session and binds to it", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ id: "ses-new" }),
@@ -75,7 +75,7 @@ describe("createCommandHandler", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       })
-      expect(mockSessionManager.deleteMapping).toHaveBeenCalledWith("chat-1")
+      expect(mockSessionManager.setMapping).toHaveBeenCalledWith("chat-1", "ses-new")
       expect(mockFeishuClient.replyMessage).toHaveBeenCalledWith("msg-1", {
         msg_type: "text",
         content: JSON.stringify({ text: "已创建新会话: ses-new" }),
@@ -555,7 +555,7 @@ describe("createCommandHandler", () => {
       const result = await handler("chat-1", "chat-1", "msg-1", "/NEW")
 
       expect(result).toBe(true)
-      expect(mockSessionManager.deleteMapping).toHaveBeenCalledWith("chat-1")
+      expect(mockSessionManager.setMapping).toHaveBeenCalledWith("chat-1", "ses-new")
     })
   })
 })

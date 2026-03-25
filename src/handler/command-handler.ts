@@ -197,8 +197,8 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
 
     const data = (await resp.json()) as { id: string }
-    sessionManager.deleteMapping(feishuKey)
-    logger.info(`/new: created session ${data.id}, unbound ${feishuKey}`)
+    sessionManager.setMapping(feishuKey, data.id)
+    logger.info(`/new: created session ${data.id}, bound to ${feishuKey}`)
     await replyText(chatId, messageId, `已创建新会话: ${data.id}`, channelId)
   }
 

@@ -36,7 +36,7 @@ export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 const IMAGE_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp)$/i
 const AUDIO_EXTENSIONS = /\.(opus|mp3|wav|m4a|ogg|flac)$/i
 const VIDEO_EXTENSIONS = /\.(mp4|mov|avi|webm|mkv)$/i
-const FILE_EXTENSIONS = /\.(pdf|doc|docx|xls|xlsx|csv|zip|tar|gz|txt|md|json|yaml|yml|html|css|js|ts|py|svg)$/i
+const FILE_EXTENSIONS = /\.(pdf|doc|docx|ppt|pptx|rtf|odt|ods|odp|xls|xlsx|csv|zip|tar|gz|txt|md|json|yaml|yml|html|css|js|ts|py|svg)$/i
 
 // ── Path extraction ──
 
@@ -51,7 +51,7 @@ function normalizePath(p: string): string {
   return p.replace(/\\/g, "/")
 }
 
-const EXT_REGEX = /\.(png|jpg|jpeg|gif|webp|pdf|svg|doc|docx|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py)$/i
+const EXT_REGEX = /\.(png|jpg|jpeg|gif|webp|pdf|svg|doc|docx|ppt|pptx|rtf|odt|ods|odp|xls|xlsx|csv|zip|tar|gz|mp3|mp4|wav|mov|avi|txt|md|json|yaml|yml|html|css|js|ts|py)$/i
 
 // Control chars + Windows illegal chars except slashes (slashes are path separators)
 const WIN_PATH_REGEX = /([A-Za-z]:[/\\][^\x00-\x1f<>:"\|?*]+)/g

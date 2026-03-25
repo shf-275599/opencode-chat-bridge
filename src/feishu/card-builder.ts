@@ -126,14 +126,15 @@ export function buildHelpCard(): Record<string, unknown> {
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "🆕 新建会话" },
+          text: { tag: "plain_text", content: "🔌 连接会话" },
           type: "primary",
-          value: { action: "command_execute", command: "/new" },
+          value: { action: "command_execute", command: "/sessions" },
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "🔌 连接会话" },
-          value: { action: "command_execute", command: "/sessions" },
+          text: { tag: "plain_text", content: "📂 项目" },
+          type: "primary",
+          value: { action: "command_execute", command: "/projects" },
         },
         {
           tag: "button",

@@ -8,6 +8,8 @@ import {
   type GetUpdatesResponse,
   type SendMessageRequest,
   type SendMessageResponse,
+  type GetUploadURLRequest,
+  type GetUploadURLResponse,
 } from "./types.js"
 
 function randomWechatUin(): string {
@@ -28,6 +30,20 @@ function buildHeaders(token: string | undefined, body: unknown): Record<string, 
     headers.Authorization = `Bearer ${token}`
   }
   return headers
+}
+
+export function generateAESKey(): string {
+  return crypto.randomBytes(16).toString("base64")
+}
+
+export function md5(buffer: Buffer): string {
+  return crypto.createHash("md5").update(buffer).digest("hex")
+}
+
+export function encryptAES128ECB(data: Buffer, keyBase64: string): Buffer {
+  const key = Buffer.from(keyBase64, "base64")
+  const cipher = crypto.createCipheriv("aes-128-ecb", key, null)
+  return Buffer.concat([cipher.update(data), cipher.final()])
 }
 
 export async function apiGet<T>(baseUrl: string, path: string): Promise<T> {
@@ -114,6 +130,137 @@ export async function sendMessage(
     base_info: { channel_version: CHANNEL_VERSION },
   }
   return apiPost<SendMessageResponse>(baseUrl, "ilink/bot/sendmessage", request, token)
+}
+
+export async function sendImageMessage(
+  baseUrl: string,
+  token: string,
+  toUserId: string,
+  clientId: string,
+  contextToken: string,
+  aesKey: string,
+  md5sum: string,
+  _encryptedData: Buffer,
+  size: number,
+): Promise<SendMessageResponse> {
+  const request: SendMessageRequest = {
+    msg: {
+      from_user_id: "",
+      to_user_id: toUserId,
+      client_id: clientId,
+      message_type: 2,
+      message_state: 2,
+      context_token: contextToken,
+      item_list: [{
+        type: 2,
+        image_item: {
+          media: {
+            aes_key: aesKey,
+            encrypt_query_param: "",
+            encrypt_type: 1,
+          },
+          mid_size: size,
+        },
+      }],
+    },
+    base_info: { channel_version: CHANNEL_VERSION },
+  }
+  return apiPost<SendMessageResponse>(baseUrl, "ilink/bot/sendmessage", request, token)
+}
+
+export async function sendFileMessage(
+  baseUrl: string,
+  token: string,
+  toUserId: string,
+  clientId: string,
+  contextToken: string,
+  aesKey: string,
+  md5sum: string,
+  _encryptedData: Buffer,
+  size: number,
+  fileName: string,
+): Promise<SendMessageResponse> {
+  const request: SendMessageRequest = {
+    msg: {
+      from_user_id: "",
+      to_user_id: toUserId,
+      client_id: clientId,
+      message_type: 2,
+      message_state: 2,
+      context_token: contextToken,
+      item_list: [{
+        type: 4,
+        file_item: {
+          media: {
+            aes_key: aesKey,
+            encrypt_query_param: "",
+            encrypt_type: 1,
+          },
+          file_name: fileName,
+          len: String(size),
+        },
+      }],
+    },
+    base_info: { channel_version: CHANNEL_VERSION },
+  }
+  return apiPost<SendMessageResponse>(baseUrl, "ilink/bot/sendmessage", request, token)
+}
+
+export async function sendVideoMessage(
+  baseUrl: string,
+  token: string,
+  toUserId: string,
+  clientId: string,
+  contextToken: string,
+  aesKey: string,
+  md5sum: string,
+  _encryptedData: Buffer,
+  size: number,
+): Promise<SendMessageResponse> {
+  const request: SendMessageRequest = {
+    msg: {
+      from_user_id: "",
+      to_user_id: toUserId,
+      client_id: clientId,
+      message_type: 2,
+      message_state: 2,
+      context_token: contextToken,
+      item_list: [{
+        type: 5,
+        video_item: {
+          media: {
+            aes_key: aesKey,
+            encrypt_query_param: "",
+            encrypt_type: 1,
+          },
+          video_size: size,
+        },
+      }],
+    },
+    base_info: { channel_version: CHANNEL_VERSION },
+  }
+  return apiPost<SendMessageResponse>(baseUrl, "ilink/bot/sendmessage", request, token)
+}
+
+export async function getUploadURL(
+  baseUrl: string,
+  token: string,
+  req: GetUploadURLRequest,
+): Promise<GetUploadURLResponse> {
+  return apiPost<GetUploadURLResponse>(baseUrl, "ilink/bot/getuploadurl", req, token)
+}
+
+export async function uploadToCDN(uploadParam: string, encryptedData: Buffer): Promise<void> {
+  const res = await fetch(uploadParam, {
+    method: "PUT",
+    body: encryptedData,
+    headers: {
+      "Content-Type": "application/octet-stream",
+    },
+  })
+  if (!res.ok) {
+    throw new Error(`CDN upload failed: ${res.status}`)
+  }
 }
 
 export { ILINK_BASE_URL, CHANNEL_VERSION }

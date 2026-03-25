@@ -1,4 +1,6 @@
 import crypto from "node:crypto"
+import { basename } from "node:path"
+import { readFile } from "node:fs/promises"
 import { BaseChannelPlugin } from "../base-plugin.js"
 import type {
   ChannelId,
@@ -17,10 +19,11 @@ import type {
 } from "../types.js"
 import type { AppConfig } from "../../utils/config.js"
 import type { Logger } from "../../utils/logger.js"
+import { CHANNEL_VERSION } from "./types.js"
 import type { WechatConfig, WechatMessage, WechatSession } from "./types.js"
-import { getUpdates, sendMessage } from "./client.js"
+import { getUpdates, sendMessage, sendFileMessage, sendImageMessage, sendVideoMessage, getUploadURL, uploadToCDN, generateAESKey, encryptAES128ECB, md5 } from "./client.js"
 import { ensureSession } from "./auth.js"
-import { MAX_CONSECUTIVE_FAILURES, RETRY_DELAY_MS, BACKOFF_DELAY_MS } from "./types.js"
+import { MAX_CONSECUTIVE_FAILURES, RETRY_DELAY_MS, BACKOFF_DELAY_MS, CDNMediaTypeFile, CDNMediaTypeImage, CDNMediaTypeVideo } from "./types.js"
 
 export interface WechatPluginDeps {
   appConfig: AppConfig
@@ -164,6 +167,15 @@ export class WechatPlugin extends BaseChannelPlugin {
         const ev = raw
         const content = ev.message?.content ? JSON.parse(ev.message.content) : {}
 
+        // Determine message type from raw message items
+        const itemType = raw._rawMessage?.item_list?.[0]?.type ?? 1
+        const messageType: "text" | "image" | "voice" | "file" | "video" =
+          itemType === 2 ? "image" :
+          itemType === 3 ? "voice" :
+          itemType === 4 ? "file" :
+          itemType === 5 ? "video" :
+          "text"
+
         return {
           messageId: ev.message_id,
           senderId: ev.sender?.sender_id?.open_id || ev.chat_id,
@@ -171,6 +183,7 @@ export class WechatPlugin extends BaseChannelPlugin {
           chatId: ev.chat_id,
           threadId: ev.chat_id,
           timestamp: Date.now(),
+          messageType,
         }
       },
 
@@ -200,6 +213,198 @@ export class WechatPlugin extends BaseChannelPlugin {
           text,
           contextToken || "",
         )
+      },
+
+      sendImage: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        if (!this._session) {
+          this.logger.error("[WechatPlugin] Session not initialized - cannot send image")
+          return
+        }
+
+        this.logger.info(`[WechatPlugin] Sending image: ${filePath}`)
+
+        const fileData = await readFile(filePath)
+        const aesKey = generateAESKey()
+        const encrypted = encryptAES128ECB(fileData, aesKey)
+        const fileMd5 = md5(fileData)
+
+        const uploadResp = await getUploadURL(this._session.baseUrl, this._session.token, {
+          filekey: fileMd5,
+          media_type: CDNMediaTypeImage,
+          to_user_id: target.address,
+          rawsize: fileData.length,
+          rawfilemd5: fileMd5,
+          filesize: encrypted.length,
+          no_need_thumb: true,
+          aeskey: aesKey,
+          base_info: { channel_version: CHANNEL_VERSION },
+        })
+
+        if (!uploadResp.upload_param) {
+          throw new Error("Failed to get upload URL")
+        }
+
+        await uploadToCDN(uploadResp.upload_param, encrypted)
+
+        const contextToken = this._contextTokenMap.get(target.address) || ""
+        await sendImageMessage(
+          this._session.baseUrl,
+          this._session.token,
+          target.address,
+          `wcb-${crypto.randomUUID()}`,
+          contextToken,
+          aesKey,
+          fileMd5,
+          encrypted,
+          fileData.length,
+        )
+
+        this.logger.info(`[WechatPlugin] Image sent: ${filePath}`)
+      },
+
+      sendFile: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        if (!this._session) {
+          this.logger.error("[WechatPlugin] Session not initialized - cannot send file")
+          return
+        }
+
+        this.logger.info(`[WechatPlugin] Sending file: ${filePath}`)
+
+        const fileData = await readFile(filePath)
+        const fileName = basename(filePath)
+
+        const aesKey = generateAESKey()
+        const encrypted = encryptAES128ECB(fileData, aesKey)
+        const fileMd5 = md5(fileData)
+
+        const uploadResp = await getUploadURL(this._session.baseUrl, this._session.token, {
+          filekey: fileMd5,
+          media_type: CDNMediaTypeFile,
+          to_user_id: target.address,
+          rawsize: fileData.length,
+          rawfilemd5: fileMd5,
+          filesize: encrypted.length,
+          no_need_thumb: true,
+          aeskey: aesKey,
+          base_info: { channel_version: CHANNEL_VERSION },
+        })
+
+        if (!uploadResp.upload_param) {
+          throw new Error("Failed to get upload URL")
+        }
+
+        await uploadToCDN(uploadResp.upload_param, encrypted)
+
+        const contextToken = this._contextTokenMap.get(target.address) || ""
+        await sendFileMessage(
+          this._session.baseUrl,
+          this._session.token,
+          target.address,
+          `wcb-${crypto.randomUUID()}`,
+          contextToken,
+          aesKey,
+          fileMd5,
+          encrypted,
+          fileData.length,
+          fileName,
+        )
+
+        this.logger.info(`[WechatPlugin] File sent: ${filePath}`)
+      },
+
+      sendAudio: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        if (!this._session) {
+          this.logger.error("[WechatPlugin] Session not initialized - cannot send audio")
+          return
+        }
+
+        this.logger.info(`[WechatPlugin] Sending audio: ${filePath}`)
+
+        const fileData = await readFile(filePath)
+        const aesKey = generateAESKey()
+        const encrypted = encryptAES128ECB(fileData, aesKey)
+        const fileMd5 = md5(fileData)
+
+        const uploadResp = await getUploadURL(this._session.baseUrl, this._session.token, {
+          filekey: fileMd5,
+          media_type: CDNMediaTypeFile,
+          to_user_id: target.address,
+          rawsize: fileData.length,
+          rawfilemd5: fileMd5,
+          filesize: encrypted.length,
+          no_need_thumb: true,
+          aeskey: aesKey,
+          base_info: { channel_version: CHANNEL_VERSION },
+        })
+
+        if (!uploadResp.upload_param) {
+          throw new Error("Failed to get upload URL")
+        }
+
+        await uploadToCDN(uploadResp.upload_param, encrypted)
+
+        const contextToken = this._contextTokenMap.get(target.address) || ""
+        await sendFileMessage(
+          this._session!.baseUrl,
+          this._session!.token,
+          target.address,
+          `wcb-${crypto.randomUUID()}`,
+          contextToken,
+          aesKey,
+          fileMd5,
+          encrypted,
+          fileData.length,
+          basename(filePath),
+        )
+
+        this.logger.info(`[WechatPlugin] Audio sent: ${filePath}`)
+      },
+
+      sendVideo: async (target: OutboundTarget, filePath: string): Promise<void> => {
+        if (!this._session) {
+          this.logger.error("[WechatPlugin] Session not initialized - cannot send video")
+          return
+        }
+
+        this.logger.info(`[WechatPlugin] Sending video: ${filePath}`)
+
+        const fileData = await readFile(filePath)
+        const aesKey = generateAESKey()
+        const encrypted = encryptAES128ECB(fileData, aesKey)
+        const fileMd5 = md5(fileData)
+
+        const uploadResp = await getUploadURL(this._session.baseUrl, this._session.token, {
+          filekey: fileMd5,
+          media_type: CDNMediaTypeVideo,
+          to_user_id: target.address,
+          rawsize: fileData.length,
+          rawfilemd5: fileMd5,
+          filesize: encrypted.length,
+          no_need_thumb: true,
+          aeskey: aesKey,
+          base_info: { channel_version: CHANNEL_VERSION },
+        })
+
+        if (!uploadResp.upload_param) {
+          throw new Error("Failed to get upload URL")
+        }
+
+        await uploadToCDN(uploadResp.upload_param, encrypted)
+
+        const contextToken = this._contextTokenMap.get(target.address) || ""
+        await sendVideoMessage(
+          this._session!.baseUrl,
+          this._session!.token,
+          target.address,
+          `wcb-${crypto.randomUUID()}`,
+          contextToken,
+          aesKey,
+          fileMd5,
+          encrypted,
+          fileData.length,
+        )
+
+        this.logger.info(`[WechatPlugin] Video sent: ${filePath}`)
       },
     }
 

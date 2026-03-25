@@ -103,9 +103,12 @@ export interface MessageItem {
     size: number
     width?: number
     height?: number
+  } | {
+    media: MediaInfo
+    mid_size?: number
   }
   voice_item?: {
-    text?: string  // Speech-to-text result
+    text?: string
     aes_key: string
     file_id: string
     md5sum: string
@@ -119,6 +122,10 @@ export interface MessageItem {
     md5sum: string
     enc_url: string
     size: number
+  } | {
+    media: MediaInfo
+    file_name?: string
+    len?: string
   }
   video_item?: {
     thumb_aes_key: string
@@ -131,6 +138,9 @@ export interface MessageItem {
     enc_url: string
     duration: number
     size: number
+  } | {
+    media: MediaInfo
+    video_size?: number
   }
 }
 
@@ -154,4 +164,36 @@ export interface NormalizedWechatMessage {
 export interface WechatConfig {
   enabled: boolean
   sessionFile?: string  // Path to save session token
+}
+
+// ── CDN Media Types ──
+export const CDNMediaTypeImage = 1
+export const CDNMediaTypeVideo = 2
+export const CDNMediaTypeFile = 3
+
+// ── CDN Upload Types ──
+export interface GetUploadURLRequest {
+  filekey: string
+  media_type: number
+  to_user_id: string
+  rawsize: number
+  rawfilemd5: string
+  filesize: number
+  no_need_thumb: boolean
+  aeskey: string
+  base_info: { channel_version: string }
+}
+
+export interface GetUploadURLResponse {
+  ret: number
+  errcode?: number
+  errmsg?: string
+  upload_param?: string
+}
+
+// ── Media Info (for sending) ──
+export interface MediaInfo {
+  encrypt_query_param: string
+  aes_key: string
+  encrypt_type: number
 }

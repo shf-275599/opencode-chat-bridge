@@ -43,6 +43,8 @@ export interface NormalizedMessage {
   timestamp: number;
   /** Optional: ID of a message this one replies to */
   replyToId?: string;
+  /** Optional: message type for media messages */
+  messageType?: "text" | "image" | "voice" | "file" | "video";
 }
 
 /**

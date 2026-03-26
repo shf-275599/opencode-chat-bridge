@@ -796,7 +796,7 @@ describe("createMessageHandler", () => {
     expect(postCall).toBeDefined()
     const body = JSON.parse((postCall![1] as { body: string }).body)
     expect(body.parts[0].text).toContain("[Telegram]")
-    expect(body.parts[0].text).toContain("Do not assume Lark/Feishu MCP tools are available")
+    expect(body.parts[0].text).toContain("/cron")
     expect(body.parts[0].text).not.toContain("[Lark]")
   })
 
@@ -978,7 +978,7 @@ describe("createMessageHandler", () => {
     expect(postCall).toBeDefined()
     const body = JSON.parse((postCall![1] as { body: string }).body)
     expect(body.parts[0].text).toContain("download failed")
-    expect(body.parts[0].text).toContain("file_key: img_bad")
+    expect(body.parts[0].text).toContain("Message ID: msg-1")
   })
 
   it("handles image message with missing image_key — forwards error", async () => {

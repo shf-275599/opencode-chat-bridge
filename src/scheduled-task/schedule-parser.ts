@@ -8,6 +8,12 @@ import type { ParsedTaskSchedule } from "./types.js"
 export function parseSchedule(text: string): ParsedTaskSchedule {
   const trimmed = text.trim()
 
+  // 中文自然语言支持
+  const chinesePatterns = parseChineseSchedule(trimmed)
+  if (chinesePatterns) {
+    return chinesePatterns
+  }
+
   const datetimeMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})$/)
   if (datetimeMatch) {
     const [, date, hourStr, minuteStr] = datetimeMatch
@@ -93,7 +99,7 @@ export function parseSchedule(text: string): ParsedTaskSchedule {
     }
   }
 
-  throw new Error(`Unrecognized schedule format "${text}". Supported formats: "every Nm", "every Nh", "daily HH:MM", "weekly", "cron expression", or "YYYY-MM-DD HH:MM"`)
+  throw new Error(`无法识别 "${text}"。支持格式: "每天19:00", "每周三14:30", "every Nm", "every Nh", "daily HH:MM", "cron表达式", "YYYY-MM-DD HH:MM"`)
 }
 
 export function getScheduleSummary(parsed: ParsedTaskSchedule): string {
@@ -148,4 +154,163 @@ function isValidCronFields(fields: string[]): boolean {
   }
 
   return true
+}
+
+function parseChineseSchedule(text: string): ParsedTaskSchedule | null {
+  const t = text.toLowerCase()
+
+  const chineseDigit: Record<string, number> = {
+    "零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
+    "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+  }
+
+  function parseChineseNumeral(s: string): number {
+    if (!s) return 0
+    // Handle pure Arabic digits
+    if (/^\d+$/.test(s)) {
+      return parseInt(s, 10)
+    }
+    let result = 0
+    let temp = 0
+
+    for (let i = 0; i < s.length; i++) {
+      const char = s[i]!
+      if (char === "十") {
+        if (temp === 0) {
+          // "十" at start or after another "十" means 10
+          result += result === 0 ? 10 : result * 10
+        } else {
+          // Normal case: e.g. "二十" = 2*10, "二十五" = 2*10+5
+          result += temp * 10
+          temp = 0
+        }
+      } else {
+        const val = chineseDigit[char]
+        if (val !== undefined && val < 10) {
+          temp = temp * 10 + val
+        }
+      }
+    }
+    result += temp
+    return result
+  }
+
+  // 每天几点 - supports "每天19:00", "每天19点", "每天晚上7点", "每天晚上八点15分", "每天晚上八点"
+  const dailyMatch = t.match(/^每天((?:晚上|上午|中午|凌晨|早上|下午)?)(.+)/)
+  if (dailyMatch) {
+    const [, timeOfDay, timePart] = dailyMatch
+    if (!timePart) return null
+
+    let hour = 0
+    let minute = 0
+
+    // Try colon format: "19:00" or "8:15"
+    const colonMatch = timePart.match(/^(\d{1,2}):(\d{1,2})$/)
+    if (colonMatch) {
+      hour = parseInt(colonMatch[1]!, 10)
+      minute = parseInt(colonMatch[2]!, 10)
+    } else {
+      // Try Chinese format: "八点15分", "八点", "8点", "8点15分"
+      const chineseTimeMatch = timePart.match(/^([一二三四五六七八九十\d]+)点(?:([一二三四五六七八九十五\d]+)分?)?/)
+      if (chineseTimeMatch) {
+        hour = parseChineseNumeral(chineseTimeMatch[1]!)
+        if (chineseTimeMatch[2]) {
+          minute = parseChineseNumeral(chineseTimeMatch[2]!)
+        }
+      } else {
+        // Just digits without "点": "19"
+        const justDigits = timePart.match(/^(\d+)$/)
+        if (justDigits) {
+          hour = parseInt(justDigits[1]!, 10)
+        }
+      }
+    }
+
+    // Apply time-of-day offset
+    if (timeOfDay === "晚上" && hour < 12) hour += 12
+    if (timeOfDay === "凌晨" && hour >= 6) hour -= 12
+    if (timeOfDay === "早上" && hour < 6) hour += 12
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+
+    const hourStr = String(hour).padStart(2, "0")
+    const minuteStr = String(minute).padStart(2, "0")
+    return {
+      cronExpression: `0 ${minute} ${hour} * * *`,
+      summary: `每天 ${hourStr}:${minuteStr}`,
+      kind: "cron",
+    }
+  }
+
+  // 提醒我吃饭 - extract time from "每天19:10提醒我吃饭" (no "点" but has "提醒")
+  if (text.includes("提醒")) {
+    const remindMatch = text.match(/(\d{1,2}):(\d{1,2})/)
+    if (remindMatch) {
+      let hour = parseInt(remindMatch[1]!, 10)
+      const minute = parseInt(remindMatch[2]!, 10)
+
+      if (text.includes("晚上") && hour < 12) hour += 12
+
+      if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+
+      const hourStr = String(hour).padStart(2, "0")
+      const minuteStr = String(minute).padStart(2, "0")
+      return {
+        cronExpression: `0 ${minute} ${hour} * * *`,
+        summary: `每天 ${hourStr}:${minuteStr}`,
+        kind: "cron",
+      }
+    }
+  }
+
+  // 每周几几点
+  const weeklyMatch = t.match(/每周([一二三四五六日天])[^\d]*(\d{1,2})(?:点|时)?(?:(\d{1,2})(?:分|分钟))?/)
+  if (weeklyMatch) {
+    const dayMap: Record<string, number> = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "日": 0, "天": 0 }
+    const dayOfWeek = dayMap[weeklyMatch[1]!]
+    if (dayOfWeek === undefined) return null
+
+    let hour = Number(weeklyMatch[2])
+    const minute = weeklyMatch[3] ? Number(weeklyMatch[3]) : 0
+
+    if (t.includes("晚上") && hour < 12) hour += 12
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+
+    const hourStr = String(hour).padStart(2, "0")
+    const minuteStr = String(minute).padStart(2, "0")
+    return {
+      cronExpression: `0 ${minute} ${hour} * * ${dayOfWeek}`,
+      summary: `每周${weeklyMatch[1]} ${hourStr}:${minuteStr}`,
+      kind: "cron",
+    }
+  }
+
+  // 每隔几小时
+  const everyHourMatch = t.match(/每[隔个]?(\d+)小时/)
+  if (everyHourMatch) {
+    const hours = Number(everyHourMatch[1])
+    if (hours > 0 && hours <= 24) {
+      return {
+        cronExpression: `0 0 */${hours} * * *`,
+        summary: `每 ${hours} 小时`,
+        kind: "cron",
+      }
+    }
+  }
+
+  // 每隔几分钟
+  const everyMinMatch = t.match(/每[隔个]?(\d+)分钟/)
+  if (everyMinMatch) {
+    const mins = Number(everyMinMatch[1])
+    if (mins > 0 && mins <= 60) {
+      return {
+        cronExpression: `0 */${mins} * * * *`,
+        summary: `每 ${mins} 分钟`,
+        kind: "cron",
+      }
+    }
+  }
+
+  return null
 }

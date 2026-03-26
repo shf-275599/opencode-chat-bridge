@@ -16,7 +16,8 @@ async function readTasks(): Promise<ScheduledTask[]> {
   const jobsFile = getJobsFilePath()
   try {
     const data = await fs.readFile(jobsFile, "utf-8")
-    return JSON.parse(data)
+    const parsed = JSON.parse(data)
+    return Array.isArray(parsed) ? parsed : parsed.tasks ?? []
   } catch (e: any) {
     if (e.code === "ENOENT") {
       return []
@@ -29,7 +30,7 @@ async function writeTasks(tasks: ScheduledTask[]): Promise<void> {
   const jobsFile = getJobsFilePath()
   const dir = path.dirname(jobsFile)
   await fs.mkdir(dir, { recursive: true })
-  await fs.writeFile(jobsFile, JSON.stringify(tasks, null, 2), "utf-8")
+  await fs.writeFile(jobsFile, JSON.stringify({ tasks }, null, 2), "utf-8")
 }
 
 export async function listScheduledTasks(): Promise<ScheduledTask[]> {

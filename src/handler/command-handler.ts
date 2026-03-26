@@ -31,7 +31,7 @@ import {
   buildTaskCreationCard,
   buildTaskPreviewCard,
 } from "../scheduled-task/display.js"
-import { parseSchedule } from "../scheduled-task/schedule-parser.js"
+import { tryParseSchedule, llmParseSchedule } from "../scheduled-task/llm-schedule-parser.js"
 import { TaskCreationManager } from "../scheduled-task/creation-manager.js"
 import { scheduledTaskRuntime } from "../scheduled-task/runtime.js"
 import type { TaskDisplayItem, ScheduledTask } from "../scheduled-task/types.js"
@@ -657,7 +657,18 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    if (sub === "add") {
+    // "add" subcommand — or natural language shortcut: /cron <description>
+    // Supports:
+    //   /cron add                       → interactive wizard (no inline input)
+    //   /cron add 每天19:10提醒我吃饭   → inline parse + LLM fallback
+    //   /cron 每天19:10提醒我吃饭       → same, auto-detected by non-keyword sub
+    const isAddExplicit = sub === "add"
+    const isNaturalLanguage = sub !== undefined
+      && sub !== "list"
+      && sub !== "remove"
+      && sub !== "add"
+
+    if (isAddExplicit || isNaturalLanguage) {
       const mapping = sessionManager.getSession(feishuKey)
       if (!mapping) {
         await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
@@ -671,13 +682,61 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       }
 
       const projectId = process.env.OPENCODE_CWD || "default"
-      const model = mapping.model ? { providerID: mapping.model.split("/")[0] || "", modelID: mapping.model.split("/")[1] || "" } : { providerID: "", modelID: "" }
+      const model = mapping.model
+        ? { providerID: mapping.model.split("/")[0] || "", modelID: mapping.model.split("/")[1] || "" }
+        : { providerID: "", modelID: "" }
       manager.start(projectId, projectId, model, mapping.agent || "build", mapping.session_id)
 
-      const state = manager.getState()
-      if (state) {
-        const text = buildTaskCreationCard(state.stage, state, locale)
-        await replyText(chatId, messageId, text, channelId)
+      // Collect the inline description text
+      const inlineInput = isNaturalLanguage
+        ? args.join(" ").trim()               // whole args is description (no 'add' prefix)
+        : args.slice(1).join(" ").trim()      // args after 'add'
+
+      if (!inlineInput) {
+        // No inline input → show wizard prompt, wait for next message
+        const state = manager.getState()
+        if (state) {
+          await replyText(chatId, messageId, buildTaskCreationCard(state.stage, state, locale), channelId)
+        }
+        return
+      }
+
+      // Fast path: try regex parser first
+      const fastParsed = tryParseSchedule(inlineInput)
+      if (fastParsed) {
+        manager.setSchedule(inlineInput, fastParsed)
+        const state = manager.getState()
+        if (state) {
+          await replyText(chatId, messageId, buildTaskCreationCard(state.stage, state, locale), channelId)
+        }
+        return
+      }
+
+      // Slow path: LLM parsing
+      await replyText(chatId, messageId, "🤔 正在理解你的描述...", channelId)
+      try {
+        const llmParsed = await llmParseSchedule(serverUrl, inlineInput, new Date().toISOString())
+        manager.setSchedule(inlineInput, llmParsed)
+
+        // If LLM extracted a task prompt, pre-fill it and skip awaiting_prompt stage
+        if (llmParsed.taskPrompt) {
+          manager.setPrompt(llmParsed.taskPrompt)
+        }
+
+        const state = manager.getState()
+        if (state) {
+          await replyText(chatId, messageId, buildTaskCreationCard(state.stage, state, locale), channelId)
+        }
+      } catch (err) {
+        logger.warn(`[handleCron] LLM schedule parse failed: ${err}`)
+        await replyText(
+          chatId,
+          messageId,
+          `⚠️ 无法理解 "${inlineInput}"，请尝试更具体的描述，例如：\n• /cron 每天19:00提醒我吃饭\n• /cron 每周三14:30开会提醒\n• /cron 每2小时检查一次`,
+          channelId,
+        )
+        manager.clear()
+        creationManagers.delete(feishuKey)
       }
       return
     }
@@ -1217,6 +1276,58 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     const state = manager.getState()
     if (!state) return false
+
+    // Stage: awaiting_schedule — try regex fast path, then LLM slow path
+    if (state.stage === "awaiting_schedule") {
+      const locale = getLocale(channelId)
+
+      // Fast path
+      const fastParsed = tryParseSchedule(userInput)
+      if (fastParsed) {
+        manager.setSchedule(userInput, fastParsed)
+        const nextState = manager.getState()
+        if (nextState) {
+          await replyText(chatId, messageId, buildTaskCreationCard(nextState.stage, nextState, locale), channelId)
+        }
+        return true
+      }
+
+      // Slow path: LLM
+      await replyText(chatId, messageId, "🤔 正在理解你的描述...", channelId)
+      try {
+        const llmParsed = await llmParseSchedule(serverUrl, userInput, new Date().toISOString())
+        manager.setSchedule(userInput, llmParsed)
+        if (llmParsed.taskPrompt) {
+          manager.setPrompt(llmParsed.taskPrompt)
+        }
+        const nextState = manager.getState()
+        if (nextState) {
+          await replyText(chatId, messageId, buildTaskCreationCard(nextState.stage, nextState, locale), channelId)
+        }
+      } catch (err) {
+        logger.warn(`[handleTaskConfirmation] LLM schedule parse failed: ${err}`)
+        await replyText(
+          chatId,
+          messageId,
+          `⚠️ 无法理解 "${userInput}"，请尝试更具体的描述，例如：每天19:00、每周三14:30`,
+          channelId,
+        )
+      }
+      return true
+    }
+
+    // Stage: awaiting_prompt - use input as prompt
+    if (state.stage === "awaiting_prompt") {
+      manager.setPrompt(userInput)
+
+      const locale = getLocale(channelId)
+      const nextState = manager.getState()
+      if (nextState) {
+        const text = buildTaskCreationCard(nextState.stage, nextState, locale)
+        await replyText(chatId, messageId, text, channelId)
+      }
+      return true
+    }
 
     if (state.stage !== "preview" && state.stage !== "confirming") return false
 

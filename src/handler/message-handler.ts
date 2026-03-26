@@ -17,7 +17,7 @@ import type { StreamingBridge } from "./streaming-integration.js"
 import type { SessionObserver } from "../streaming/session-observer.js"
 import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
-import type { CommandHandler } from "./command-handler.js"
+import type { CommandHandler, CommandHandlerEx } from "./command-handler.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
 import { MessageDebouncer, type BufferedMessage, type BatchContext } from "./message-debounce.js"
 import { getAttachmentsDir } from "../utils/paths.js"
@@ -41,7 +41,7 @@ export interface HandlerDeps {
   logger: Logger
   streamingBridge?: StreamingBridge
   observer?: SessionObserver
-  commandHandler?: CommandHandler
+  commandHandler?: CommandHandlerEx
   botOpenId?: string
   outboundMedia?: OutboundMediaHandler
   debounceMs?: number
@@ -305,12 +305,12 @@ function appendPlatformContextSignature(
 ): string {
   const signatureLabel = getPlatformSignatureLabel(channelId, plugin)
 
-    if (!signedSessions.has(sessionId)) {
+  if (!signedSessions.has(sessionId)) {
     if (signedSessions.size > 1000) signedSessions.clear()
     signedSessions.add(sessionId)
 
     const attachDir = getAttachmentsDir()
-    return `${text}\n[${signatureLabel}] Save files -> ${attachDir} (auto-send to user). You can send files (images, PDFs, documents, etc.) to the user by saving them to this directory in your response.\n\nScheduled tasks: Edit ./data/scheduled-tasks.json to manage cron jobs.`
+    return `${text}\n[${signatureLabel}] Save files -> ${attachDir} (auto-send to user). You can save files to this directory.\n\nScheduled Task: Use /cron {natural language description} to create a scheduled task, e.g., "/cron set a reminder to eat everyday at 19:10", "/cron meeting at 9am on weekdays".`
   }
 
   return `${text}\n[${signatureLabel}]`
@@ -444,6 +444,30 @@ export function createMessageHandler(
     if (userText.startsWith("/") && deps.commandHandler) {
       const handled = await deps.commandHandler(feishuKey, event.chat_id, event.message_id, userText.trim(), channelId)
       if (handled) return
+    }
+
+    // ── 4c. Check for natural language schedule intent ──
+    const schedulePatterns = [/每天.*[点时]/, /每周.*[点时]/, /每.*小时/, /每.*分钟/, /提醒我/, /定时任务/]
+    if (schedulePatterns.some(p => p.test(userText))) {
+      const cmdHandlerEx = deps.commandHandler as CommandHandlerEx | undefined
+
+      if (cmdHandlerEx?.handleTaskConfirmation) {
+        // Check if there's an active task creation flow, if not start one
+        let confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
+
+        if (!confirmed) {
+          // No active flow - need to start one
+          const session = deps.sessionManager?.getSession(feishuKey)
+          if (session && deps.commandHandler) {
+            // Trigger /cron add flow via command handler
+            await deps.commandHandler(feishuKey, event.chat_id, event.message_id, "/cron add", channelId)
+            // Then pass the user input to handleTaskConfirmation
+            confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
+          }
+        }
+
+        if (confirmed) return
+      }
     }
 
     // ── 4c. Debounce path (when enabled) ──

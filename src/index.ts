@@ -247,7 +247,7 @@ async function main(): Promise<void> {
     logger,
     streamingBridge,
     observer,
-    commandHandler,
+    commandHandler: commandHandler as any,
     botOpenId,
     outboundMedia,
     debounceMs: config.messageDebounceMs,

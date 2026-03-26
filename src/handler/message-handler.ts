@@ -446,27 +446,24 @@ export function createMessageHandler(
       if (handled) return
     }
 
-    // ── 4c. Check for natural language schedule intent ──
+    // ── 4c. If there's an active task creation flow, route ALL messages there ──
+    const cmdHandlerEx = deps.commandHandler as CommandHandlerEx | undefined
+    if (cmdHandlerEx?.handleTaskConfirmation) {
+      const confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
+      if (confirmed) return
+    }
+
+    // ── 4d. Check for natural language schedule intent ──
     const schedulePatterns = [/每天.*[点时]/, /每周.*[点时]/, /每.*小时/, /每.*分钟/, /提醒我/, /定时任务/]
     if (schedulePatterns.some(p => p.test(userText))) {
-      const cmdHandlerEx = deps.commandHandler as CommandHandlerEx | undefined
-
       if (cmdHandlerEx?.handleTaskConfirmation) {
-        // Check if there's an active task creation flow, if not start one
-        let confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
-
-        if (!confirmed) {
-          // No active flow - need to start one
-          const session = deps.sessionManager?.getSession(feishuKey)
-          if (session && deps.commandHandler) {
-            // Trigger /cron add flow via command handler
-            await deps.commandHandler(feishuKey, event.chat_id, event.message_id, "/cron add", channelId)
-            // Then pass the user input to handleTaskConfirmation
-            confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
-          }
+        // Start a new task creation flow
+        const session = deps.sessionManager?.getSession(feishuKey)
+        if (session && deps.commandHandler) {
+          await deps.commandHandler(feishuKey, event.chat_id, event.message_id, "/cron add", channelId)
+          const confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
+          if (confirmed) return
         }
-
-        if (confirmed) return
       }
     }
 

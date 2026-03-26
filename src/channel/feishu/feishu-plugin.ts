@@ -195,8 +195,8 @@ export class FeishuPlugin extends BaseChannelPlugin {
         const fileName = basename(filePath)
         const fileKey = await this.feishuClient.uploadVideo(fileData, fileName)
         await this.feishuClient.sendMessage(target.address, {
-          msg_type: "video",
-          content: JSON.stringify({ file_key: fileKey }),
+          msg_type: "media",
+          content: JSON.stringify({ file_key: fileKey, duration: 0 }),
         })
         this.logger.info(`[FeishuPlugin] Video sent: ${fileKey}`)
       },

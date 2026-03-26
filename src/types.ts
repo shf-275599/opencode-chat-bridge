@@ -41,7 +41,7 @@ export interface FeishuCardAction {
 // ── Feishu API Types ──
 
 export interface FeishuMessageBody {
-  msg_type: "text" | "interactive" | "image" | "file" | "audio" | "video"
+  msg_type: "text" | "interactive" | "image" | "file" | "audio" | "video" | "media"
   content: string
 }
 

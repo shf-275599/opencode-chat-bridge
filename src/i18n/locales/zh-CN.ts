@@ -102,6 +102,8 @@ export const zhCN = {
       parsingSchedule: "正在解析周期: {scheduleText}...",
       awaitingPrompt: "⏰ 周期: {scheduleSummary}\n\n输入任务描述：",
       confirming: "确认创建任务？(y/n)",
+      success: "✅ 任务已创建: {name}",
+      cancelled: "❌ 任务创建已取消",
       unknown: "未知的创建阶段。",
     },
     preview: {

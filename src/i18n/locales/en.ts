@@ -102,6 +102,8 @@ export const en = {
       parsingSchedule: "Parsing schedule: {scheduleText}...",
       awaitingPrompt: "⏰ Schedule: {scheduleSummary}\n\nEnter task description:",
       confirming: "Confirm task creation? (y/n)",
+      success: "✅ Task created: {name}",
+      cancelled: "❌ Task creation cancelled",
       unknown: "Unknown creation stage.",
     },
     preview: {

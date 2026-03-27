@@ -1,0 +1,17 @@
+name: Question
+description: 提问或寻求帮助
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题
+      description: 请详细描述你的问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 背景信息
+      description: 相关的上下文或已尝试的解决方案

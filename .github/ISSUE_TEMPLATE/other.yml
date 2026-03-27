@@ -1,0 +1,11 @@
+name: Other
+description: 不属于以上类别的问题
+labels: [invalid]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 描述
+      description: 请详细描述你的问题或建议
+    validations:
+      required: true

@@ -487,23 +487,49 @@ async function main(): Promise<void> {
   }
 
   const sendTaskDelivery: (delivery: TaskDelivery) => Promise<void> = async (delivery) => {
+    logger.info(`[sendTaskDelivery] Sending task result to channel=${delivery.channelId}, chatId=${delivery.chatId}, status=${delivery.status}`)
+    
+    const statusEmoji = delivery.status === "success" ? "✅" : "❌"
+    const messageContent = delivery.status === "success" 
+      ? `**任务执行成功**\n\n**Session:** ${delivery.sessionId || "N/A"}\n\n**执行结果:**\n${delivery.messageText}`
+      : `**任务执行失败**\n\n**Session:** ${delivery.sessionId || "N/A"}\n\n**错误信息:**\n${delivery.messageText}`
+    
+    const fullMessage = `🕒 **${delivery.taskName}** (${delivery.scheduleSummary})\n\n${messageContent}`
+    
     const plugin = channelManager?.getChannel(delivery.channelId as ChannelId)
     if (plugin?.outbound) {
+      logger.info(`[sendTaskDelivery] Using plugin outbound for ${delivery.channelId}`)
       await plugin.outbound.sendText(
         { address: delivery.chatId },
-        `🕒 **${delivery.scheduleSummary}**\n${delivery.messageText}`,
+        fullMessage,
       )
+      logger.info(`[sendTaskDelivery] Message sent via plugin`)
     } else if (delivery.channelId === "feishu") {
+      logger.info(`[sendTaskDelivery] Using feishuClient directly`)
       await feishuClient.sendMessage(delivery.chatId, {
         msg_type: "text",
-        content: JSON.stringify({ text: `🕒 [${delivery.scheduleSummary}] ${delivery.messageText}` }),
+        content: JSON.stringify({ text: fullMessage }),
       })
+      logger.info(`[sendTaskDelivery] Message sent via feishuClient`)
+    } else {
+      logger.error(`[sendTaskDelivery] No delivery method available for channel ${delivery.channelId}`)
+    }
+
+    if (delivery.status === "success" && outboundMedia) {
+      const adapter = channelManager?.getChannel(delivery.channelId as ChannelId)?.outbound
+      try {
+        await outboundMedia.sendDetectedFiles({ address: delivery.chatId }, delivery.messageText, adapter)
+        logger.info(`[sendTaskDelivery] Files sent successfully`)
+      } catch (err) {
+        logger.warn(`[sendTaskDelivery] sendDetectedFiles failed: ${err}`)
+      }
     }
   }
 
   await scheduledTaskRuntime.initialize(sendTaskDelivery, {
     serverUrl,
     logger,
+    snapshotAttachments: (chatId: string) => outboundMedia.snapshotAttachments(chatId),
   })
   logger.info("Scheduled task runtime initialized")
 

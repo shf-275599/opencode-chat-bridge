@@ -105,6 +105,9 @@ export const en = {
       success: "✅ Task created: {name}",
       cancelled: "❌ Task creation cancelled",
       unknown: "Unknown creation stage.",
+      successWithId: "✅ Task created (ID: {taskId})",
+      notInCreationFlow: "Not in task creation flow.",
+      missingData: "Missing task data. Please create again.",
     },
     preview: {
       title: "📋 Task Preview",
@@ -114,12 +117,20 @@ export const en = {
       model: "Model",
       agent: "Agent",
       prompt: "Task",
+      confirmHint: "Click buttons below to confirm or cancel",
+    },
+    remove: {
+      title: "🗑️ Delete Task",
+      hint: "Click button to delete task",
+      empty: "No tasks to delete.",
     },
     kind: {
       cron: "Repeating",
       once: "One-time",
     },
     modelNotSet: "Not set",
+    confirm: "Confirm",
+    reject: "Cancel",
   },
 } as const
 

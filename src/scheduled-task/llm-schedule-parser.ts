@@ -58,7 +58,7 @@ export function extractJsonBlock(text: string): Record<string, unknown> | null {
  * Build the one-shot prompt for LLM schedule parsing.
  */
 function buildParsePrompt(input: string, nowIso: string): string {
-  return `You are a cron schedule parser. Given a user request (in Chinese or English), extract the schedule and optional task content.
+  return `You are a cron schedule parser. Given a user request (in Chinese or English), extract the schedule and task content.
 
 Current time: ${nowIso}
 
@@ -66,17 +66,21 @@ User request: "${input}"
 
 Respond with ONLY a JSON block (no other text):
 \`\`\`json
-{"cronExpression":"0 10 19 * * *","summary":"每天 19:10","kind":"cron","taskPrompt":"提醒我吃饭"}
+{"cronExpression":"0 */5 * * * *","summary":"每 5 分钟","kind":"cron","taskPrompt":"发送新闻摘要"}
 \`\`\`
 
 Rules:
-- cronExpression: 6-field format (second minute hour dayOfMonth month dayOfWeek), e.g. "0 10 19 * * *"
+- cronExpression: 6-field format (second minute hour dayOfMonth month dayOfWeek), e.g. "0 */5 * * * *" for every 5 minutes
 - summary: human-readable Chinese summary of the schedule
 - kind: "cron" for repeating, "once" for one-time
-- taskPrompt: the action/reminder content extracted from input (may be omitted if unclear)
+- taskPrompt: ALWAYS extract the task/action content from the input, e.g. "发送新闻摘要", "提醒我开会", "检查代码". If the input contains any action/verb after the schedule, that IS the taskPrompt. Never omit it.
 - For "once" tasks, also include "runAt": "YYYY-MM-DDTHH:MM:00" (must be in the future relative to current time)
 - Weekdays: 0=Sunday, 1=Monday, ..., 5=Friday, 6=Saturday
-- "工作日" means weekdays: use "1-5" for dayOfWeek field`
+- "工作日" means weekdays: use "1-5" for dayOfWeek field
+- "每N分钟" = every N minutes: cronExpression = "0 */N * * * *"
+- "每N小时" = every N hours: cronExpression = "0 0 */N * * *"
+- When user says "每五分钟发送新闻摘要", taskPrompt should be "发送新闻摘要"
+- When user says "每天19点提醒我吃饭", taskPrompt should be "提醒我吃饭"`
 }
 
 /**

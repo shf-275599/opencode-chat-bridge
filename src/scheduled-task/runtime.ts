@@ -29,6 +29,8 @@ interface RuntimeConfig {
   serverUrl: string
   logger: RuntimeLogger
   timeoutMs?: number
+  /** Called before task execution to snapshot existing attachments */
+  snapshotAttachments?: (chatId: string) => Promise<void>
 }
 
 /**
@@ -70,12 +72,15 @@ export class ScheduledTaskRuntime {
 
     const { logger } = this.config
 
+    logger.info("[runtime] Starting task recovery...")
+
     try {
       const tasks = await listScheduledTasks()
-      logger.info(`[runtime] Recovering ${tasks.length} scheduled tasks from store`)
+      logger.info(`[runtime] Found ${tasks.length} tasks in store, checking for enabled ones...`)
 
       for (const task of tasks) {
         if (task.enabled) {
+          logger.info(`[runtime] Recovering enabled task: ${task.id} - ${task.name}`)
           this.taskRegistry.set(task.id, task)
           this.scheduleTask(task)
         }
@@ -160,6 +165,10 @@ export class ScheduledTaskRuntime {
 
     logger.info(`[runtime] Executing task "${task.name}" (id=${taskId})`)
 
+    if (this.config?.snapshotAttachments) {
+      await this.config.snapshotAttachments(task.chatId)
+    }
+
     await updateScheduledTask(taskId, (t) => ({
       ...t,
       lastStatus: "running",
@@ -176,6 +185,7 @@ export class ScheduledTaskRuntime {
 
       const delivery: TaskDelivery = {
         taskId,
+        taskName: task.name,
         scheduleSummary: task.scheduleSummary,
         prompt: task.prompt,
         runAt: startTime,
@@ -184,9 +194,12 @@ export class ScheduledTaskRuntime {
           result.status === "success"
             ? result.resultText ?? "(no response)"
             : result.errorMessage ?? "Unknown error",
+        sessionId: result.sessionId,
         channelId: task.channelId,
         chatId: task.chatId,
       }
+
+      logger.info(`[runtime] Task "${task.name}" result: status=${result.status}, resultText length=${(result.resultText || "").length}, messageText length=${delivery.messageText.length}`)
 
       await updateScheduledTask(taskId, (t) => ({
         ...t,
@@ -210,6 +223,7 @@ export class ScheduledTaskRuntime {
 
       const errorDelivery: TaskDelivery = {
         taskId,
+        taskName: task.name,
         scheduleSummary: task.scheduleSummary,
         prompt: task.prompt,
         runAt: startTime,
@@ -227,10 +241,13 @@ export class ScheduledTaskRuntime {
 
   private async handleDelivery(delivery: TaskDelivery): Promise<void> {
     if (!this.sendFn) {
+      this.config?.logger.warn(`[runtime] handleDelivery: sendFn is not set, skipping delivery`)
       return
     }
 
+    this.config?.logger.info(`[runtime] handleDelivery: delivering to channel=${delivery.channelId}, chatId=${delivery.chatId}`)
     await this.sendFn(delivery)
+    this.config?.logger.info(`[runtime] handleDelivery: completed`)
   }
 
   private rescheduleTask(taskId: string): void {

@@ -105,6 +105,9 @@ export const zhCN = {
       success: "✅ 任务已创建: {name}",
       cancelled: "❌ 任务创建已取消",
       unknown: "未知的创建阶段。",
+      successWithId: "✅ 任务已创建 (ID: {taskId})",
+      notInCreationFlow: "当前不在任务创建流程中。",
+      missingData: "缺少任务数据，请重新创建。",
     },
     preview: {
       title: "📋 任务预览",
@@ -114,12 +117,20 @@ export const zhCN = {
       model: "模型",
       agent: "Agent",
       prompt: "任务",
+      confirmHint: "点击下方按钮确认或取消创建",
+    },
+    remove: {
+      title: "🗑️ 删除任务",
+      hint: "点击按钮直接删除任务",
+      empty: "暂无定时任务可删除。",
     },
     kind: {
       cron: "周期执行",
       once: "单次执行",
     },
     modelNotSet: "未设置",
+    confirm: "确认",
+    reject: "取消",
   },
 }
 

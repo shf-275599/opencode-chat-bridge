@@ -30,6 +30,7 @@ import {
   buildTaskListText,
   buildTaskCreationCard,
   buildTaskPreviewCard,
+  buildTaskRemoveCard,
 } from "../scheduled-task/display.js"
 import { tryParseSchedule, llmParseSchedule } from "../scheduled-task/llm-schedule-parser.js"
 import { TaskCreationManager } from "../scheduled-task/creation-manager.js"
@@ -201,6 +202,19 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     }
   }
 
+  function buildDiscordRemoveCard(tasks: TaskDisplayItem[]) {
+    const lines = tasks.map((t) => {
+      const status = t.lastStatus === "success" ? "✅" : t.lastStatus === "error" ? "❌" : t.lastStatus === "running" ? "🔄" : "💤"
+      const enabled = t.enabled ? "●" : "○"
+      return `${enabled} ${status} *${t.name}*\n  ${t.scheduleSummary}\n  ID: ${t.id}`
+    })
+    const text = "🗑️ Delete Task\n\n" + lines.join("\n\n")
+    return {
+      text,
+      rows: tasks.map((task) => ({ text: `🗑️ Delete: ${task.name}`, command: `/cron remove ${task.id}` })),
+    }
+  }
+
   function buildTelegramAgentCard(currentAgent: string, names: string[]) {
     return createTelegramInlineCard(
       `Current agent: ${currentAgent}\nChoose the agent to use:`,
@@ -217,6 +231,25 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       models.slice(0, 8).map((model) => [{
         text: model.id === currentModelId ? `• ${model.id}` : model.id,
         payload: { action: "cmd" as const, command: `/models ${model.id}` },
+      }]),
+    )
+  }
+
+  function buildTelegramRemoveCard(tasks: TaskDisplayItem[]) {
+    if (tasks.length === 0) {
+      return createTelegramInlineCard("No tasks to delete.", [])
+    }
+    const lines = tasks.map((t) => {
+      const status = t.lastStatus === "success" ? "✅" : t.lastStatus === "error" ? "❌" : t.lastStatus === "running" ? "🔄" : "💤"
+      const enabled = t.enabled ? "●" : "○"
+      return `${enabled} ${status} *${t.name}*\n  ${t.scheduleSummary}\n  ID: ${t.id}`
+    })
+    const text = "🗑️ Delete Task\n\n" + lines.join("\n\n")
+    return createTelegramInlineCard(
+      text,
+      tasks.map((task) => [{
+        text: `🗑️ Delete: ${task.name}`,
+        payload: { action: "cmd" as const, command: `/cron remove ${task.id}` },
       }]),
     )
   }
@@ -631,6 +664,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
         id: task.id,
         name: task.name,
+        prompt: task.prompt,
         scheduleSummary: task.scheduleSummary,
         nextRunAt: task.nextRunAt,
         lastRunAt: task.lastRunAt,
@@ -647,13 +681,101 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     if (sub === "remove") {
       const taskId = args[1]
-      if (!taskId) {
-        await replyText(chatId, messageId, t(locale, "command.cronUsage"), channelId)
+      if (taskId) {
+        const success = await removeScheduledTask(taskId)
+        scheduledTaskRuntime.removeTask(taskId)
+        await replyText(chatId, messageId, t(locale, success ? "command.cronJobRemoved" : "command.cronJobNotFound", { jobId: taskId }), channelId)
         return
       }
-      const success = await removeScheduledTask(taskId)
-      scheduledTaskRuntime.removeTask(taskId)
-      await replyText(chatId, messageId, t(locale, success ? "command.cronJobRemoved" : "command.cronJobNotFound", { jobId: taskId }), channelId)
+
+      const tasks = await listScheduledTasks()
+      const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
+        id: task.id,
+        name: task.name,
+        prompt: task.prompt,
+        scheduleSummary: task.scheduleSummary,
+        nextRunAt: task.nextRunAt,
+        lastRunAt: task.lastRunAt,
+        lastStatus: task.lastStatus,
+        enabled: task.enabled,
+      }))
+
+      if (channelId === "feishu") {
+        const card = buildTaskRemoveCard(displayItems, locale)
+        await replyCard(chatId, messageId, { card, text: "" }, channelId)
+      } else if (channelId === "telegram") {
+        const card = buildTelegramRemoveCard(displayItems)
+        if (card) {
+          await replyCard(chatId, messageId, { card, text: card.text }, channelId)
+        } else {
+          await replyText(chatId, messageId, "No tasks to delete.", channelId)
+        }
+      } else if (channelId === "discord") {
+        const card = buildDiscordRemoveCard(displayItems)
+        await replyCard(chatId, messageId, { card, text: card.text }, channelId)
+      } else {
+        await replyText(chatId, messageId, buildTaskListText(displayItems, locale), channelId)
+      }
+      return
+    }
+
+    if (sub === "confirm" || sub === "reject") {
+      const manager = creationManagers.get(feishuKey)
+      if (!manager) {
+        await replyText(chatId, messageId, t(locale, "scheduledTask.creation.notInCreationFlow"), channelId)
+        return
+      }
+
+      const state = manager.getState()
+      if (!state || (state.stage !== "preview" && state.stage !== "confirming")) {
+        await replyText(chatId, messageId, t(locale, "scheduledTask.creation.notInCreationFlow"), channelId)
+        return
+      }
+
+      if (sub === "reject") {
+        manager.clear()
+        creationManagers.delete(feishuKey)
+        await replyText(chatId, messageId, t(locale, "scheduledTask.creation.cancelled"), channelId)
+        return
+      }
+
+      // confirm: create and save the task
+      const { parsedSchedule, prompt, model, agent, projectId, projectWorktree, sessionId } = state
+      if (!parsedSchedule || !prompt) {
+        await replyText(chatId, messageId, t(locale, "scheduledTask.creation.missingData"), channelId)
+        return
+      }
+
+      const taskId = Math.random().toString(36).substring(2, 9)
+      const newTask = await addScheduledTask({
+        id: taskId,
+        name: parsedSchedule.summary,
+        kind: parsedSchedule.kind,
+        prompt,
+        schedule: state.scheduleText ?? "",
+        scheduleSummary: parsedSchedule.summary,
+        cronExpression: parsedSchedule.cronExpression,
+        model: model ?? { providerID: "", modelID: "" },
+        agent: agent ?? "build",
+        projectId: projectId ?? "",
+        projectWorktree: projectWorktree ?? "",
+        enabled: true,
+        sessionId: sessionId ?? undefined,
+        runAt: parsedSchedule.runAt,
+        nextRunAt: null,
+        lastRunAt: null,
+        lastStatus: "idle",
+        lastError: null,
+        runCount: 0,
+        createdAt: new Date().toISOString(),
+        channelId,
+        chatId,
+      })
+
+      scheduledTaskRuntime.registerTask(newTask)
+      creationManagers.delete(feishuKey)
+
+      await replyText(chatId, messageId, t(locale, "scheduledTask.creation.successWithId", { taskId: newTask.id }), channelId)
       return
     }
 
@@ -696,7 +818,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         // No inline input → show wizard prompt, wait for next message
         const state = manager.getState()
         if (state) {
-          await replyText(chatId, messageId, buildTaskCreationCard(state.stage, state, locale), channelId)
+          const result = buildTaskCreationCard(state.stage, state, locale, channelId)
+          if (typeof result === "object") {
+            await replyCard(chatId, messageId, { card: result, text: "" }, channelId)
+          } else {
+            await replyText(chatId, messageId, result, channelId)
+          }
         }
         return
       }
@@ -707,7 +834,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         manager.setSchedule(inlineInput, fastParsed)
         const state = manager.getState()
         if (state) {
-          await replyText(chatId, messageId, buildTaskCreationCard(state.stage, state, locale), channelId)
+          const result = buildTaskCreationCard(state.stage, state, locale, channelId)
+          if (typeof result === "object") {
+            await replyCard(chatId, messageId, { card: result, text: "" }, channelId)
+          } else {
+            await replyText(chatId, messageId, result, channelId)
+          }
         }
         return
       }
@@ -725,7 +857,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
         const state = manager.getState()
         if (state) {
-          await replyText(chatId, messageId, buildTaskCreationCard(state.stage, state, locale), channelId)
+          const result = buildTaskCreationCard(state.stage, state, locale, channelId)
+          if (typeof result === "object") {
+            await replyCard(chatId, messageId, { card: result, text: "" }, channelId)
+          } else {
+            await replyText(chatId, messageId, result, channelId)
+          }
         }
       } catch (err) {
         logger.warn(`[handleCron] LLM schedule parse failed: ${err}`)
@@ -1287,7 +1424,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         manager.setSchedule(userInput, fastParsed)
         const nextState = manager.getState()
         if (nextState) {
-          await replyText(chatId, messageId, buildTaskCreationCard(nextState.stage, nextState, locale), channelId)
+          const result = buildTaskCreationCard(nextState.stage, nextState, locale, channelId)
+          if (typeof result === "object") {
+            await replyCard(chatId, messageId, { card: result, text: "" }, channelId)
+          } else {
+            await replyText(chatId, messageId, result, channelId)
+          }
         }
         return true
       }
@@ -1302,7 +1444,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         }
         const nextState = manager.getState()
         if (nextState) {
-          await replyText(chatId, messageId, buildTaskCreationCard(nextState.stage, nextState, locale), channelId)
+          const result = buildTaskCreationCard(nextState.stage, nextState, locale, channelId)
+          if (typeof result === "object") {
+            await replyCard(chatId, messageId, { card: result, text: "" }, channelId)
+          } else {
+            await replyText(chatId, messageId, result, channelId)
+          }
         }
       } catch (err) {
         logger.warn(`[handleTaskConfirmation] LLM schedule parse failed: ${err}`)
@@ -1323,8 +1470,12 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       const locale = getLocale(channelId)
       const nextState = manager.getState()
       if (nextState) {
-        const text = buildTaskCreationCard(nextState.stage, nextState, locale)
-        await replyText(chatId, messageId, text, channelId)
+        const result = buildTaskCreationCard(nextState.stage, nextState, locale, channelId)
+        if (typeof result === "object") {
+          await replyCard(chatId, messageId, { card: result, text: "" }, channelId)
+        } else {
+          await replyText(chatId, messageId, result, channelId)
+        }
       }
       return true
     }

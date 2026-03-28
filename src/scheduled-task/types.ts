@@ -66,11 +66,13 @@ export interface TaskCreationState {
 
 export interface TaskDelivery {
   taskId: string
+  taskName: string
   scheduleSummary: string
   prompt: string
   runAt: string
   status: "success" | "error"
   messageText: string
+  sessionId?: string
   /** 路由信息：回复到哪个频道 */
   channelId: string
   /** 路由信息：回复到哪个 chat */
@@ -80,6 +82,7 @@ export interface TaskDelivery {
 export interface TaskDisplayItem {
   id: string
   name: string
+  prompt?: string
   scheduleSummary: string
   nextRunAt: string | null
   lastRunAt: string | null

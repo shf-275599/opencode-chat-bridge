@@ -456,13 +456,18 @@ export function createMessageHandler(
     // ── 4d. Check for natural language schedule intent ──
     const schedulePatterns = [/每天.*[点时]/, /每周.*[点时]/, /每.*小时/, /每.*分钟/, /提醒我/, /定时任务/]
     if (schedulePatterns.some(p => p.test(userText))) {
+      logger.info(`[schedule-intent] Detected schedule intent in: "${userText}"`)
       if (cmdHandlerEx?.handleTaskConfirmation) {
         // Start a new task creation flow
         const session = deps.sessionManager?.getSession(feishuKey)
+        logger.info(`[schedule-intent] Session check for ${feishuKey}: ${session ? 'found' : 'not found'}`)
         if (session && deps.commandHandler) {
           await deps.commandHandler(feishuKey, event.chat_id, event.message_id, "/cron add", channelId)
           const confirmed = await cmdHandlerEx.handleTaskConfirmation(feishuKey, event.chat_id, event.message_id, channelId, userText)
+          logger.info(`[schedule-intent] handleTaskConfirmation result: ${confirmed}`)
           if (confirmed) return
+        } else {
+          logger.warn(`[schedule-intent] No session found for ${feishuKey}, cannot create task`)
         }
       }
     }

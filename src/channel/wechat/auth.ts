@@ -73,6 +73,58 @@ async function renderQrToTerminal(qrString: string): Promise<void> {
   }
 }
 
+const MIN_QRCODE_SIZE = 100 // 最小有效二维码图片大小（字节）
+
+/**
+ * 判断字符串是否为 URL
+ */
+function isUrl(str: string): boolean {
+  return str.startsWith("http://") || str.startsWith("https://")
+}
+
+async function saveQrcodeImage(content: string, filePath: string): Promise<boolean> {
+  try {
+    // 如果 content 是 URL，下载图片
+    if (isUrl(content)) {
+      log.info(`[DEBUG] qrcode_img_content 是 URL，正在下载: ${content}`)
+      const res = await fetch(content)
+      if (!res.ok) {
+        log.warn(`下载二维码图片失败: HTTP ${res.status}`)
+        return false
+      }
+      const imageBuffer = Buffer.from(await res.arrayBuffer())
+      if (imageBuffer.length < MIN_QRCODE_SIZE) {
+        log.warn(`二维码图片数据过小 (${imageBuffer.length} 字节)，可能无效`)
+        return false
+      }
+      fs.writeFileSync(filePath, imageBuffer)
+      return true
+    }
+
+    // 否则当作 base64 解码
+    const imageBuffer = Buffer.from(content, "base64")
+    // 验证解码后的数据是否像有效的 PNG 图片
+    if (imageBuffer.length < MIN_QRCODE_SIZE) {
+      log.warn(`二维码图片数据过小 (${imageBuffer.length} 字节)，可能无效`)
+      return false
+    }
+    // PNG 文件以 0x89 50 4E 47 开头
+    const isPng = imageBuffer[0] === 0x89 &&
+      imageBuffer[1] === 0x50 &&
+      imageBuffer[2] === 0x4e &&
+      imageBuffer[3] === 0x47
+    if (!isPng) {
+      log.warn("二维码图片数据不是有效的 PNG 格式")
+      return false
+    }
+    fs.writeFileSync(filePath, imageBuffer)
+    return true
+  } catch (err) {
+    log.warn(`保存二维码图片失败: ${err}`)
+    return false
+  }
+}
+
 export async function login(
   baseUrl: string,
   sessionFile: string | undefined,
@@ -83,6 +135,7 @@ export async function login(
   onStatus("开始微信扫码登录...")
 
   const qrResp = await getQrcode(baseUrl)
+  log.info(`[DEBUG] getQrcode 响应: qrcode=${qrResp.qrcode?.substring(0, 8)}..., qrcode_img_content 长度=${qrResp.qrcode_img_content?.length ?? 0}`)
 
   const dataDir = getDefaultDataDir()
   if (!fs.existsSync(dataDir)) {
@@ -90,17 +143,44 @@ export async function login(
   }
 
   const qrFilePath = getDefaultQrcodeFile()
+  let qrcodeFileSaved = false
+  let qrcodeUrl: string | undefined
+
   if (qrResp.qrcode_img_content) {
-    const imageBuffer = Buffer.from(qrResp.qrcode_img_content, "base64")
-    fs.writeFileSync(qrFilePath, imageBuffer)
+    // qrcode_img_content 可能是 URL 或 base64 数据
+    if (isUrl(qrResp.qrcode_img_content)) {
+      qrcodeUrl = qrResp.qrcode_img_content
+      qrcodeFileSaved = await saveQrcodeImage(qrResp.qrcode_img_content, qrFilePath)
+      if (!qrcodeFileSaved) {
+        log.warn("无法下载二维码图片文件，请使用终端二维码")
+      }
+    } else {
+      // base64 格式
+      qrcodeFileSaved = await saveQrcodeImage(qrResp.qrcode_img_content, qrFilePath)
+      if (!qrcodeFileSaved) {
+        log.warn("无法保存二维码图片文件，请使用终端二维码")
+      }
+    }
+  } else {
+    log.warn("API 未返回二维码图片数据 (qrcode_img_content 为空)")
   }
 
-  await renderQrToTerminal(qrResp.qrcode)
+  // 终端二维码：优先显示 URL（微信扫码需要），否则显示 qrcode 标识符
+  const qrContent = qrcodeUrl ?? qrResp.qrcode
+  await renderQrToTerminal(qrContent)
   onStatus("请使用微信扫描上方二维码（5分钟内有效）")
-  onStatus(`二维码图片已保存到: ${qrFilePath}`)
+  if (qrcodeFileSaved) {
+    onStatus(`二维码图片已保存到: ${qrFilePath}`)
+  }
 
-  if (callbacks.onQrcode && qrResp.qrcode_img_content) {
-    callbacks.onQrcode(`data:image/png;base64,${qrResp.qrcode_img_content}`)
+  if (callbacks.onQrcode) {
+    if (qrcodeUrl) {
+      // 回调传递 URL
+      callbacks.onQrcode(qrcodeUrl)
+    } else if (qrResp.qrcode_img_content) {
+      // base64 格式
+      callbacks.onQrcode(`data:image/png;base64,${qrResp.qrcode_img_content}`)
+    }
   }
 
   onStatus("等待扫码确认...")
@@ -143,12 +223,14 @@ export async function login(
         const newQr = await getQrcode(baseUrl)
         currentQrcode = newQr.qrcode
         if (newQr.qrcode_img_content) {
-          const imageBuffer = Buffer.from(newQr.qrcode_img_content, "base64")
-          fs.writeFileSync(qrFilePath, imageBuffer)
-        }
-        await renderQrToTerminal(newQr.qrcode)
-        if (callbacks.onQrcode && newQr.qrcode_img_content) {
-          callbacks.onQrcode(`data:image/png;base64,${newQr.qrcode_img_content}`)
+          const newUrl = isUrl(newQr.qrcode_img_content) ? newQr.qrcode_img_content : undefined
+          await saveQrcodeImage(newQr.qrcode_img_content, qrFilePath)
+          await renderQrToTerminal(newUrl ?? newQr.qrcode)
+          if (callbacks.onQrcode) {
+            callbacks.onQrcode(newUrl ?? `data:image/png;base64,${newQr.qrcode_img_content}`)
+          }
+        } else {
+          await renderQrToTerminal(newQr.qrcode)
         }
         onStatus("请重新扫描上方新二维码")
         break

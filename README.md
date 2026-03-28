@@ -67,6 +67,45 @@
 - `/agent`：切换 Agent（飞书返回交互式卡片）
 - `/status`：查看当前状态（服务器、模型、会话、Context 用量等）
 - `/help` 或 `/`：查看命令帮助菜单
+- `/cron add`：创建定时任务（飞书返回交互式预览卡片，支持确认/拒绝按钮）
+- `/cron remove`：删除定时任务（飞书/Telegram/Discord 返回交互式卡片）
+- `/cron list`：查看定时任务列表
+
+### 定时任务 (/cron)
+
+支持创建周期性和一次性定时任务，自动执行并通过 IM 平台发送结果。
+
+**创建任务：**
+
+```
+/cron 每五分钟发送新闻摘要
+/cron 每天19:00提醒我开会
+/cron 创建任务每2小时检查一次代码
+```
+
+任务创建流程：
+1. 输入自然语言描述（支持中文数字，如"每五分钟"）
+2. AI 自动解析周期和任务内容
+3. 预览任务信息，确认后创建
+4. 任务将在指定时间自动执行
+
+**定时任务特性：**
+
+- **IM 上下文注入**：任务执行时 AI 知道通过哪个平台与用户交互
+- **文件自动发送**：将文件保存到 `.opencode-lark/attachments/` 目录，系统自动发送给用户
+- **交互式卡片**：
+  - 飞书：确认/拒绝按钮卡片
+  - Telegram：Inline keyboard
+  - Discord：Button rows
+- **丰富的信息展示**：任务卡片显示名称、ID、周期、状态、运行时间等
+
+**执行结果通知：**
+
+任务执行完成后，自动将结果文本和检测到的文件发送给用户。支持的文件类型：
+- 图片：PNG、JPG、GIF、WebP
+- 音频：MP3、WAV、OGG
+- 视频：MP4、MOV
+- 文档：PDF、Word、Excel、PPT、代码文件等
 
 ![斜杠命令演示](screenshot/slash.png)
 
@@ -209,6 +248,19 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 
 ## 项目结构
 
+```
+src/
+├── index.ts         # 入口，9 阶段启动 + 优雅关闭
+├── types.ts         # 共享类型定义
+├── channel/         # ChannelPlugin 接口、ChannelManager、FeishuPlugin
+├── feishu/          # 飞书 REST 客户端、CardKit、WebSocket、消息去重
+├── handler/         # MessageHandler（入站管道）+ StreamingBridge（SSE → 卡片）
+├── session/         # TUI session 发现、thread→session 映射、进度卡片
+├── streaming/       # EventProcessor（SSE 解析）、SessionObserver、SubAgentTracker
+├── memory/          # SQLite 驱动的会话级对话记忆
+├── scheduled-task/  # 定时任务管理（创建、执行、通知）
+├── cron/            # CronService（定时任务）+ HeartbeatService
+└── utils/          # 配置加载、日志、SQLite 初始化、EventListenerMap
 ```
 src/
 ├── index.ts         # 入口，9 阶段启动 + 优雅关闭

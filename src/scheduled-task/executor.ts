@@ -54,15 +54,8 @@ export async function executeScheduledTask(
     logger.info(`[executor] Dedicated session created: ${sessionId}`)
 
     const attachmentsDir = getAttachmentsDir()
-    const imContext = `【任务执行上下文】
-你正在通过 ${task.channelId} 平台 (chatId: ${task.chatId}) 与用户交互。任务完成后，你的回复将通过该平台发送给用户。
+    const imContext = `[Task Context: ${task.channelId} (chatId: ${task.chatId})] Save files -> ${attachmentsDir} (auto-send to user). You can save files to this directory after task completed.
 
-【文件发送说明】
-如果你需要向用户发送文件（如图片、文档、代码等），请将文件保存到以下目录：
-${attachmentsDir}
-系统会自动检测该目录中的新文件并发送给用户。支持的文件类型：图片(png/jpg/gif/webp)、音频、视频、PDF、文档、代码文件等。
-
----任务内容---
 ${task.prompt}`
 
     const resp = await fetch(`${serverUrl}/session/${sessionId}/prompt_async`, {

@@ -1,6 +1,5 @@
 import fs from "node:fs"
 import path from "node:path"
-import QRCode from "qrcode"
 import {
   ILINK_BASE_URL,
   type WechatSession,
@@ -18,10 +17,6 @@ export function getDefaultSessionFile(): string {
 export function getDefaultDataDir(): string {
   const cwdBase = process.env["OPENCODE_CWD"] ?? process.cwd()
   return path.resolve(cwdBase, ".opencode-lark")
-}
-
-export function getDefaultQrcodeFile(): string {
-  return path.resolve(getDefaultDataDir(), "wechat-qrcode.png")
 }
 
 export function loadSession(sessionFile?: string): WechatSession | null {
@@ -64,67 +59,6 @@ export interface LoginCallbacks {
   onStatus?: (message: string) => void
 }
 
-async function renderQrToTerminal(qrString: string): Promise<void> {
-  try {
-    const str = await QRCode.toString(qrString, { type: "terminal", small: true })
-    process.stdout.write("\n" + str + "\n")
-  } catch {
-    // If terminal rendering fails, skip
-  }
-}
-
-const MIN_QRCODE_SIZE = 100 // 最小有效二维码图片大小（字节）
-
-/**
- * 判断字符串是否为 URL
- */
-function isUrl(str: string): boolean {
-  return str.startsWith("http://") || str.startsWith("https://")
-}
-
-async function saveQrcodeImage(content: string, filePath: string): Promise<boolean> {
-  try {
-    // 如果 content 是 URL，下载图片
-    if (isUrl(content)) {
-      log.info(`[DEBUG] qrcode_img_content 是 URL，正在下载: ${content}`)
-      const res = await fetch(content)
-      if (!res.ok) {
-        log.warn(`下载二维码图片失败: HTTP ${res.status}`)
-        return false
-      }
-      const imageBuffer = Buffer.from(await res.arrayBuffer())
-      if (imageBuffer.length < MIN_QRCODE_SIZE) {
-        log.warn(`二维码图片数据过小 (${imageBuffer.length} 字节)，可能无效`)
-        return false
-      }
-      fs.writeFileSync(filePath, imageBuffer)
-      return true
-    }
-
-    // 否则当作 base64 解码
-    const imageBuffer = Buffer.from(content, "base64")
-    // 验证解码后的数据是否像有效的 PNG 图片
-    if (imageBuffer.length < MIN_QRCODE_SIZE) {
-      log.warn(`二维码图片数据过小 (${imageBuffer.length} 字节)，可能无效`)
-      return false
-    }
-    // PNG 文件以 0x89 50 4E 47 开头
-    const isPng = imageBuffer[0] === 0x89 &&
-      imageBuffer[1] === 0x50 &&
-      imageBuffer[2] === 0x4e &&
-      imageBuffer[3] === 0x47
-    if (!isPng) {
-      log.warn("二维码图片数据不是有效的 PNG 格式")
-      return false
-    }
-    fs.writeFileSync(filePath, imageBuffer)
-    return true
-  } catch (err) {
-    log.warn(`保存二维码图片失败: ${err}`)
-    return false
-  }
-}
-
 export async function login(
   baseUrl: string,
   sessionFile: string | undefined,
@@ -142,43 +76,13 @@ export async function login(
     fs.mkdirSync(dataDir, { recursive: true })
   }
 
-  const qrFilePath = getDefaultQrcodeFile()
-  let qrcodeFileSaved = false
-  let qrcodeUrl: string | undefined
-
-  if (qrResp.qrcode_img_content) {
-    // qrcode_img_content 可能是 URL 或 base64 数据
-    if (isUrl(qrResp.qrcode_img_content)) {
-      qrcodeUrl = qrResp.qrcode_img_content
-      qrcodeFileSaved = await saveQrcodeImage(qrResp.qrcode_img_content, qrFilePath)
-      if (!qrcodeFileSaved) {
-        log.warn("无法下载二维码图片文件，请使用终端二维码")
-      }
-    } else {
-      // base64 格式
-      qrcodeFileSaved = await saveQrcodeImage(qrResp.qrcode_img_content, qrFilePath)
-      if (!qrcodeFileSaved) {
-        log.warn("无法保存二维码图片文件，请使用终端二维码")
-      }
-    }
-  } else {
-    log.warn("API 未返回二维码图片数据 (qrcode_img_content 为空)")
-  }
-
-  // 终端二维码：优先显示 URL（微信扫码需要），否则显示 qrcode 标识符
-  const qrContent = qrcodeUrl ?? qrResp.qrcode
-  await renderQrToTerminal(qrContent)
-  onStatus("请使用微信扫描上方二维码（5分钟内有效）")
-  if (qrcodeFileSaved) {
-    onStatus(`二维码图片已保存到: ${qrFilePath}`)
-  }
+  onStatus(`二维码链接: ${qrResp.qrcode_img_content}`)
+  onStatus("请用微信扫描上方二维码或在浏览器中打开链接（5分钟内有效）")
 
   if (callbacks.onQrcode) {
-    if (qrcodeUrl) {
-      // 回调传递 URL
-      callbacks.onQrcode(qrcodeUrl)
-    } else if (qrResp.qrcode_img_content) {
-      // base64 格式
+    if (qrResp.qrcode_img_content.startsWith("http")) {
+      callbacks.onQrcode(qrResp.qrcode_img_content)
+    } else {
       callbacks.onQrcode(`data:image/png;base64,${qrResp.qrcode_img_content}`)
     }
   }
@@ -222,15 +126,13 @@ export async function login(
         onStatus(`二维码过期，正在刷新 (${refreshCount}/3)...`)
         const newQr = await getQrcode(baseUrl)
         currentQrcode = newQr.qrcode
-        if (newQr.qrcode_img_content) {
-          const newUrl = isUrl(newQr.qrcode_img_content) ? newQr.qrcode_img_content : undefined
-          await saveQrcodeImage(newQr.qrcode_img_content, qrFilePath)
-          await renderQrToTerminal(newUrl ?? newQr.qrcode)
-          if (callbacks.onQrcode) {
-            callbacks.onQrcode(newUrl ?? `data:image/png;base64,${newQr.qrcode_img_content}`)
+        onStatus(`新二维码链接: ${newQr.qrcode_img_content}`)
+        if (callbacks.onQrcode) {
+          if (newQr.qrcode_img_content.startsWith("http")) {
+            callbacks.onQrcode(newQr.qrcode_img_content)
+          } else {
+            callbacks.onQrcode(`data:image/png;base64,${newQr.qrcode_img_content}`)
           }
-        } else {
-          await renderQrToTerminal(newQr.qrcode)
         }
         onStatus("请重新扫描上方新二维码")
         break

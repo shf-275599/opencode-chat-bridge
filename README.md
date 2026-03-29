@@ -8,8 +8,6 @@
 ![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
----
-
 ## 功能特性
 
 - **实时桥接** — 飞书消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回飞书。支持 **Markdown 格式渲染**（标题、列表、代码块等）。

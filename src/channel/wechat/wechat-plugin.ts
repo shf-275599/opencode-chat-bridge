@@ -224,12 +224,13 @@ export class WechatPlugin extends BaseChannelPlugin {
         this.logger.info(`[WechatPlugin] Sending image: ${filePath}`)
 
         const fileData = await readFile(filePath)
+        const fileKey = crypto.randomBytes(16).toString("hex")
         const aesKey = generateAESKey()
         const encrypted = encryptAES128ECB(fileData, aesKey)
         const fileMd5 = md5(fileData)
 
         const uploadResp = await getUploadURL(this._session.baseUrl, this._session.token, {
-          filekey: fileMd5,
+          filekey: fileKey,
           media_type: CDNMediaTypeImage,
           to_user_id: target.address,
           rawsize: fileData.length,
@@ -240,22 +241,28 @@ export class WechatPlugin extends BaseChannelPlugin {
           base_info: { channel_version: CHANNEL_VERSION },
         })
 
-        if (!uploadResp.upload_param) {
-          throw new Error("Failed to get upload URL")
+        const uploadFullUrl = (uploadResp as any).upload_full_url
+        let uploadUrl: string
+        if (uploadFullUrl) {
+          uploadUrl = uploadFullUrl
+        } else if (uploadResp.upload_param) {
+          uploadUrl = `https://novac2c.cdn.weixin.qq.com/c2c/upload?encrypted_query_param=${uploadResp.upload_param}&filekey=${fileKey}`
+        } else {
+          throw new Error("Failed to get upload URL: no upload_param or upload_full_url")
         }
 
-        await uploadToCDN(uploadResp.upload_param, encrypted)
+        const downloadParam = await uploadToCDN(uploadUrl, encrypted)
 
         const contextToken = this._contextTokenMap.get(target.address) || ""
+        const aesKeyBase64 = Buffer.from(aesKey, "hex").toString("base64")
         await sendImageMessage(
           this._session.baseUrl,
           this._session.token,
           target.address,
           `wcb-${crypto.randomUUID()}`,
           contextToken,
-          aesKey,
-          fileMd5,
-          encrypted,
+          aesKeyBase64,
+          downloadParam,
           fileData.length,
         )
 

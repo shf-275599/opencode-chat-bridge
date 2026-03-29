@@ -33,17 +33,30 @@ function buildHeaders(token: string | undefined, body: unknown): Record<string, 
 }
 
 export function generateAESKey(): string {
-  return crypto.randomBytes(16).toString("base64")
+  return crypto.randomBytes(16).toString("hex")
 }
 
 export function md5(buffer: Buffer): string {
   return crypto.createHash("md5").update(buffer).digest("hex")
 }
 
-export function encryptAES128ECB(data: Buffer, keyBase64: string): Buffer {
-  const key = Buffer.from(keyBase64, "base64")
+function pkcs7Pad(data: Buffer, blockSize: number): Buffer {
+  const padLen = blockSize - (data.length % blockSize)
+  const pad = Buffer.alloc(padLen, padLen)
+  return Buffer.concat([data, pad])
+}
+
+export function encryptAES128ECB(data: Buffer, keyHex: string): Buffer {
+  const key = Buffer.from(keyHex, "hex")
+  const padded = pkcs7Pad(data, 16)
   const cipher = crypto.createCipheriv("aes-128-ecb", key, null)
-  return Buffer.concat([cipher.update(data), cipher.final()])
+  return Buffer.concat([cipher.update(padded), cipher.final()])
+}
+
+export function decryptAES128ECB(data: Buffer, keyBase64: string): Buffer {
+  const key = Buffer.from(keyBase64, "base64")
+  const decipher = crypto.createDecipheriv("aes-128-ecb", key, null)
+  return Buffer.concat([decipher.update(data), decipher.final()])
 }
 
 export async function apiGet<T>(baseUrl: string, path: string): Promise<T> {
@@ -139,8 +152,7 @@ export async function sendImageMessage(
   clientId: string,
   contextToken: string,
   aesKey: string,
-  md5sum: string,
-  _encryptedData: Buffer,
+  encryptQueryParam: string,
   size: number,
 ): Promise<SendMessageResponse> {
   const request: SendMessageRequest = {
@@ -156,7 +168,7 @@ export async function sendImageMessage(
         image_item: {
           media: {
             aes_key: aesKey,
-            encrypt_query_param: "",
+            encrypt_query_param: encryptQueryParam,
             encrypt_type: 1,
           },
           mid_size: size,
@@ -250,9 +262,9 @@ export async function getUploadURL(
   return apiPost<GetUploadURLResponse>(baseUrl, "ilink/bot/getuploadurl", req, token)
 }
 
-export async function uploadToCDN(uploadParam: string, encryptedData: Buffer): Promise<void> {
+export async function uploadToCDN(uploadParam: string, encryptedData: Buffer): Promise<string> {
   const res = await fetch(uploadParam, {
-    method: "PUT",
+    method: "POST",
     body: encryptedData,
     headers: {
       "Content-Type": "application/octet-stream",
@@ -261,6 +273,11 @@ export async function uploadToCDN(uploadParam: string, encryptedData: Buffer): P
   if (!res.ok) {
     throw new Error(`CDN upload failed: ${res.status}`)
   }
+  const downloadParam = res.headers.get("X-Encrypted-Param")
+  if (!downloadParam) {
+    throw new Error("CDN upload: missing X-Encrypted-Param header")
+  }
+  return downloadParam
 }
 
 export { ILINK_BASE_URL, CHANNEL_VERSION }

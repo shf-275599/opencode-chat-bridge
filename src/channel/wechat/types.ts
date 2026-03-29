@@ -189,6 +189,7 @@ export interface GetUploadURLResponse {
   errcode?: number
   errmsg?: string
   upload_param?: string
+  upload_full_url?: string
 }
 
 // ── Media Info (for sending) ──

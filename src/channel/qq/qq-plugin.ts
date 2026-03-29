@@ -76,32 +76,43 @@ export class QQPlugin extends BaseChannelPlugin {
         })
 
         // Hotfix: after INVALID_SESSION, force a fresh IDENTIFY instead of RESUME
-        // to avoid infinite reconnect loops.
+        // and do a full bot restart after repeated failures.
         {
             const receiver = (this.qqBot as any).receiver ?? (this.qqBot as any).sessionManager?.receiver
             if (receiver && typeof receiver.handleInvalidSession === "function" && typeof receiver.handleHello === "function") {
                 const logger = this.logger
                 const state = receiver as any
-                let forceIdentify = false
+                const bot = this.qqBot
+                let consecutiveInvalidSessions = 0
+                const MAX_CONSECUTIVE_INVALID = 3
+
                 const originalInvalid = state.handleInvalidSession.bind(receiver)
                 const originalHello = state.handleHello.bind(receiver)
 
                 state.handleInvalidSession = (...args: any[]) => {
-                    forceIdentify = true
+                    consecutiveInvalidSessions++
+                    logger.warn(`[QQPlugin] Invalid session detected (${consecutiveInvalidSessions}/${MAX_CONSECUTIVE_INVALID})`)
                     if (typeof state.isReconnect === "boolean") {
                         state.isReconnect = false
                     }
-                    logger.warn("[QQPlugin] Invalid session detected; forcing IDENTIFY on next HELLO")
+                    if (consecutiveInvalidSessions >= MAX_CONSECUTIVE_INVALID) {
+                        logger.warn("[QQPlugin] Too many invalid sessions, forcing full bot restart...")
+                        consecutiveInvalidSessions = 0
+                        bot.stop().catch(() => {})
+                        setTimeout(() => {
+                            bot.start().catch(err => logger.error(`[QQPlugin] Failed to restart bot: ${err}`))
+                        }, 1000)
+                    }
                     return originalInvalid(...args)
                 }
 
-                state.handleHello = async (...args: any[]) => {
-                    if (forceIdentify) {
-                        forceIdentify = false
-                        if (typeof state.isReconnect === "boolean") {
-                            state.isReconnect = false
-                        }
-                        logger.info("[QQPlugin] Forcing IDENTIFY (skip RESUME) after invalid session")
+                state.handleHello = (...args: any[]) => {
+                    if (consecutiveInvalidSessions > 0) {
+                        logger.info("[QQPlugin] HELLO received, resetting invalid session counter")
+                        consecutiveInvalidSessions = 0
+                    }
+                    if (typeof state.isReconnect === "boolean" && !state.isReconnect) {
+                        state.isReconnect = false
                     }
                     return originalHello(...args)
                 }

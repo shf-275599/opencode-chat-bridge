@@ -8,8 +8,6 @@
 ![npm](https://img.shields.io/npm/v/opencode-im-bridge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ET06731/opencode-im-bridge&type=github&theme=hand-drawn)](https://star-history.com/#ET06731/opencode-im-bridge&Date)
-
 ---
 
 ## 功能特性
@@ -307,7 +305,8 @@ bun run build        # 编译到 dist/
 - [op7418/Claude-to-IM-skill](https://github.com/op7418/Claude-to-IM-skill)
 
 ---
-
+[![Star History Chart](https://api.star-history.com/svg?repos=ET06731/opencode-im-bridge&type=github&theme=hand-drawn)](https://star-history.com/#ET06731/opencode-im-bridge&Date)
+---
 ## License
 
 [MIT](LICENSE) © 2026 opencode-im-bridge contributors

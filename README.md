@@ -261,20 +261,6 @@ src/
 ├── cron/            # CronService（定时任务）+ HeartbeatService
 └── utils/          # 配置加载、日志、SQLite 初始化、EventListenerMap
 ```
-src/
-├── index.ts         # 入口，9 阶段启动 + 优雅关闭
-├── types.ts         # 共享类型定义
-├── channel/         # ChannelPlugin 接口、ChannelManager、FeishuPlugin
-├── feishu/          # 飞书 REST 客户端、CardKit、WebSocket、消息去重
-├── handler/         # MessageHandler（入站管道）+ StreamingBridge（SSE → 卡片）
-├── session/         # TUI session 发现、thread→session 映射、进度卡片
-├── streaming/       # EventProcessor（SSE 解析）、SessionObserver、SubAgentTracker
-├── memory/          # SQLite 驱动的会话级对话记忆
-├── cron/            # CronService（定时任务）+ HeartbeatService
-└── utils/           # 配置加载、日志、SQLite 初始化、EventListenerMap
-```
-
----
 
 ## 开发
 

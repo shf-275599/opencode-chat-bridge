@@ -195,14 +195,13 @@ export function createOutboundMediaHandler(
 
       for (const fileName of entries) {
         if (snapshot.has(fileName)) {
-          logger.info(`[OutboundMedia] File ${fileName} already in snapshot, skipping`)
           continue
         }
-        logger.info(`[OutboundMedia] New file detected: ${fileName} (not in snapshot)`)
+        logger.info(`[OutboundMedia] New file detected: ${fileName}`)
         const filePath = join(dir, fileName)
         const type = classifyFile(fileName)
         if (type) {
-          logger.info(`[OutboundMedia] Classified as type: ${type}`)
+          logger.debug(`[OutboundMedia] Classified as type: ${type}`)
           await processFile(filePath, target, adapter, type, logger, allowlist)
         } else {
           logger.warn(`[OutboundMedia] File not classified: ${fileName}`)

@@ -172,3 +172,98 @@ Run `opencode-im-bridge init` and select the `qq` channel, or fill in `QQ_APP_ID
 7. Configure this token in `opencode-im-bridge` via the interactive setup or `.env`.
 
 > **Note**: You can optionally configure `DISCORD_ALLOWED_CHANNEL_IDS` (comma-separated) to restrict the bot to only reply in specific channels.
+
+---
+
+## DingTalk Bot Setup
+
+This section covers how to create a DingTalk enterprise internal app and connect it as a bot.
+
+### 1. Create an Enterprise Internal App
+
+1. Open [DingTalk Open Platform](https://open.dingtalk.com/)
+2. Click **Application Development → Enterprise Internal Development**, then click **Create Application**
+3. Fill in app name and description, select your enterprise
+4. After creation, get the following from the app details page:
+   - **App Key** → set as `DINGTALK_APP_KEY`
+   - **App Secret** → set as `DINGTALK_APP_SECRET`
+
+### 2. Enable Bot Capability
+
+Navigate to **App Features → Bot** and enable the bot capability.
+
+### 3. Configure Permissions
+
+Navigate to **Permissions & Scopes** and add the following:
+
+| Permission | Scope Identifier | Purpose | Required |
+|---|---|---|---|
+| Get and send p2p/group messages | `企微机器人>获取与发送单聊消息` | Send messages | ✅ |
+| Get user info within enterprise | `企业内用户身份-basic:userid:read` | Get user information | ✅ |
+| Upload media files | `微应用>上传媒体文件` | Upload images, files, etc. | ✅ |
+
+### 4. Configure Event Subscription (Long Connection Mode)
+
+1. Navigate to **Development Config → Events & Callbacks**
+2. Select **Long Connection** mode
+3. Add the following event subscription:
+   - Receive Message (`im.message.receive_v1`)
+
+> **Note**: Long Connection mode doesn't require a public server, but opencode-im-bridge must be running to establish the connection.
+
+### 5. Configure opencode-im-bridge
+
+#### Option 1: Environment Variables
+
+```bash
+export DINGTALK_APP_KEY=your_app_key
+export DINGTALK_APP_SECRET=your_app_secret
+export DINGTALK_AGENT_ID=your_agent_id  # Optional
+```
+
+#### Option 2: Configuration File
+
+```jsonc
+{
+  "dingtalk": {
+    "appKey": "your_app_key",
+    "appSecret": "your_app_secret",
+    "agentId": "your_agent_id"  // Optional
+  }
+}
+```
+
+### 6. Start the Service
+
+1. Start opencode server first:
+   ```bash
+   opencode serve
+   ```
+
+2. Then start opencode-im-bridge:
+   ```bash
+   opencode-im-bridge
+   ```
+
+### 7. Verify Configuration
+
+After successful startup, you should see logs similar to:
+```
+[DingTalkPlugin] Starting DingTalk long polling...
+[DingTalkPlugin] Connected as Bot: xxx
+```
+
+Send a message to the bot to test if it's working.
+
+### Technical Features
+
+- Uses HTTP long polling to receive messages (~25 second timeout)
+- Supports text, images, files, audio, and video messages
+- Interactive cards support questions and permission approvals
+- access_token is automatically cached and refreshed
+
+### Notes
+
+- Ensure the DingTalk app is published and the bot is added to group/p2p chat
+- In long connection mode, opencode-im-bridge must remain running
+- In group chats, the bot responds only when @mentioned

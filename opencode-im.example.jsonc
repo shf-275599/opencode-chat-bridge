@@ -17,6 +17,18 @@
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
 
+  // DingTalk application configuration
+  // "dingtalk": {
+  //   // DingTalk Open Platform App Key (env: DINGTALK_APP_KEY)
+  //   "appKey": "${DINGTALK_APP_KEY}",
+  //
+  //   // DingTalk Open Platform App Secret (env: DINGTALK_APP_SECRET)
+  //   "appSecret": "${DINGTALK_APP_SECRET}",
+  //
+  //   // DingTalk Agent ID (optional, env: DINGTALK_AGENT_ID)
+  //   "agentId": "${DINGTALK_AGENT_ID}"
+  // },
+
   // Default opencode agent name. This should match an agent configured in your opencode setup.
   // Common values: "build", "claude", "code" — check your opencode config for available agents.
   "defaultAgent": "build",

@@ -399,9 +399,26 @@ export function createStreamingBridge(
             logger.info(
               `POST completed for session ${sessionId} (${responseBody.length} bytes)`,
             )
-            // 如果没有流式事件，直接发送同步响应
+            // 如果没有流式事件，直接发送同步响应（仅 WeChat 需要特殊处理以防止重复）
             if (!gotFirstEvent && !textBuffer.length) {
-              // 发送 typing 状态
+              if (settled) return
+              // WeChat 同步响应后需要立即 resolve 并设置 settled 防止 SessionIdle 重复发送
+              if (channelId === "wechat") {
+                settled = true
+                const finalText = parseSyncResponse(responseBody, logger)
+                sendFinalResponse(finalText, false)
+                  .then(() => {
+                    onComplete(finalText)
+                    resolve()
+                  })
+                  .catch((err) => {
+                    logger.error(`Failed to send sync response: ${err}`)
+                    onComplete(finalText)
+                    resolve()
+                  })
+                return
+              }
+              // 其他渠道保持原有逻辑
               startTyping()
               const finalText = parseSyncResponse(responseBody, logger)
               sendFinalResponse(finalText, false).catch((err) => {

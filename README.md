@@ -291,6 +291,14 @@ bun run build        # 编译到 dist/
 ---
 [![Star History Chart](https://api.star-history.com/svg?repos=ET06731/opencode-im-bridge&type=github&theme=hand-drawn)](https://star-history.com/#ET06731/opencode-im-bridge&Date)
 ---
-## License
 
+## ☕ 支持作者
+
+如果这个项目对你有帮助，欢迎请作者喝杯咖啡！
+
+<img src="docs/donate.jpg" alt="收款码" width="300" />
+
+---
+
+## License
 [MIT](LICENSE) © 2026 opencode-im-bridge contributors

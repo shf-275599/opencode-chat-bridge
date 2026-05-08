@@ -20,6 +20,7 @@
   },
   "type": "module",
   "files": [
+    "dist",
     "src",
     "bin",
     "README.md",

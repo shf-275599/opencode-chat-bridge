@@ -61,6 +61,11 @@ const CronJobSchema = z.object({
   chatId: z.string(),
   channelId: z.string().optional().default("feishu"),
   enabled: z.boolean().optional().default(true),
+  modelProviderId: z.string().optional(),
+  modelId: z.string().optional(),
+  agent: z.string().optional(),
+  projectId: z.string().optional(),
+  projectWorktree: z.string().optional(),
 })
 
 const CronConfigSchema = z.object({

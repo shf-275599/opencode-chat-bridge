@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.45.1 - 2026-05-09
+
+### Features
+- Add /variants command support with model variant selection
+- Add buildVariantSelectorCard in card-builder
+- Modify handleModels to show variant card after model selection
+- Add i18n strings for variant-related messages
+- Add /variants and /variant command routing
+
 ## 0.43.0 - 2026-03-28
 
 ### Features

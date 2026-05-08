@@ -292,11 +292,52 @@ export function buildModelSelectorCard(
             content: "暂无可用模型。",
           }]
           : []),
-      ],
+        ],
     },
   }
 }
 
+export function buildVariantSelectorCard(
+  variants: Array<{ id: string; name?: string }>,
+  currentModelId?: string,
+): Record<string, unknown> {
+  const currentVariantId = currentModelId ? currentModelId.split('/').pop() : undefined
+
+  return {
+    schema: "2.0",
+    config: { wide_screen_mode: true },
+    header: {
+      title: {
+        tag: "plain_text",
+        content: "🧬 Model Variant",
+      },
+      template: "purple",
+    },
+    body: {
+      elements: [
+        {
+          tag: "markdown",
+          content: "**选择要使用的模型变体：**",
+        },
+        ...variants.slice(0, 10).map((variant) => ({
+          tag: "button",
+          text: {
+            tag: "plain_text",
+            content: `${variant.id === currentVariantId ? "* " : ""}${variant.name ?? variant.id}`,
+          },
+          type: variant.id === currentVariantId ? "primary" : "default",
+          value: { action: "command_execute", command: `/variants ${variant.id}` },
+        })),
+        ...(variants.length > 10
+          ? [{
+              tag: "markdown",
+              content: `_还有 ${variants.length - 10} 个变体，使用 \`/variants {variant}\` 直接切换_`,
+            }]
+          : []),
+      ],
+    },
+  }
+}
 
 export function buildProjectCard(
   projects: Array<{ id: string; worktree: string; name?: string }>,

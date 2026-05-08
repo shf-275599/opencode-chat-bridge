@@ -10,7 +10,7 @@ import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
-import { buildResponseCard, buildProjectSelectorCard, buildProjectCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard } from "../feishu/card-builder.js"
+import { buildResponseCard, buildProjectSelectorCard, buildProjectCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard, buildVariantSelectorCard } from "../feishu/card-builder.js"
 import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
 import { t, getLocale } from "../i18n/index.js"
 
@@ -65,11 +65,17 @@ interface AgentInfo {
   mode: "subagent" | "primary" | "all"
 }
 
+interface VariantInfo {
+  id: string
+  name?: string
+}
+
 interface ProviderModelInfo {
   id: string
   providerId: string
   providerName: string
   modelName: string
+  variants?: VariantInfo[]
 }
 interface ReplyCardPayload {
   text: string
@@ -555,7 +561,28 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       })
 
       if (!matched) {
-        await replyText(chatId, messageId, t(locale, "command.projectNotFound", { project: targetProjectArg }), channelId)
+        await replyText(chatId, messageId, t(locale, "command.projectCreating", { project: targetProjectArg }), channelId)
+
+        const baseDir = process.env.OPENCODE_CWD || process.cwd()
+        const newProjectDir = `${baseDir}/${targetProjectArg}`
+
+        const createResp = await fetch(`${serverUrl}/session?directory=${encodeURIComponent(newProjectDir)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: targetProjectArg }),
+        })
+
+        if (!createResp.ok) {
+          const errText = await createResp.text()
+          await replyText(chatId, messageId, t(locale, "command.projectCreateFailed", { project: targetProjectArg, error: errText }), channelId)
+          return
+        }
+
+        const newData = (await createResp.json()) as { id: string; directory?: string }
+        process.env.OPENCODE_CWD = newData.directory || newProjectDir
+        sessionManager.setMapping(feishuKey, newData.id)
+        logger.info(`/projects: created and switched to project "${targetProjectArg}" (${newData.directory || newProjectDir})`)
+        await replyText(chatId, messageId, t(locale, "command.projectCreated", { project: targetProjectArg, sessionId: newData.id }), channelId)
         return
       }
 
@@ -993,7 +1020,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       all?: Array<{
         id: string
         name: string
-        models?: Record<string, { id?: string; name?: string }>
+        models?: Record<string, { id?: string; name?: string; variants?: Array<{ id?: string; name?: string }> }>
       }>
       connected?: string[]
     }
@@ -1016,12 +1043,21 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     return availableProviders
       .flatMap((provider) =>
-        Object.entries(provider.models ?? {}).map(([modelKey, model]) => ({
-          id: `${provider.id}/${model.id ?? modelKey}`,
-          providerId: provider.id,
-          providerName: provider.name,
-          modelName: model.name ?? model.id ?? modelKey,
-        })),
+        Object.entries(provider.models ?? {}).map(([modelKey, model]) => {
+          const modelId = model.id ?? modelKey
+          const baseId = `${provider.id}/${modelId}`
+          return {
+            id: baseId,
+            providerId: provider.id,
+            providerName: provider.name,
+            modelName: model.name ?? modelId,
+            variants: model.variants ? Object.entries(model.variants).map(([variantKey, variant]: [string, any]) => ({
+              id: `${baseId}#${variantKey}`,
+              name: variant.name ?? variantKey,
+              key: variantKey,
+            })) : [],
+          }
+        }),
       )
       .sort((a, b) => {
         // 1. Favorites from model.json first (preserve order)
@@ -1045,6 +1081,36 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         // 4. Alphabetical by provider name
         return a.providerName.localeCompare(b.providerName)
       })
+  }
+
+  async function listVariants(providerId: string, modelId: string): Promise<VariantInfo[]> {
+    try {
+      const resp = await fetch(`${serverUrl}/provider`)
+      if (!resp.ok) {
+        return []
+      }
+
+      const data = (await resp.json()) as {
+        all?: Array<{
+          id: string
+          models?: Record<string, { variants?: Record<string, { name?: string }> }>
+        }>
+      }
+
+      const provider = (data.all ?? []).find(p => p.id === providerId)
+      if (!provider) return []
+
+      const model = provider.models?.[modelId] ?? provider.models?.[modelId.split('/').pop() || '']
+      if (!model || !model.variants) return []
+
+      return Object.entries(model.variants).map(([variantKey, variant]) => ({
+        id: `${providerId}/${modelId}#${variantKey}`,
+        name: variant?.name ?? variantKey,
+        key: variantKey,
+      }))
+    } catch {
+      return []
+    }
   }
 
   function detectCurrentModel(mapping: SessionMapping | null): string | undefined {
@@ -1179,7 +1245,108 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     sessionManager.setModel(feishuKey, matched.id)
     recordProviderUsage(feishuKey, matched.providerId)
+
+    if (matched.variants && matched.variants.length > 0) {
+      if (channelId === "feishu") {
+        const card = buildVariantSelectorCard(matched.variants, matched.id)
+        await replyCard(chatId, messageId, {
+          text: `Model switched to ${matched.id}. Available variants:\n${matched.variants.map(v => v.id).join("\n")}`,
+          card,
+        }, channelId)
+        return
+      }
+    }
+
     await replyText(chatId, messageId, t(locale, "command.modelSwitched", { model: matched.id }), channelId)
+  }
+
+  async function handleVariants(
+    feishuKey: string,
+    chatId: string,
+    messageId: string,
+    channelId: string,
+    args: string[],
+  ): Promise<void> {
+    const locale = getLocale(channelId)
+    const mapping = sessionManager.getSession(feishuKey)
+    if (!mapping) {
+      await replyText(chatId, messageId, t(locale, "command.noSessionBound"), channelId)
+      return
+    }
+
+    const currentModelId = await getCurrentModelFromFile() ?? detectCurrentModel(mapping)
+    if (!currentModelId) {
+      await replyText(chatId, messageId, t(locale, "command.noModelSet"), channelId)
+      return
+    }
+
+    const [providerId, ...restParts] = currentModelId.split("/")
+    const modelWithVariant = restParts.join("/")
+    const [modelId, _currentVariant] = modelWithVariant.split("#")
+
+    if (!providerId || !modelId) {
+      await replyText(chatId, messageId, t(locale, "command.invalidModelId"), channelId)
+      return
+    }
+
+    const variants = await listVariants(providerId, modelId)
+
+    if (variants.length === 0) {
+      await replyText(chatId, messageId, t(locale, "command.noVariants"), channelId)
+      return
+    }
+
+    const targetRaw = args[0]
+    if (targetRaw) {
+      const matched = variants.find(v => v.id.toLowerCase() === targetRaw.toLowerCase())
+      if (!matched) {
+        await replyText(chatId, messageId, t(locale, "command.variantNotFound", { variant: targetRaw }), channelId)
+        return
+      }
+
+      try {
+        const home = homedir()
+        const statePath = join(home, ".local", "state", "opencode", "model.json")
+        const stateContent = await readFile(statePath, "utf-8").catch(() => '{"favorite":[],"recent":[]}')
+        const state = JSON.parse(stateContent) as {
+          favorite?: Array<{ providerID: string; modelID: string }>
+        }
+
+      if (state.favorite && state.favorite.length > 0) {
+        const [_prov, ...rest] = matched.id.split("/")
+        const modelWithVariant = rest.join("/")
+        const firstFavorite = state.favorite[0]
+        if (firstFavorite) {
+          firstFavorite.modelID = modelWithVariant
+          await writeFile(statePath, JSON.stringify(state, null, 2))
+        }
+      }
+      } catch (err) {
+        logger.warn(`Failed to write model.json for variant: ${err}`)
+      }
+
+      sessionManager.setModel(feishuKey, matched.id)
+      await replyText(chatId, messageId, t(locale, "command.variantSwitched", { variant: matched.id }), channelId)
+      return
+    }
+
+
+    if (channelId === "feishu") {
+      const card = buildVariantSelectorCard(variants, currentModelId)
+      await replyCard(chatId, messageId, {
+        text: `Current model: ${currentModelId}\n\nAvailable variants:\n${variants.map(v => v.id).join("\n")}`,
+        card,
+      }, channelId)
+      return
+    }
+
+    const listText = variants.map((v, i) => `- ${v.id}`).join("\n")
+    await replyText(
+      chatId,
+      messageId,
+      `**Current model:** ${currentModelId}\n\n**Available variants:**\n${listText}\n\n💡 Usage: \`/variants {variant}\``,
+      channelId,
+    )
   }
 
   async function handleStatus(
@@ -1366,6 +1533,11 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         case "/models":
         case "/model":
           await handleModels(feishuKey, chatId, messageId, channelId, parts.slice(1))
+          return true
+
+        case "/variants":
+        case "/variant":
+          await handleVariants(feishuKey, chatId, messageId, channelId, parts.slice(1))
           return true
 
         case "/compact":

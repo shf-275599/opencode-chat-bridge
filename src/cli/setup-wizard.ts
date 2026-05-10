@@ -42,10 +42,8 @@ export async function needsSetup(): Promise<boolean> {
   // 3. Env vars already provide credentials → no setup needed
   const hasFeishu = !!(process.env.FEISHU_APP_ID && process.env.FEISHU_APP_SECRET)
   const hasQq = !!(process.env.QQ_APP_ID && process.env.QQ_SECRET)
-  const hasTelegram = !!process.env.TELEGRAM_BOT_TOKEN
-  const hasDiscord = !!process.env.DISCORD_BOT_TOKEN
   const hasWechat = process.env.WECHAT_ENABLED === "true"
-  if (hasFeishu || hasQq || hasTelegram || hasDiscord || hasWechat) {
+  if (hasFeishu || hasQq || hasWechat) {
     return false
   }
 
@@ -208,17 +206,13 @@ export async function runSetupWizard(): Promise<void> {
 
     let setupFeishu = false
     let setupQq = false
-    let setupTelegram = false
-    let setupDiscord = false
     let setupWechat = false
-    while (!setupFeishu && !setupQq && !setupTelegram && !setupDiscord && !setupWechat) {
-      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, telegram, discord, wechat, all]: ")).trim().toLowerCase()
+    while (!setupFeishu && !setupQq && !setupWechat) {
+      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, wechat, all]: ")).trim().toLowerCase()
       if (choice === "feishu" || choice === "all") setupFeishu = true
       if (choice === "qq" || choice === "all") setupQq = true
-      if (choice === "telegram" || choice === "all") setupTelegram = true
-      if (choice === "discord" || choice === "all") setupDiscord = true
       if (choice === "wechat" || choice === "all") setupWechat = true
-      if (!setupFeishu && !setupQq && !setupTelegram && !setupDiscord && !setupWechat) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
+      if (!setupFeishu && !setupQq && !setupWechat) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
     }
 
     let feishuAppId = "", feishuAppSecret = ""
@@ -254,56 +248,6 @@ export async function runSetupWizard(): Promise<void> {
       process.stdout.write("\n")
     } else if (!setupFeishu) {
       rl.close()
-    }
-
-    let telegramBotToken = ""
-    let telegramAllowedChatIds = ""
-    if (setupTelegram) {
-      const rlTg = setupFeishu || setupQq
-        ? readline.createInterface({ input: process.stdin, output: process.stdout })
-        : rl
-      process.stdout.write("\n" + dim("--- Telegram Bot Configuration ---") + "\n")
-      process.stdout.write(dim("  Get a bot token from @BotFather on Telegram.") + "\n")
-      if (setupFeishu || setupQq) rlTg.close()
-      else if (!setupDiscord) rl.close()
-      while (!telegramBotToken) {
-        telegramBotToken = (await readSecret("  Enter your Telegram Bot Token: ")).trim()
-      }
-      process.stdout.write("\n")
-      // Re-create rl for optional prompts
-      const rlTgOpt = readline.createInterface({ input: process.stdin, output: process.stdout })
-      try {
-        telegramAllowedChatIds = (
-          await rlTgOpt.question("  Allowed Chat IDs (comma-separated, leave blank to allow all): ")
-        ).trim()
-      } finally {
-        rlTgOpt.close()
-      }
-    }
-
-    let discordBotToken = ""
-    let discordAllowedChannelIds = ""
-    if (setupDiscord) {
-      const rlDc = setupFeishu || setupQq || setupTelegram
-        ? readline.createInterface({ input: process.stdin, output: process.stdout })
-        : rl
-      process.stdout.write("\n" + dim("--- Discord Bot Configuration ---") + "\n")
-      process.stdout.write(dim("  Get a bot token from the Discord Developer Portal.") + "\n")
-      if (setupFeishu || setupQq || setupTelegram) rlDc.close()
-      else rl.close()
-      while (!discordBotToken) {
-        discordBotToken = (await readSecret("  Enter your Discord Bot Token: ")).trim()
-      }
-      process.stdout.write("\n")
-      // Re-create rl for optional prompts
-      const rlDcOpt = readline.createInterface({ input: process.stdin, output: process.stdout })
-      try {
-        discordAllowedChannelIds = (
-          await rlDcOpt.question("  Allowed Channel IDs (comma-separated, leave blank to allow all): ")
-        ).trim()
-      } finally {
-        rlDcOpt.close()
-      }
     }
 
     // WeChat uses QR code login, no credentials needed
@@ -352,7 +296,7 @@ export async function runSetupWizard(): Promise<void> {
       process.stdout.write(dim("Step 3/3: Save Configuration") + "\n")
 
       ensureConfigDir()
-      const mainId = feishuAppId || qqAppId || telegramBotToken || discordBotToken || "bot"
+      const mainId = feishuAppId || qqAppId || "bot"
       const envPath = path.join(CONFIG_DIR, `.env.${mainId}`)
 
       // Build .env content
@@ -371,22 +315,6 @@ export async function runSetupWizard(): Promise<void> {
       } else {
         lines.push(`QQ_APP_ID=`)
         lines.push(`QQ_SECRET=`)
-      }
-      if (setupTelegram) {
-        lines.push(`TELEGRAM_BOT_TOKEN=${telegramBotToken}`)
-        if (telegramAllowedChatIds) {
-          lines.push(`TELEGRAM_ALLOWED_CHAT_IDS=${telegramAllowedChatIds}`)
-        }
-      } else {
-        lines.push(`TELEGRAM_BOT_TOKEN=`)
-      }
-      if (setupDiscord) {
-        lines.push(`DISCORD_BOT_TOKEN=${discordBotToken}`)
-        if (discordAllowedChannelIds) {
-          lines.push(`DISCORD_ALLOWED_CHANNEL_IDS=${discordAllowedChannelIds}`)
-        }
-      } else {
-        lines.push(`DISCORD_BOT_TOKEN=`)
       }
       if (setupWechat) {
         lines.push(`WECHAT_ENABLED=true`)
@@ -413,26 +341,6 @@ export async function runSetupWizard(): Promise<void> {
       } else {
         delete process.env.QQ_APP_ID
         delete process.env.QQ_SECRET
-      }
-      if (setupTelegram) {
-        process.env.TELEGRAM_BOT_TOKEN = telegramBotToken
-        if (telegramAllowedChatIds) {
-          process.env.TELEGRAM_ALLOWED_CHAT_IDS = telegramAllowedChatIds
-        } else {
-          delete process.env.TELEGRAM_ALLOWED_CHAT_IDS
-        }
-      } else {
-        delete process.env.TELEGRAM_BOT_TOKEN
-      }
-      if (setupDiscord) {
-        process.env.DISCORD_BOT_TOKEN = discordBotToken
-        if (discordAllowedChannelIds) {
-          process.env.DISCORD_ALLOWED_CHANNEL_IDS = discordAllowedChannelIds
-        } else {
-          delete process.env.DISCORD_ALLOWED_CHANNEL_IDS
-        }
-      } else {
-        delete process.env.DISCORD_BOT_TOKEN
       }
       if (setupWechat) {
         process.env.WECHAT_ENABLED = "true"

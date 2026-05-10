@@ -276,7 +276,7 @@ async function main(): Promise<void> {
     logger.info("Interactive poller started (interval=3000ms)")
   }
 
-  // Handle card actions from all channels (Feishu, Telegram, etc.)
+  // Handle card actions from all channels (Feishu, QQ, WeChat, etc.)
   // question_answer and permission_reply are channel-agnostic - always route to interactiveHandler
   // which POSTs to opencode server APIs directly
   const handleCardAction = async (action: FeishuCardAction): Promise<void> => {

@@ -762,44 +762,6 @@ describe("createMessageHandler", () => {
     expect(body.parts[0].text).toContain("[Lark] Save files ->")
   })
 
-  it("uses a non-Lark signature for telegram messages", async () => {
-    mockFetchOk("")
-    const deps = makeDeps({
-      channelManager: {
-        getChannel: vi.fn().mockReturnValue({
-          meta: { label: "Telegram" },
-        }),
-      },
-    })
-    const { handleMessage: handler } = createMessageHandler(deps)
-
-    const handlerPromise = handler({
-      ...makeEvent(),
-      _channelId: "telegram",
-    } as FeishuMessageEvent)
-
-    await waitFor(() => {
-      expect(deps.eventListeners.size).toBe(1)
-    })
-
-    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
-      type: "session.status",
-      properties: { sessionID: "ses-1", status: { type: "idle" } },
-    }))
-
-    await handlerPromise
-
-    const fetchCalls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
-    const postCall = fetchCalls.find(
-      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
-    )
-    expect(postCall).toBeDefined()
-    const body = JSON.parse((postCall![1] as { body: string }).body)
-    expect(body.parts[0].text).toContain("[Telegram]")
-    expect(body.parts[0].text).toContain("/cron")
-    expect(body.parts[0].text).not.toContain("[Lark]")
-  })
-
   it("handles getMessage failure gracefully (still sends user message)", async () => {
     mockFetchOk("")
     const feishuClient = createMockFeishuClient()

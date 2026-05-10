@@ -158,29 +158,6 @@
 运行 `opencode-im-bridge init` 时选择 `qq` 渠道，或直接在 `.env` 中填写 `QQ_APP_ID` 和 `QQ_SECRET`。
 
 
-## Telegram 机器人配置
-
-1. 在 Telegram 搜索 `@BotFather`。
-2. 发送 `/newbot` 创建机器人并获取 **Bot Token**。
-3. 在 opencode-im-bridge 中配置该 Token。
-
----
-
-## Discord 机器人配置
-
-1. 访问 [Discord Developer Portal](https://discord.com/developers/applications)。
-2. 点击 **New Application** 创建应用并命名。
-3. 进入左侧的 **Bot** 菜单。
-4. 在 **Privileged Gateway Intents** 部分，**必须开启**以下选项：
-   - **Message Content Intent** (用于读取用户发送的消息内容)
-5. 点击 **Reset Token** 获取 **Token** (对应 `DISCORD_BOT_TOKEN`)。
-6. 进入 **OAuth2 -> URL Generator**，勾选 `bot` 作用域，以及 `Send Messages` 和 `Read Message History` 权限，生成链接并邀请机器人到你的服务器。
-7. 在 opencode-im-bridge 中（或 `.env` 文件）配置该 Token。
-
-> **提示**：你可以通过配置 `DISCORD_ALLOWED_CHANNEL_IDS` (逗号分隔的频道ID列表) 来限制机器人只在特定的频道中回复消息。
-
----
-
 ## 微信机器人配置
 
 微信使用腾讯官方 **iLink Bot API**，认证方式与其他平台不同。

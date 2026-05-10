@@ -477,5 +477,5 @@ const questionCard = {
 
 - `src/channel/feishu/feishu-plugin.ts` - Full-featured plugin with streaming cards (reference implementation)
 - `src/channel/wechat/wechat-plugin.ts` - Alternative polling-based plugin
-- `src/channel/telegram/telegram-plugin.ts` - Plugin with Markdown v2 formatting
+- `src/channel/qq/qq-plugin.ts` - Plugin with Markdown formatting
 - `src/channel/types.ts` - ChannelPlugin interface definition

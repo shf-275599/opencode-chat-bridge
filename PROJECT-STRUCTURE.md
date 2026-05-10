@@ -15,7 +15,7 @@ opencode-im-bridge/
 │   │   ├── index.ts              # 入口：9阶段启动 + 优雅关闭
 │   │   └── types.ts              # 共享类型定义
 │   │
-│   ├── 📂 channel/               # 📡 渠道插件层（6个平台）
+│   ├── 📂 channel/               # 📡 渠道插件层（4个平台）
 │   │   ├── types.ts              # ChannelPlugin 接口定义
 │   │   ├── manager.ts            # 插件管理器
 │   │   ├── base-plugin.ts        # 抽象基类
@@ -34,15 +34,6 @@ opencode-im-bridge/
 │   │   ├── 📂 qq/                # QQ
 │   │   │   ├── qq-plugin.ts      # 插件实现
 │   │   │   ├── qq-api-client.ts  # API 客户端
-│   │   │   └── index.ts
-│   │   │
-│   │   ├── 📂 telegram/          # Telegram
-│   │   │   ├── telegram-plugin.ts      # 插件实现
-│   │   │   ├── telegram-interactive.ts # 交互卡片
-│   │   │   └── index.ts
-│   │   │
-│   │   ├── 📂 discord/           # Discord
-│   │   │   ├── discord-plugin.ts # 插件实现
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── 📂 dingtalk/          # 钉钉

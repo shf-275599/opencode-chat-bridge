@@ -160,8 +160,6 @@ interface StreamingSession {
 
 | 文件 | 职责 |
 |------|------|
-| `src/channel/telegram/telegram-interactive.ts` | Inline 卡片创建、回调编解码 |
-| `src/channel/telegram/telegram-plugin.ts` | Telegram Plugin + 长轮询 + 消息编辑 |
 | `src/handler/interactive-handler.ts` | 处理问答和权限响应 |
 
 ---

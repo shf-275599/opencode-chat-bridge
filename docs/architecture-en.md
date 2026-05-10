@@ -37,8 +37,7 @@ src/
 │   ├── feishu/     # Feishu REST client, CardKit, WebSocket
 │   ├── wechat/     # WeChat iLink Bot API, QR login
 │   ├── qq/         # QQ Official Bot SDK
-│   ├── telegram/   # Telegram Bot API
-│   └── discord/   # Discord Bot API
+│   └── dingtalk/   # DingTalk Bot API
 ├── handler/         # MessageHandler (inbound pipeline) + StreamingBridge (SSE → cards)
 ├── session/         # TUI session discovery, thread→session mapping, progress cards
 ├── streaming/       # EventProcessor (SSE parsing), SessionObserver

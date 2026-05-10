@@ -16,7 +16,7 @@ tags: [architecture, design, channel, plugin]
 
 ## 2. 术语定义
 
-- **Channel (通道)**: 指一个独立的 IM 平台（例如 `feishu`, `qq`, `discord`）。
+- **Channel (通道)**: 指一个独立的 IM 平台（例如 `feishu`, `qq`, `wechat`）。
 - **ChannelPlugin (通道插件)**: 通道接口的模块化实现，用于将特定 IM 平台接入桥接器网络中。
 - **Adapter (适配器)**: `ChannelPlugin` 的子接口实现，负责更细分的业务领域（例如 `ChannelGatewayAdapter` 负责网络连接建立；`ChannelOutboundAdapter` 负责发送消息交互）。
 
@@ -57,7 +57,7 @@ class ChannelManager {
 
 ## 5. 验收标准
 - **AC-001**: 假设我们已经注册了一个携带错误非法 `bot token` 的 Telegram 插件，当调用 `startAll()` 时，Telegram 系统网关会抛出异常并被捕获记录日志，此时飞书等其他网关不受影响，能够正常启动。
-- **AC-002**: 假设存在一条源自 Discord 的新进消息，当达到 Handler 管道时，`discord` `ChannelPlugin` 被调用并自行执行私有解析，然后将结构化信息传递给通用的消息处理器执行后续逻辑。
+- **AC-002**: 假设存在一条源自微信的新进消息，当达到 Handler 管道时，`wechat` `ChannelPlugin` 被调用并自行执行私有解析，然后将结构化信息传递给通用的消息处理器执行后续逻辑。
 - **AC-003**: 假设核心应用准备下发一张新图片时，通过 `plugin.outbound.sendImage` 调度，对应通道的适配器会接管处理，读取本地绝对路径下的图片资源并发送给 IM 服务器。
 
 ## 6. 自动化测试策略
@@ -82,7 +82,7 @@ class ChannelManager {
 ```typescript
 // Core system must always check adapter existence before invocation
 // 核心系统必须调用前检测适配器存续情况
-const plugin = channelManager.getChannel("discord");
+const plugin = channelManager.getChannel("wechat");
 if (plugin?.outbound?.sendCard) {
   await plugin.outbound.sendCard(target, cardData);
 } else {

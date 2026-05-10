@@ -4,11 +4,11 @@
 
 ## 项目定位
 
-`opencode-im-bridge` 是一个桥接服务，它将 IM 聊天平台（飞书、QQ、Telegram、Discord、微信）与 `opencode` TUI 会话连接起来。
+`opencode-im-bridge` 是一个桥接服务，它将 IM 聊天平台（飞书、QQ、微信、钉钉）与 `opencode` TUI 会话连接起来。
 用户在 IM 中发送的消息会流动到 `opencode` 中，如同在终端直接输入一样；Agent 的回复则实时流式推送回 IM 平台。
 
 ```
-飞书/QQ/TG/Discord 客户端
+飞书/QQ/微信 客户端
     ↕  WebSocket (长连接)
 IM 开放平台
     ↕  WebSocket / HTTP Bot API
@@ -37,8 +37,7 @@ src/
 │   ├── feishu/     # 飞书 REST 客户端、CardKit (卡片构建)、WebSocket
 │   ├── wechat/     # 微信 iLink Bot API 客户端、扫码登录
 │   ├── qq/         # QQ 官方机器人 SDK
-│   ├── telegram/   # Telegram Bot API
-│   └── discord/    # Discord Bot API
+│   └── dingtalk/   # 钉钉 Bot API
 ├── handler/         # MessageHandler (入站管道) + StreamingBridge (SSE → IM 卡片)
 ├── session/         # TUI session 发现、thread→session 映射、进度追踪
 ├── streaming/       # EventProcessor (SSE 解析)、 SessionObserver
@@ -52,7 +51,7 @@ src/
 
 ### ChannelPlugin (`src/channel/types.ts`)
 
-核心扩展契约。任何聊天平台（Slack, Discord 等）只需实现此接口即可接入 `ChannelManager`。
+核心扩展契约。任何聊天平台（飞书、QQ、微信、钉钉）只需实现此接口即可接入 `ChannelManager`。
 
 ```typescript
 interface ChannelPlugin {
@@ -105,9 +104,8 @@ interface ChannelPlugin {
 |------|----------|----------|------|
 | 飞书 | WebSocket | App ID + Secret | 支持富媒体卡片、流式更新 |
 | QQ | WebSocket | App ID + Secret | 支持 Markdown |
-| Telegram | HTTP Bot API | Bot Token | 轮询获取消息 |
-| Discord | HTTP Bot API | Bot Token | Webhook 接收 |
 | 微信 | HTTP 长轮询 | 扫码登录 | iLink Bot API |
+| 钉钉 | HTTP 长轮询 | App Key + Secret | Bot API |
 
 ---
 

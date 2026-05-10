@@ -152,29 +152,6 @@ In the dashboard, ensure you've enabled:
 Run `opencode-im-bridge init` and select the `qq` channel, or fill in `QQ_APP_ID` and `QQ_SECRET` in your `.env`.
 
 
-## Telegram Bot Setup
-
-1. Search for `@BotFather` in Telegram.
-2. Send `/newbot` to create a bot and get the **Bot Token**.
-3. Configure this token in opencode-im-bridge.
-
----
-
-## Discord Bot Setup
-
-1. Visit the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Click **New Application** and give your bot a name.
-3. Navigate to the **Bot** tab on the left menu.
-4. Under the **Privileged Gateway Intents** section, you MUST enable:
-   - **Message Content Intent** (Required to read messages)
-5. Click **Reset Token** to get your **Bot Token** (maps to `DISCORD_BOT_TOKEN`).
-6. Navigate to **OAuth2 -> URL Generator**, select `bot` scope, and `Send Messages`, `Read Message History` permissions to invite the bot to your server.
-7. Configure this token in `opencode-im-bridge` via the interactive setup or `.env`.
-
-> **Note**: You can optionally configure `DISCORD_ALLOWED_CHANNEL_IDS` (comma-separated) to restrict the bot to only reply in specific channels.
-
----
-
 ## DingTalk Bot Setup
 
 This section covers how to create a DingTalk enterprise internal app and connect it as a bot.

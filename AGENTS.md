@@ -6,7 +6,7 @@
 
 ## What This Project Does
 
-`opencode-im-bridge` bridges IM chats (Feishu, QQ, Telegram) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/Telegram), while tool and sub-agent status are shown via separate cards.
+`opencode-im-bridge` bridges IM chats (Feishu, QQ, WeChat, DingTalk) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/WeChat), while tool and sub-agent status are shown via separate cards.
 
 ```
 Feishu client
@@ -43,7 +43,7 @@ src/
 
 ### ChannelPlugin (`src/channel/types.ts`)
 
-The core extension contract. Any chat platform (Slack, Discord, etc.) implements this interface to plug into `ChannelManager`.
+The core extension contract. Any chat platform (Feishu, QQ, WeChat, DingTalk) implements this interface to plug into `ChannelManager`.
 
 ```typescript
 interface ChannelPlugin {
@@ -160,15 +160,14 @@ This project uses **npm** as its primary package manager. Please ensure you run 
 | `FEISHU_APP_SECRET` | yes* | | Feishu App Secret |
 | `QQ_APP_ID` | yes* | | QQ Bot App ID |
 | `QQ_SECRET` | yes* | | QQ Bot Secret |
-| `TELEGRAM_BOT_TOKEN` | yes* | | Telegram Bot Token (from @BotFather) |
-| `TELEGRAM_ALLOWED_CHAT_IDS` | no | (all) | Comma-separated Chat IDs allowed to use the bot |
-| `DISCORD_BOT_TOKEN` | yes* | | Discord Bot Token (from Discord Developer Portal) |
-| `DISCORD_ALLOWED_CHANNEL_IDS` | no | (all) | Comma-separated Channel IDs allowed to use the bot |
+| `WECHAT_ENABLED` | yes* | | Set to `true` to enable WeChat |
+| `DINGTALK_APP_KEY` | yes* | | DingTalk App Key |
+| `DINGTALK_APP_SECRET` | yes* | | DingTalk App Secret |
 | `OPENCODE_SERVER_URL` | no | `http://localhost:4096` | opencode server URL |
 | `FEISHU_WEBHOOK_PORT` | no | `3001` | Card action callback port |
 | `OPENCODE_CWD` | no | `process.cwd()` | Override session discovery directory |
 
-\* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`TELEGRAM_BOT_TOKEN`/`DISCORD_BOT_TOKEN`) must be configured.
+\* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`WECHAT_ENABLED`/`DINGTALK_APP_KEY`) must be configured.
 
 See `.env.example` and `opencode-im-bridge.example.jsonc` for full reference.
 

@@ -16,7 +16,7 @@ The purpose of the `ChannelManager` is to administer the lifecycle (registration
 
 ## 2. Definitions
 
-- **Channel**: A distinct Instant Messaging platform (e.g., `feishu`, `qq`, `discord`).
+- **Channel**: A distinct Instant Messaging platform (e.g., `feishu`, `qq`, `wechat`).
 - **ChannelPlugin**: A modular implementation of the channel interfaces required to integrate a specific IM platform into the bridge.
 - **Adapter**: Sub-interfaces of a `ChannelPlugin` responsible for focused domains (e.g., `ChannelGatewayAdapter` for connections, `ChannelOutboundAdapter` for sending messages).
 
@@ -58,7 +58,7 @@ class ChannelManager {
 ## 5. Acceptance Criteria
 
 - **AC-001**: Given a registered Telegram plugin with an invalid bot token, When `startAll()` is invoked, Then the Telegram gateway throws an error, the error is logged, and the Feishu gateway starts normally without being blocked.
-- **AC-002**: Given an incoming message from Discord, When it reaches the pipeline, Then the `discord` ChannelPlugin parses its payload and the core message handler treats it agnostically.
+- **AC-002**: Given an incoming message from WeChat, When it reaches the pipeline, Then the `wechat` ChannelPlugin parses its payload and the core message handler treats it agnostically.
 - **AC-003**: Given a core routing intent to send an image, When `plugin.outbound.sendImage` is called, Then the target channel's adapter processes the absolute file path and sends binary data to the IM endpoint safely.
 
 ## 6. Test Automation Strategy
@@ -82,7 +82,7 @@ class ChannelManager {
 ### Edge Case: Missing Adapter Invocation
 ```typescript
 // Core system must always check adapter existence before invocation
-const plugin = channelManager.getChannel("discord");
+const plugin = channelManager.getChannel("wechat");
 if (plugin?.outbound?.sendCard) {
   await plugin.outbound.sendCard(target, cardData);
 } else {

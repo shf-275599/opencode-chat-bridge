@@ -10,7 +10,6 @@ import { addListener, removeListener } from "../utils/event-listeners.js"
 import { StreamingCardSession } from "../streaming/streaming-card.js"
 import { buildResponseCard } from "../feishu/card-builder.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
-import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
 import type { StreamingSession } from "../channel/types.js"
 
 // ── Types ──
@@ -76,17 +75,6 @@ export function createStreamingBridge(
       }
 
       const sendInteractiveCard = async (cardData: Record<string, unknown>): Promise<void> => {
-        if (channelId === "telegram") {
-          const keyboard = (cardData.reply_markup as { inline_keyboard?: unknown[] } | undefined)?.inline_keyboard
-          if (Array.isArray(keyboard) && keyboard.length > 0 && plugin?.outbound?.sendCard) {
-            await plugin.outbound.sendCard({ address: chatId }, cardData)
-            return
-          }
-          if (plugin?.outbound?.sendText && typeof cardData.text === "string") {
-            await plugin.outbound.sendText({ address: chatId }, cardData.text)
-            return
-          }
-        }
         if (plugin?.outbound?.sendCard) {
           await plugin.outbound.sendCard({ address: chatId }, cardData)
           return
@@ -141,22 +129,7 @@ export function createStreamingBridge(
         const startTyping = (): void => {
           if (typingInterval) return // 防止重复启动
 
-          if (channelId === "telegram") {
-            const sendTypingAction = async (): Promise<void> => {
-              try {
-                const cfg = plugin?.config?.resolveAccount?.()
-                const token = cfg?.botToken
-                if (!token) return
-                await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ chat_id: chatId, action: "typing" }),
-                })
-              } catch {}
-            }
-            void sendTypingAction()
-            typingInterval = setInterval(() => void sendTypingAction(), 4000)
-          } else if (channelId === "wechat" && plugin?.outbound?.sendTyping) {
+          if (channelId === "wechat" && plugin?.outbound?.sendTyping) {
             // WeChat: 发送"正在输入"状态
             logger.info(`[StreamingBridge] Calling WeChat sendTyping for ${chatId}`)
             plugin.outbound.sendTyping({ address: chatId }).catch((err: unknown) => {
@@ -294,9 +267,7 @@ export function createStreamingBridge(
               if (seenInteractiveIds.has(action.requestId)) break
               seenInteractiveIds.add(action.requestId)
               logger.info(`Question event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
-              const questionCard = channelId === "telegram"
-                ? buildTelegramQuestionCard(action)
-                : buildQuestionCard(action)
+              const questionCard = buildQuestionCard(action)
               sendInteractiveCard(questionCard).catch((err) => {
                 logger.warn(`Question card send failed: ${err}`)
               })
@@ -307,9 +278,7 @@ export function createStreamingBridge(
               if (seenInteractiveIds.has(action.requestId)) break
               seenInteractiveIds.add(action.requestId)
               logger.info(`Permission event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
-              const permissionCard = channelId === "telegram"
-                ? buildTelegramPermissionCard(action)
-                : buildPermissionCard(action)
+              const permissionCard = buildPermissionCard(action)
               sendInteractiveCard(permissionCard).catch((err) => {
                 logger.warn(`Permission card send failed: ${err}`)
               })
@@ -594,43 +563,4 @@ export function buildPermissionCard(
       ],
     },
   }
-}
-
-export function buildTelegramQuestionCard(
-  action: QuestionAsked,
-): Record<string, unknown> {
-  const question = action.questions[0]
-  const text = question
-    ? `${question.header}\n${question.question}`
-    : "Question"
-
-  const rows = (question?.options ?? []).slice(0, 3).map((option) => [{
-    text: option.label,
-    payload: {
-      action: "qa" as const,
-      requestId: action.requestId,
-      answers: [[option.label]],
-    },
-  }])
-
-  return ((createTelegramInlineCard(text, rows) ?? {
-    text,
-    reply_markup: { inline_keyboard: [] },
-  }) as unknown) as Record<string, unknown>
-}
-
-export function buildTelegramPermissionCard(
-  action: PermissionRequested,
-): Record<string, unknown> {
-  return ((createTelegramInlineCard(
-    `Permission: ${action.permissionType}\n${action.title}`,
-    [[
-      { text: "Allow Once", payload: { action: "pr" as const, requestId: action.requestId, reply: "once" } },
-      { text: "Always Allow", payload: { action: "pr" as const, requestId: action.requestId, reply: "always" } },
-      { text: "Reject", payload: { action: "pr" as const, requestId: action.requestId, reply: "reject" } },
-    ]],
-  ) ?? {
-    text: action.title,
-    reply_markup: { inline_keyboard: [] },
-  }) as unknown) as Record<string, unknown>
 }

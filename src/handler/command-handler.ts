@@ -11,7 +11,6 @@ import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
 import { buildResponseCard, buildProjectSelectorCard, buildProjectCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard, buildVariantSelectorCard } from "../feishu/card-builder.js"
-import { createTelegramInlineCard } from "../channel/telegram/telegram-interactive.js"
 import { t, getLocale } from "../i18n/index.js"
 
 import type { ChannelManager } from "../channel/manager.js"
@@ -110,10 +109,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     channelId: string = "feishu",
   ): Promise<void> {
     const plugin = getPlugin(channelId)
-    if (channelId === "telegram" && plugin?.outbound?.sendPlainText) {
-      await plugin.outbound.sendPlainText({ address: chatId }, text)
-      return
-    }
     if (plugin?.outbound) {
       await plugin.outbound.sendText({ address: chatId }, text)
       return
@@ -148,116 +143,10 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, payload.text, channelId)
   }
 
-  function buildTelegramSessionCard(sessions: Session[], currentSessionId?: string) {
-    return createTelegramInlineCard(
-      `Current session: ${currentSessionId ?? "none"}\nChoose a session to connect:`,
-      [
-        ...sessions.slice(0, 8).map((session) => [{
-          text: session.id === currentSessionId ? `• ${session.title || session.id}` : (session.title || session.id),
-          payload: { action: "cmd" as const, command: `/connect ${session.id}` },
-        }]),
-        [{ text: "New Session", payload: { action: "cmd" as const, command: "/new" } }],
-      ],
-    )
-  }
-
   interface ProjectInfo {
     id: string
     worktree: string
     name?: string
-  }
-
-  function buildTelegramProjectCard(projects: ProjectInfo[], currentWorktree?: string) {
-    const normalizedCurrent = (currentWorktree || "").replace(/\\/g, "/").toLowerCase()
-    const rows = projects.slice(0, 8).map((p) => {
-      const name = p.name || p.worktree.split("/").pop() || p.worktree
-      const isCurrent = p.worktree.replace(/\\/g, "/").toLowerCase() === normalizedCurrent
-      return [{
-        text: isCurrent ? `✓ ${name}` : name,
-        payload: { action: "cmd" as const, command: `/projects ${name}` },
-      }]
-    })
-    return createTelegramInlineCard(
-      `Projects (${projects.length}):`,
-      rows,
-    )
-  }
-
-  function buildDiscordSessionCard(sessions: Session[], currentSessionId?: string) {
-    const rows: Array<Array<{ text: string; command: string }>> = []
-    const sessionRows = sessions.slice(0, 8).map((session) => ({
-      text: session.id === currentSessionId ? `• ${session.title || session.id}` : (session.title || session.id),
-      command: `/connect ${session.id}`,
-    }))
-    if (sessionRows.length > 0) rows.push(sessionRows)
-    rows.push([{ text: "New Session", command: "/new" }])
-    return { text: `Current session: ${currentSessionId ?? "none"}\nChoose a session to connect:`, rows }
-  }
-
-  function buildDiscordAgentCard(currentAgent: string, names: string[]) {
-    return {
-      text: `Current agent: ${currentAgent}\nChoose the agent to use:`,
-      rows: names.slice(0, 8).map((name) => [{ text: name === currentAgent ? `• ${name}` : name, command: `/agent ${name}` }]),
-    }
-  }
-
-  function buildDiscordModelCard(currentModelId: string | null | undefined, models: ProviderModelInfo[]) {
-    return {
-      text: `Current model: ${currentModelId ?? "unknown"}\nChoose the model to use:`,
-      rows: models.slice(0, 8).map((model) => ({ text: model.id === currentModelId ? `• ${model.id}` : model.id, command: `/models ${model.id}` })),
-    }
-  }
-
-  function buildDiscordRemoveCard(tasks: TaskDisplayItem[]) {
-    const lines = tasks.map((t) => {
-      const status = t.lastStatus === "success" ? "✅" : t.lastStatus === "error" ? "❌" : t.lastStatus === "running" ? "🔄" : "💤"
-      const enabled = t.enabled ? "●" : "○"
-      return `${enabled} ${status} *${t.name}*\n  ${t.scheduleSummary}\n  ID: ${t.id}`
-    })
-    const text = "🗑️ Delete Task\n\n" + lines.join("\n\n")
-    return {
-      text,
-      rows: tasks.map((task) => ({ text: `🗑️ Delete: ${task.name}`, command: `/cron remove ${task.id}` })),
-    }
-  }
-
-  function buildTelegramAgentCard(currentAgent: string, names: string[]) {
-    return createTelegramInlineCard(
-      `Current agent: ${currentAgent}\nChoose the agent to use:`,
-      names.slice(0, 8).map((name) => [{
-        text: name === currentAgent ? `• ${name}` : name,
-        payload: { action: "cmd" as const, command: `/agent ${name}` },
-      }]),
-    )
-  }
-
-  function buildTelegramModelCard(currentModelId: string | null | undefined, models: ProviderModelInfo[]) {
-    return createTelegramInlineCard(
-      `Current model: ${currentModelId ?? "unknown"}\nChoose the model to use:`,
-      models.slice(0, 8).map((model) => [{
-        text: model.id === currentModelId ? `• ${model.id}` : model.id,
-        payload: { action: "cmd" as const, command: `/models ${model.id}` },
-      }]),
-    )
-  }
-
-  function buildTelegramRemoveCard(tasks: TaskDisplayItem[]) {
-    if (tasks.length === 0) {
-      return createTelegramInlineCard("No tasks to delete.", [])
-    }
-    const lines = tasks.map((t) => {
-      const status = t.lastStatus === "success" ? "✅" : t.lastStatus === "error" ? "❌" : t.lastStatus === "running" ? "🔄" : "💤"
-      const enabled = t.enabled ? "●" : "○"
-      return `${enabled} ${status} *${t.name}*\n  ${t.scheduleSummary}\n  ID: ${t.id}`
-    })
-    const text = "🗑️ Delete Task\n\n" + lines.join("\n\n")
-    return createTelegramInlineCard(
-      text,
-      tasks.map((task) => [{
-        text: `🗑️ Delete: ${task.name}`,
-        payload: { action: "cmd" as const, command: `/cron remove ${task.id}` },
-      }]),
-    )
   }
 
   async function handleNew(
@@ -451,26 +340,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       }
     }
 
-    if (channelId === "telegram") {
-      const telegramCard = buildTelegramSessionCard(sessions, currentSessionId)
-      if (telegramCard) {
-        await replyCard(chatId, messageId, {
-          text: sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (${session.id})`).join("\n"),
-          card: telegramCard,
-        }, channelId)
-        return
-      }
-    }
-
-    if (channelId === "discord") {
-      const discordCard = buildDiscordSessionCard(sessions, currentSessionId)
-      await replyCard(chatId, messageId, {
-        text: sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (${session.id})`).join("\n"),
-        card: discordCard,
-      }, channelId)
-      return
-    }
-
     if (channelId !== "feishu") {
       const sessionList = sessions.slice(0, 10).map((session) => `- ${session.title || session.id} (\`${session.id}\`)`).join("\n")
       await replyText(chatId, messageId, t(locale, "command.recentSessions", { sessions: sessionList }), channelId)
@@ -618,21 +487,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     const currentWorktree = process.env.OPENCODE_CWD || process.cwd()
 
-    if (channelId === "telegram") {
-      const telegramCard = buildTelegramProjectCard(projects, currentWorktree)
-      if (telegramCard) {
-        const projectList = projects.slice(0, 10).map((p) => {
-          const name = p.name || p.worktree.split("/").pop() || p.worktree
-          return `- ${name}`
-        }).join("\n")
-        await replyCard(chatId, messageId, {
-          text: `📂 *Projects*\n\n${projectList}\n\n💡 Tap a button to switch`,
-          card: telegramCard,
-        }, channelId)
-        return
-      }
-    }
-
     const card = buildProjectCard(projects, currentWorktree)
     await replyCard(chatId, messageId, {
       text: projects.slice(0, 10).map((p) => {
@@ -730,16 +584,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       if (channelId === "feishu") {
         const card = buildTaskRemoveCard(displayItems, locale)
         await replyCard(chatId, messageId, { card, text: "" }, channelId)
-      } else if (channelId === "telegram") {
-        const card = buildTelegramRemoveCard(displayItems)
-        if (card) {
-          await replyCard(chatId, messageId, { card, text: card.text }, channelId)
-        } else {
-          await replyText(chatId, messageId, "No tasks to delete.", channelId)
-        }
-      } else if (channelId === "discord") {
-        const card = buildDiscordRemoveCard(displayItems)
-        await replyCard(chatId, messageId, { card, text: card.text }, channelId)
       } else {
         await replyText(chatId, messageId, buildTaskListText(displayItems, locale), channelId)
       }
@@ -957,26 +801,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
         ? names.map((name) => (name.toLowerCase() === current.toLowerCase() ? `✓ ${name}` : `- ${name}`)).join("\n")
         : "No agents available"
 
-      if (channelId === "telegram") {
-        const telegramCard = buildTelegramAgentCard(current, names)
-        if (telegramCard) {
-          await replyCard(chatId, messageId, {
-            text: `Current agent: ${current}\n\nAvailable agents:\n${listText}`,
-            card: telegramCard,
-          }, channelId)
-          return
-        }
-      }
-
-      if (channelId === "discord") {
-        const discordCard = buildDiscordAgentCard(current, names)
-        await replyCard(chatId, messageId, {
-          text: `Current agent: ${current}\n\nAvailable agents:\n${listText}`,
-          card: discordCard,
-        }, channelId)
-        return
-      }
-
       if (channelId === "feishu") {
         const card = buildAgentSelectorCard(names, current)
         await replyCard(chatId, messageId, {
@@ -1166,28 +990,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       const fileModelId = await getCurrentModelFromFile()
       const localModelId = detectCurrentModel(mapping)
       const currentModelId = fileModelId ?? localModelId
-
-      if (channelId === "telegram") {
-        const telegramCard = buildTelegramModelCard(currentModelId, models)
-        if (telegramCard) {
-          const text = models.length ? models.map((model) => `- ${model.id}`).join("\n") : "No models available"
-          await replyCard(chatId, messageId, {
-            text: `Current model: ${currentModelId ?? "unknown"}\n\nAvailable models:\n${text}`,
-            card: telegramCard,
-          }, channelId)
-          return
-        }
-      }
-
-      if (channelId === "discord") {
-        const discordCard = buildDiscordModelCard(currentModelId, models)
-        const text = models.length ? models.map((model) => `- ${model.id}`).join("\n") : "No models available"
-        await replyCard(chatId, messageId, {
-          text: `Current model: ${currentModelId ?? "unknown"}\n\nAvailable models:\n${text}`,
-          card: discordCard,
-        }, channelId)
-        return
-      }
 
       if (channelId === "feishu") {
         const card = buildModelSelectorCard(models, currentModelId)

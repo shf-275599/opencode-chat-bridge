@@ -21,18 +21,6 @@ const QqConfigSchema = z.object({
   sandbox: z.boolean().optional().default(false),
 })
 
-const TelegramConfigSchema = z.object({
-  botToken: z.string().min(1),
-  /** 允许回复的 Chat ID 列表（数字字符串），留空则允许所有 */
-  allowedChatIds: z.array(z.string()).optional().default([]),
-})
-
-const DiscordConfigSchema = z.object({
-  botToken: z.string().min(1),
-  /** 允许回复的 Channel ID 列表（数字字符串），留空则允许所有 */
-  allowedChannelIds: z.array(z.string()).optional().default([]),
-})
-
 const WechatConfigSchema = z.object({
   enabled: z.boolean().default(true),
   sessionFile: z.string().optional(),
@@ -88,8 +76,6 @@ const HeartbeatConfigSchema = z.object({
 const AppConfigSchema = z.object({
   feishu: FeishuConfigSchema.optional(),
   qq: QqConfigSchema.optional(),
-  telegram: TelegramConfigSchema.optional(),
-  discord: DiscordConfigSchema.optional(),
   wechat: WechatConfigSchema.optional(),
   dingtalk: DingTalkConfigSchema.optional(),
   defaultAgent: z.string().default("build"),
@@ -98,16 +84,14 @@ const AppConfigSchema = z.object({
   cron: CronConfigSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   messageDebounceMs: z.number().int().min(0).optional().default(10000),
-}).refine(data => data.feishu || data.qq || data.telegram || data.discord || data.wechat || data.dingtalk, {
-  message: "At least one channel (feishu, qq, telegram, discord, wechat, or dingtalk) must be configured."
+}).refine(data => data.feishu || data.qq || data.wechat || data.dingtalk, {
+  message: "At least one channel (feishu, qq, wechat, or dingtalk) must be configured."
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>
 export type CronConfig = z.infer<typeof CronConfigSchema>
 export type CronJobConfig = z.infer<typeof CronJobSchema>
 export type HeartbeatConfig = z.infer<typeof HeartbeatConfigSchema>
-export type TelegramConfig = z.infer<typeof TelegramConfigSchema>
-export type DiscordConfig = z.infer<typeof DiscordConfigSchema>
 export type WechatConfig = z.infer<typeof WechatConfigSchema>
 export type DingTalkConfig = z.infer<typeof DingTalkConfigSchema>
 
@@ -170,18 +154,6 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
         appId: process.env["QQ_APP_ID"],
         secret: process.env["QQ_SECRET"] ?? "",
         sandbox: String(process.env["QQ_SANDBOX"]) === "true",
-      } : undefined,
-      telegram: process.env["TELEGRAM_BOT_TOKEN"] ? {
-        botToken: process.env["TELEGRAM_BOT_TOKEN"],
-        allowedChatIds: process.env["TELEGRAM_ALLOWED_CHAT_IDS"]
-          ? process.env["TELEGRAM_ALLOWED_CHAT_IDS"].split(",").map((s: string) => s.trim()).filter(Boolean)
-          : [],
-      } : undefined,
-      discord: process.env["DISCORD_BOT_TOKEN"] ? {
-        botToken: process.env["DISCORD_BOT_TOKEN"],
-        allowedChannelIds: process.env["DISCORD_ALLOWED_CHANNEL_IDS"]
-          ? process.env["DISCORD_ALLOWED_CHANNEL_IDS"].split(",").map((s: string) => s.trim()).filter(Boolean)
-          : [],
       } : undefined,
       wechat: process.env["WECHAT_ENABLED"] === "true" ? {
         enabled: true,

@@ -88,9 +88,9 @@ async function main(): Promise<void> {
   logger.info("Phase 1: Loading config...")
   const config = await loadConfig()
 
-  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.telegram?.botToken && !config.discord?.botToken && !config.wechat?.enabled) {
+  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled) {
     logger.error(
-      "No valid channel credentials found (Feishu, QQ, Telegram, Discord, or WeChat). Run `opencode-im-bridge init` to configure, " +
+      "No valid channel credentials found (Feishu, QQ, or WeChat). Run `opencode-im-bridge init` to configure, " +
       "or set environment variables.",
     )
     process.exit(1)
@@ -410,28 +410,6 @@ async function main(): Promise<void> {
       onMessage: handleMessage,
     })
     channelManager.register(qqPlugin)
-  }
-
-  if (config.telegram) {
-    // TelegramPlugin imported asynchronously to avoid top-level require if not used
-    const { TelegramPlugin } = await import("./channel/telegram/index.js")
-    const telegramPlugin = new TelegramPlugin({
-      appConfig: config,
-      logger,
-      onMessage: handleMessage,
-      onCardAction: handleCardAction,
-    })
-    channelManager.register(telegramPlugin)
-  }
-
-  if (config.discord) {
-    const { DiscordPlugin } = await import("./channel/discord/index.js") as any
-    const discordPlugin = new DiscordPlugin({
-      appConfig: config,
-      logger,
-      onMessage: handleMessage,
-    })
-    channelManager.register(discordPlugin)
   }
 
   if (config.wechat) {

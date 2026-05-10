@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 文档
+    url: https://github.com/anomalyco/opencode-lark/wiki
+    about: 查看项目文档
+  - name: 💬 讨论
+    url: https://github.com/anomalyco/opencode-lark/discussions
+    about: 在 Discussions 中提问或参与讨论

@@ -43,7 +43,6 @@ export interface FeishuApiClient {
   uploadAudio(audioData: Buffer, fileName: string): Promise<string>
   uploadVideo(videoData: Buffer, fileName: string): Promise<string>
   sendTypingIndicator(chatId: string): Promise<FeishuApiResponse>
-  speechToText(audioData: Buffer): Promise<string>
 }
 
 
@@ -332,25 +331,6 @@ export function createFeishuApiClient(options: FeishuApiClientOptions): FeishuAp
       return apiRequest("POST", "/im/v1/messages/typing_indicators", {
         receive_id: chatId,
       })
-    },
-
-    async speechToText(audioData) {
-      const token = await getToken()
-      const form = new FormData()
-      const base64Pcm = audioData.toString("base64")
-      form.append("speech", JSON.stringify({ speech: base64Pcm }))
-      form.append("config", JSON.stringify({ format: "pcm", engine_type: "16k_auto" }))
-
-      const response = await fetch(`${FEISHU_BASE_URL}/speech_to_text/v1/speech/file_recognize`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      })
-      const data = (await response.json()) as { code: number; msg: string; data?: { recognition_text?: string } }
-      if (data.code !== 0) {
-        throw new Error(`Feishu speechToText error: ${data.code} - ${data.msg}`)
-      }
-      return data.data?.recognition_text ?? ""
     },
   }
 }

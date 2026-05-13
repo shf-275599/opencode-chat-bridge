@@ -18,37 +18,37 @@
   },
 
   // QQ 机器人配置
-  // "qq": {
-  //   // QQ 开放平台 App ID（环境变量: QQ_APP_ID）
-  //   "appId": "${QQ_APP_ID}",
-  //
-  //   // QQ 开放平台 App Secret（环境变量: QQ_SECRET）
-  //   "secret": "${QQ_SECRET}",
-  //
-  //   // 是否启用沙箱模式（默认: false）
-  //   "sandbox": false
-  // },
+  "qq": {
+    // QQ 开放平台 App ID（环境变量: QQ_APP_ID）
+    "appId": "${QQ_APP_ID}",
+  
+    // QQ 开放平台 App Secret（环境变量: QQ_SECRET）
+    "secret": "${QQ_SECRET}",
+  
+    // 是否启用沙箱模式（默认: false）
+    "sandbox": false
+  },
 
   // 微信机器人配置
-  // "wechat": {
-  //   // 是否启用微信渠道（环境变量: WECHAT_ENABLED）
-  //   "enabled": true,
-  //
-  //   // 扫码登录会话持久化路径
-  //   "sessionFile": "./data/wechat-session.json"
-  // },
+  "wechat": {
+    // 是否启用微信渠道（环境变量: WECHAT_ENABLED）
+    "enabled": true,
+  
+    // 扫码登录会话持久化路径
+    "sessionFile": "./data/wechat-session.json"
+  },
 
   // 钉钉机器人配置
-  // "dingtalk": {
-  //   // 钉钉开放平台 App Key（环境变量: DINGTALK_APP_KEY）
-  //   "appKey": "${DINGTALK_APP_KEY}",
-  //
-  //   // 钉钉开放平台 App Secret（环境变量: DINGTALK_APP_SECRET）
-  //   "appSecret": "${DINGTALK_APP_SECRET}",
-  //
-  //   // 钉钉 Agent ID（可选，环境变量: DINGTALK_AGENT_ID）
-  //   "agentId": "${DINGTALK_AGENT_ID}"
-  // },
+  "dingtalk": {
+    // 钉钉开放平台 App Key（环境变量: DINGTALK_APP_KEY）
+    "appKey": "${DINGTALK_APP_KEY}",
+  
+    // 钉钉开放平台 App Secret（环境变量: DINGTALK_APP_SECRET）
+    "appSecret": "${DINGTALK_APP_SECRET}",
+  
+    // 钉钉 Agent ID（可选，环境变量: DINGTALK_AGENT_ID）
+    "agentId": "${DINGTALK_AGENT_ID}"
+  },
 
   // 默认使用的 opencode agent 名称，需与 opencode 配置中的 agent 一致
   // 常见值: "build"、"claude"、"code"

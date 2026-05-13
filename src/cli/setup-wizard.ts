@@ -17,8 +17,17 @@ const red = (s: string) => `\x1b[31m${s}\x1b[0m`
 const dim = (s: string) => `\x1b[2m${s}\x1b[0m`
 const bold = (s: string) => `\x1b[1m${s}\x1b[0m`
 
-/** Config file search paths — must match src/utils/config.ts lines 69-76 */
+/**
+ * 配置文件搜索路径 — 优先 config/ 目录，向下兼容项目根目录。
+ * 必须与 src/utils/config.ts 中的搜索路径保持同步。
+ */
 const CONFIG_SEARCH_PATHS = [
+  path.resolve("config", "opencode-im.jsonc"),
+  path.resolve("config", "opencode-lark.jsonc"),
+  path.resolve("config", "opencode-lark.json"),
+  path.resolve("config", "opencode-feishu.jsonc"),
+  path.resolve("config", "opencode-feishu.json"),
+  // 向下兼容：项目根目录的旧路径
   path.resolve("opencode-im.jsonc"),
   path.resolve("opencode-lark.jsonc"),
   path.resolve("opencode-lark.json"),

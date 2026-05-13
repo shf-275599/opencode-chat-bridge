@@ -8,6 +8,12 @@ data/
 opencode-feishu.jsonc
 opencode-lark.jsonc
 .sisyphus/
+
+# 配置目录 — 排除敏感凭证，保留模板文件
+config/.env.*
+!config/.env.example
+config/opencode-im*.jsonc
+!config/opencode-im.example.jsonc
 *.tgz
 .DS_Store
 

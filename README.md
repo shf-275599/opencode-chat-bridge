@@ -151,7 +151,11 @@ opencode-im-bridge
 
 ### JSONC 配置文件
 
-创建 `opencode-im-bridge.jsonc`：
+复制模板并创建 `config/opencode-im.jsonc`：
+
+```bash
+cp config/opencode-im.example.jsonc config/opencode-im.jsonc
+```
 
 ```jsonc
 {
@@ -174,7 +178,7 @@ opencode-im-bridge
 }
 ```
 
-支持 `${ENV_VAR}` 环境变量插值和 `//` 注释。
+支持 `${ENV_VAR}` 环境变量插值和 `//` 注释。配置文件在项目内 `config/` 目录统一管理。
 
 ---
 
@@ -246,6 +250,10 @@ opencode-im-bridge
 ## 项目结构
 
 ```
+config/                 # 用户配置文件（凭证、渠道、调度等）
+├── opencode-im.jsonc   # 主配置（从 .example.jsonc 复制）
+├── .env.example        # 环境变量模板
+└── .env.bot            # 首次运行向导生成的凭证文件
 src/
 ├── index.ts           # 入口，9 阶段启动 + 优雅关闭
 ├── channel/           # 渠道插件（飞书、QQ、微信、钉钉）+ 统一接口

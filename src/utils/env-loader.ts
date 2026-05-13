@@ -9,8 +9,17 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 
-/** Fixed config directory for all opencode-lark configs */
-export const CONFIG_DIR = path.join(os.homedir(), ".config", "opencode-lark")
+/**
+ * 固定配置目录 — 项目内的 config/ 目录。
+ * 同时兼容旧的 ~/.config/opencode-lark 路径（优先检查旧目录以支持存量配置）。
+ */
+export const CONFIG_DIR = (() => {
+  // 优先使用旧目录（兼容已有安装）
+  const legacyDir = path.join(os.homedir(), ".config", "opencode-lark")
+  if (fs.existsSync(legacyDir)) return legacyDir
+  // 否则使用项目内的 config/ 目录
+  return path.resolve("config")
+})()
 
 /** Create CONFIG_DIR recursively if it doesn't exist */
 export function ensureConfigDir(): void {

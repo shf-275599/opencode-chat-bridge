@@ -113,6 +113,12 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
   const searchPaths = configPath
     ? [configPath]
     : [
+      path.resolve("config", "opencode-im.jsonc"),
+      path.resolve("config", "opencode-lark.jsonc"),
+      path.resolve("config", "opencode-lark.json"),
+      path.resolve("config", "opencode-feishu.jsonc"),
+      path.resolve("config", "opencode-feishu.json"),
+      // 向下兼容：项目根目录的旧路径
       path.resolve("opencode-im.jsonc"),
       path.resolve("opencode-lark.jsonc"),
       path.resolve("opencode-lark.json"),

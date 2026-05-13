@@ -106,7 +106,7 @@ opencode SSE stream
 
 ## Startup Phases (`src/index.ts`)
 
-1. Load config (`opencode-im-bridge.jsonc` or env vars)
+1. Load config (`config/opencode-im.jsonc` or env vars)
 2. Connect to opencode server (exponential-backoff retry, max 10 attempts)
 3. Init SQLite database
 4. Create shared services (SessionManager, EventProcessor, StreamingBridge)
@@ -146,7 +146,7 @@ This project uses **npm** as its primary package manager. Please ensure you run 
 1. Open `src/cron/cron-service.ts`.
 2. Add your job definition to the cron config schema in `src/types.ts`.
 3. Register the new job inside `CronService.start()` with a cron expression and handler function.
-4. Enable it in `opencode-im-bridge.jsonc` under the `cron` key.
+4. Enable it in `config/opencode-im.jsonc` under the `cron` key.
 
 ### Adding a Heartbeat Check
 
@@ -169,5 +169,5 @@ This project uses **npm** as its primary package manager. Please ensure you run 
 
 \* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`WECHAT_ENABLED`/`DINGTALK_APP_KEY`) must be configured.
 
-See `.env.example` and `opencode-im-bridge.example.jsonc` for full reference.
+See `config/.env.example` and `config/opencode-im.example.jsonc` for full reference.
 

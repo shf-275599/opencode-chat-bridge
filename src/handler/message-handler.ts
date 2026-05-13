@@ -26,6 +26,7 @@ import { join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { randomBytes } from "node:crypto"
 import { downloadQQMedia, parseQQMediaMessage, type QQMediaMessage } from "../channel/qq/qq-api-client.js"
+import { createVoiceTranscriber } from "../feishu/voice-transcriber.js"
 
 // ── Dependency injection interface ──
 
@@ -338,6 +339,7 @@ export function createMessageHandler(
   } = deps
   const notifiedFeishuKeys = new Set<string>()
   const signedSessions = new Set<string>()
+  const voiceTranscriber = createVoiceTranscriber(feishuClient)
 
   // ── Debouncer (opt-in via debounceMs > 0) ──
   const debouncer = deps.debounceMs && deps.debounceMs > 0
@@ -370,7 +372,7 @@ export function createMessageHandler(
     // ── 2. Handle message types ──
     const messageType = event.message.message_type
 
-    const feishuSupportedTypes = ["text", "post", "image", "file"]
+    const feishuSupportedTypes = ["text", "post", "image", "file", "voice"]
     const qqSupportedTypes = ["text", "image", "file"]
     const wechatSupportedTypes = ["text", "image", "file", "voice", "video"]
     let supportedTypes: string[]
@@ -432,12 +434,43 @@ export function createMessageHandler(
         }
       }
     } else if (messageType === "voice" || messageType === "video") {
-      // 微信语音/视频消息处理
-      try {
-        const parsed = JSON.parse(event.message.content)
-        userText = parsed.text || ""
-      } catch {
-        userText = event.message.content || ""
+      if (channelId === "feishu" && messageType === "voice") {
+        // 飞书语音消息：下载音频 → ffmpeg 转码 → ASR 转写
+        try {
+          const parsed = JSON.parse(event.message.content) as { file_key?: string; duration?: number }
+          const fileKey = parsed.file_key
+          const durationMs = parsed.duration ?? 0
+          if (!fileKey) {
+            logger.error("Missing file_key in Feishu voice message")
+            return
+          }
+          const result = await voiceTranscriber.transcribe(
+            event.message_id, fileKey, durationMs,
+          )
+          userText = result.text
+        } catch (err) {
+          logger.error(`Feishu voice transcription failed: ${err}`)
+          userText = "[语音消息 — 处理失败]"
+        }
+      } else if (channelId === "feishu" && messageType === "video") {
+        // 飞书视频消息暂不支持
+        userText = "[视频消息 — 暂不支持]"
+      } else if (channelId === "wechat") {
+        // 微信语音/视频消息处理
+        try {
+          const parsed = JSON.parse(event.message.content)
+          userText = parsed.text || ""
+        } catch {
+          userText = event.message.content || ""
+        }
+      } else {
+        // 其他渠道
+        try {
+          const parsed = JSON.parse(event.message.content)
+          userText = parsed.text || ""
+        } catch {
+          userText = event.message.content || ""
+        }
       }
     } else if (messageType === "post") {
       userText = extractTextFromPost(event.message.content)

@@ -70,7 +70,7 @@ export class QQPlugin extends BaseChannelPlugin {
             reconnectDelay: 1000,
             heartbeatInterval: 45000,
             intents: [
-                "C2C_MESSAGE_CREATE", // Private messages
+                "GROUP_AND_C2C_EVENT", // Private messages (C2C) and group messages
             ],
             mode: ReceiverMode.WEBSOCKET,
         })

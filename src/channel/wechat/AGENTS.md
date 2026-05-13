@@ -20,28 +20,12 @@ SessionManager + opencode HTTP API
 
 ## Files
 
-### `types.ts`
-- iLink API type definitions
-- Message types (WechatMessage, MessageItem)
-- Session types (WechatSession)
-- Config types (WechatConfig)
-
-### `client.ts`
-- HTTP API client with `X-WECHAT-UIN` header (anti-replay)
-- `getUpdates()` - Long polling for incoming messages
-- `sendMessage()` - Send text to WeChat
-- `getQrcode()` / `getQrcodeStatus()` - QR login flow
-
-### `auth.ts`
-- QR code login flow
-- Session token persistence (saved to `wechat-session.json`)
-- `ensureSession()` - Load existing or perform new login
-
 ### `wechat-plugin.ts`
-- Implements `ChannelPlugin` interface
-- Gateway: Long polling loop for message reception
-- Outbound: Send messages with `context_token`
-- Stores per-user `context_token` for reply routing
+- Implements `ChannelPlugin` interface using `@wechatbot/wechatbot` npm package
+- Gateway: QR code login + long polling loop for message reception via WeChatBot SDK
+- Outbound: Send text/images/files/audio/video messages, typing indicators
+- Streaming: basic StreamingSession (no-edits, flush = no-op, close → sendText)
+- Threading: C2C thread per user
 
 ## Key Differences from Other Channels
 

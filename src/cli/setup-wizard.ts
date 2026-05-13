@@ -19,6 +19,7 @@ const bold = (s: string) => `\x1b[1m${s}\x1b[0m`
 
 /** Config file search paths — must match src/utils/config.ts lines 69-76 */
 const CONFIG_SEARCH_PATHS = [
+  path.resolve("opencode-im.jsonc"),
   path.resolve("opencode-lark.jsonc"),
   path.resolve("opencode-lark.json"),
   path.resolve("opencode-feishu.jsonc"),

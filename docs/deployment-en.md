@@ -11,11 +11,11 @@ PM2 ensures the service automatically restarts if it crashes or the server reboo
 - PM2 installed: `npm install -g pm2`
 
 ### Usage
-The project includes a `start.sh` script that handles environment variables.
+The project includes a `scripts/start.sh` script that handles environment variables.
 
 ```bash
 # Start the service
-pm2 start ./start.sh --name opencode-lark
+pm2 start ./scripts/start.sh --name opencode-im-bridge
 
 # View logs
 pm2 logs opencode-lark

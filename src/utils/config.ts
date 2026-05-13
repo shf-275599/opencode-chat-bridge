@@ -113,6 +113,7 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
   const searchPaths = configPath
     ? [configPath]
     : [
+      path.resolve("opencode-im.jsonc"),
       path.resolve("opencode-lark.jsonc"),
       path.resolve("opencode-lark.json"),
       path.resolve("opencode-feishu.jsonc"),

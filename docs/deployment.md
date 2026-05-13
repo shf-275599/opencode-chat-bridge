@@ -11,11 +11,11 @@ PM2 可以确保服务在崩溃或重启后自动恢复。
 - 已安装 PM2: `npm install -g pm2`
 
 ### 脚本说明
-项目根目录提供了 `start.sh`，内部已包含环境变量处理逻辑。
+项目提供了 `scripts/start.sh`，内部已包含环境变量处理逻辑。
 
 ```bash
 # 启动服务
-pm2 start ./start.sh --name opencode-lark
+pm2 start ./scripts/start.sh --name opencode-im-bridge
 
 # 查看日志
 pm2 logs opencode-lark

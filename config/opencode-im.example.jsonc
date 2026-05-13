@@ -17,6 +17,27 @@
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
 
+  // QQ Bot configuration
+  // "qq": {
+  //   // QQ Open Platform App ID (env: QQ_APP_ID)
+  //   "appId": "${QQ_APP_ID}",
+  //
+  //   // QQ Open Platform App Secret (env: QQ_SECRET)
+  //   "secret": "${QQ_SECRET}",
+  //
+  //   // Enable sandbox mode (default: false)
+  //   "sandbox": false
+  // },
+
+  // WeChat iLink Bot configuration
+  // "wechat": {
+  //   // Enable WeChat channel (env: WECHAT_ENABLED)
+  //   "enabled": true,
+  //
+  //   // Session file path for QR login persistence
+  //   "sessionFile": "./data/wechat-session.json"
+  // },
+
   // DingTalk application configuration
   // "dingtalk": {
   //   // DingTalk Open Platform App Key (env: DINGTALK_APP_KEY)

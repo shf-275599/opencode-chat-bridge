@@ -1,75 +1,75 @@
 {
-  // Feishu application configuration
+  // 飞书应用配置
   "feishu": {
-    // Feishu Open Platform App ID (env: FEISHU_APP_ID)
+    // 飞书开放平台 App ID（环境变量: FEISHU_APP_ID）
     "appId": "${FEISHU_APP_ID}",
 
-    // Feishu Open Platform App Secret (env: FEISHU_APP_SECRET)
+    // 飞书开放平台 App Secret（环境变量: FEISHU_APP_SECRET）
     "appSecret": "${FEISHU_APP_SECRET}",
 
-    // Event subscription verification token (env: FEISHU_VERIFICATION_TOKEN)
+    // 事件订阅验证 Token（环境变量: FEISHU_VERIFICATION_TOKEN）
     "verificationToken": "${FEISHU_VERIFICATION_TOKEN}",
 
-    // Webhook server listening port (default: 3001)
+    // Webhook 服务端口（默认: 3001）
     "webhookPort": 3001,
 
-    // Encryption key for events (optional)
+    // 事件加密密钥（可选）
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
 
-  // QQ Bot configuration
+  // QQ 机器人配置
   // "qq": {
-  //   // QQ Open Platform App ID (env: QQ_APP_ID)
+  //   // QQ 开放平台 App ID（环境变量: QQ_APP_ID）
   //   "appId": "${QQ_APP_ID}",
   //
-  //   // QQ Open Platform App Secret (env: QQ_SECRET)
+  //   // QQ 开放平台 App Secret（环境变量: QQ_SECRET）
   //   "secret": "${QQ_SECRET}",
   //
-  //   // Enable sandbox mode (default: false)
+  //   // 是否启用沙箱模式（默认: false）
   //   "sandbox": false
   // },
 
-  // WeChat iLink Bot configuration
+  // 微信机器人配置
   // "wechat": {
-  //   // Enable WeChat channel (env: WECHAT_ENABLED)
+  //   // 是否启用微信渠道（环境变量: WECHAT_ENABLED）
   //   "enabled": true,
   //
-  //   // Session file path for QR login persistence
+  //   // 扫码登录会话持久化路径
   //   "sessionFile": "./data/wechat-session.json"
   // },
 
-  // DingTalk application configuration
+  // 钉钉机器人配置
   // "dingtalk": {
-  //   // DingTalk Open Platform App Key (env: DINGTALK_APP_KEY)
+  //   // 钉钉开放平台 App Key（环境变量: DINGTALK_APP_KEY）
   //   "appKey": "${DINGTALK_APP_KEY}",
   //
-  //   // DingTalk Open Platform App Secret (env: DINGTALK_APP_SECRET)
+  //   // 钉钉开放平台 App Secret（环境变量: DINGTALK_APP_SECRET）
   //   "appSecret": "${DINGTALK_APP_SECRET}",
   //
-  //   // DingTalk Agent ID (optional, env: DINGTALK_AGENT_ID)
+  //   // 钉钉 Agent ID（可选，环境变量: DINGTALK_AGENT_ID）
   //   "agentId": "${DINGTALK_AGENT_ID}"
   // },
 
-  // Default opencode agent name. This should match an agent configured in your opencode setup.
-  // Common values: "build", "claude", "code" — check your opencode config for available agents.
+  // 默认使用的 opencode agent 名称，需与 opencode 配置中的 agent 一致
+  // 常见值: "build"、"claude"、"code"
   "defaultAgent": "build",
 
-  // Data directory for SQLite database
+  // SQLite 数据库存放目录
   "dataDir": "./data",
 
-  // Progress card update debounce configuration
+  // 进度卡片更新防抖配置
   "progress": {
     "debounceMs": 500,
     "maxDebounceMs": 3000
   }
 
-  // Optional: cron jobs configuration
+  // 可选：定时任务配置
   // "cron": {
   //   "jobs": [
   //     {
-  //       "name": "daily-standup",
+  //       "name": "每日站会",
   //       "schedule": "0 9 * * 1-5",
-  //       "prompt": "Good morning! Please provide a daily standup summary.",
+  //       "prompt": "早上好，请总结今日待办事项。",
   //       "chatId": "oc_xxxxxxxxxxxxxxxx"
   //     }
   //   ]

@@ -33,7 +33,7 @@ import { createFeishuWSGateway } from "../../feishu/ws-client.js"
 
 // ── Dependencies ──
 
-export interface FeishuPluginDeps {
+interface FeishuPluginDeps {
   appConfig: AppConfig
   feishuClient: FeishuApiClient
   cardkitClient: CardKitClient

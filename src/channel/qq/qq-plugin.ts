@@ -20,7 +20,7 @@ import type { Logger } from "../../utils/logger.js"
 import { Bot, ReceiverMode, segment } from "qq-official-bot"
 import { parseQQMediaMessage } from "./qq-api-client.js"
 
-export interface QQPluginDeps {
+interface QQPluginDeps {
     appConfig: AppConfig
     logger: Logger
     onMessage?: (event: any) => Promise<void>

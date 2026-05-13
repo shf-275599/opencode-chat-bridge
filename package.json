@@ -24,8 +24,7 @@
     "src",
     "bin",
     "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
+    "LICENSE"
   ],
   "bin": {
     "opencode-im-bridge": "bin/opencode-im-bridge.js"

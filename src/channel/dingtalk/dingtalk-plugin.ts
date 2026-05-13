@@ -29,7 +29,7 @@ import {
 } from "./types.js"
 import { createDingTalkApiClient, type DingTalkApiClient } from "./api-client.js"
 
-export interface DingTalkPluginDeps {
+interface DingTalkPluginDeps {
   appConfig: AppConfig
   logger: Logger
   onMessage?: (event: any) => Promise<void>

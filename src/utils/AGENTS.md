@@ -10,7 +10,7 @@ Shared infrastructure. No business logic lives here. If something is needed in m
 Always use this instead of constructing attachment paths manually.
 
 ### `config.ts`
-Loads configuration from `opencode-lark.jsonc` (supports comments via jsonc parsing) and merges with environment variables. Environment variables take precedence over file values.
+Loads configuration from `opencode-im.jsonc` (supports comments via jsonc parsing) and merges with environment variables. Environment variables take precedence over file values.
 
 Returns a typed `Config` object. The config schema lives in `src/types.ts`. Don't access `process.env` directly in other modules — import from here instead.
 

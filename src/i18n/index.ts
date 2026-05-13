@@ -1,5 +1,5 @@
-import { en, type EnglishLocale } from "./locales/en.js"
-import { zhCN, type ChineseLocale } from "./locales/zh-CN.js"
+import { en } from "./locales/en.js"
+import { zhCN } from "./locales/zh-CN.js"
 
 export type Locale = "en" | "zh-CN"
 
@@ -48,4 +48,3 @@ export function t(
 }
 
 export { en, zhCN }
-export type { EnglishLocale, ChineseLocale }

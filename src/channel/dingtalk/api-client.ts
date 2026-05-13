@@ -210,11 +210,3 @@ export function createDingTalkApiClient(config: DingTalkConfig): DingTalkApiClie
     getUserInfo,
   }
 }
-
-export async function sendDingTalkMessage(
-  config: DingTalkConfig,
-  request: DingTalkSendMessageRequest,
-): Promise<void> {
-  const client = createDingTalkApiClient(config)
-  await client.sendMessage(request)
-}

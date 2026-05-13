@@ -6,7 +6,7 @@
 import type { ChannelPlugin, ChannelId } from "./types.js"
 import type { Logger } from "../utils/logger.js"
 
-export interface ChannelManagerOptions {
+interface ChannelManagerOptions {
   logger: Logger
 }
 

@@ -20,7 +20,7 @@ import type {
 import type { AppConfig } from "../../utils/config.js"
 import type { Logger } from "../../utils/logger.js"
 
-export interface WechatPluginDeps {
+interface WechatPluginDeps {
   appConfig: AppConfig
   logger: Logger
   onMessage?: (event: any) => Promise<void>

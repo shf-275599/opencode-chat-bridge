@@ -72,13 +72,6 @@ export interface DingTalkMediaUploadResponse {
   media_id: string
 }
 
-export interface DingTalkStreamEvent {
-  eventType: string
-  streamId?: string
-  topic?: string
-  data?: unknown
-}
-
 export interface DingTalkCallbackEvent {
   eventType?: string
   conversationId?: string

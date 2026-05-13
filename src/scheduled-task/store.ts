@@ -37,11 +37,6 @@ export async function listScheduledTasks(): Promise<ScheduledTask[]> {
   return readTasks()
 }
 
-export async function getScheduledTask(id: string): Promise<ScheduledTask | null> {
-  const tasks = await readTasks()
-  return tasks.find((t) => t.id === id) ?? null
-}
-
 export async function addScheduledTask(
   task: Omit<ScheduledTask, "id"> & { id?: string }
 ): Promise<ScheduledTask> {
@@ -81,8 +76,4 @@ export async function updateScheduledTask(
   tasks[index] = merged
   await writeTasks(tasks)
   return merged
-}
-
-export async function replaceScheduledTasks(tasks: ScheduledTask[]): Promise<void> {
-  await writeTasks(tasks)
 }

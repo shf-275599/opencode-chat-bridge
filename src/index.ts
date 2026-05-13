@@ -1,5 +1,5 @@
 /**
- * OhMyOpenclaw — Feishu channel integration for opencode.
+ * opencode-im-bridge — IM channel integration for opencode.
  *
  * Standalone process entry point:
  *   0. Load .env + interactive setup wizard (first run)
@@ -88,9 +88,9 @@ async function main(): Promise<void> {
   logger.info("Phase 1: Loading config...")
   const config = await loadConfig()
 
-  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled) {
+  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled && (!config.dingtalk?.appKey || !config.dingtalk?.appSecret)) {
     logger.error(
-      "No valid channel credentials found (Feishu, QQ, or WeChat). Run `opencode-im-bridge init` to configure, " +
+      "No valid channel credentials found (Feishu, QQ, WeChat, or DingTalk). Run `opencode-im-bridge init` to configure, " +
       "or set environment variables.",
     )
     process.exit(1)
@@ -550,7 +550,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown("SIGTERM"))
   process.on("SIGINT", shutdown("SIGINT"))
 
-  logger.info("OhMyOpenclaw started — channels active")
+  logger.info("opencode-im-bridge started — channels active")
 }
 
 main().catch((err) => {

@@ -1,6 +1,6 @@
 # Q&A 卡片交互文档
 
-本文档描述 opencode-im-bridge 如何在飞书和 Telegram 中实现问答卡片交互。
+本文档描述 opencode-im-bridge 如何在飞书中实现问答卡片交互。
 
 ## 交互类型
 
@@ -98,75 +98,7 @@ interface FeishuCardAction {
 
 ---
 
-## Telegram 实现
-
-### 技术方案
-
-- **消息类型**：Inline 键盘按钮 (InlineKeyboardMarkup)
-- **消息编辑**：`editMessageText` 更新流式消息
-- **回调接收**：CallbackQuery + `answerCallbackQuery`
-- **数据编码**：`tg1|{action}|{args}` 格式，限制 64 字节
-
-### 按钮回调协议
-
-```typescript
-// 回调数据格式
-type TelegramCallbackAction = "cmd" | "qa" | "pr"
-
-// question 回调
-"tg1|qa|{requestId}|{flatAnswers}"
-
-// permission 回调  
-"tg1|pr|{requestId}|{reply}"
-// reply: "once" | "always" | "reject"
-```
-
-### Inline 卡片创建
-
-```typescript
-// createTelegramInlineCard(text, rows)
-// rows: [[{ text: "按钮文本", payload: { action: "qa", requestId: "...", answers: [[...]] } }]]
-
-const card = createTelegramInlineCard(
-  "请选择方案：",
-  [
-    [
-      { text: "🚀 方案 A", payload: { action: "qa", requestId: "req_123", answers: [["A"]] } },
-      { text: "⚡ 方案 B", payload: { action: "qa", requestId: "req_123", answers: [["B"]] } },
-    ],
-  ]
-)
-```
-
-### 消息流式更新
-
-```typescript
-// StreamingSession 实现
-interface StreamingSession {
-  sessionId: string
-  lastMessageId?: string  // Bot 发送的最后消息 ID
-  lastRenderedText: string
-  
-  flush(): Promise<void>   // 防抖后编辑消息
-  close(finalText?): Promise<void>  // 发送最终消息
-}
-```
-
-- 初始：发送新消息，记录 `message_id`
-- 更新：编辑已发送消息 (900ms 防抖)
-- 结束：编辑或发送最终消息
-
-### 关键文件
-
-| 文件 | 职责 |
-|------|------|
-| `src/handler/interactive-handler.ts` | 处理问答和权限响应 |
-
----
-
-## 统一交互流程
-
-无论平台如何，交互流程一致：
+## 交互流程
 
 ```
 Agent 发送问题/权限请求
@@ -175,7 +107,7 @@ Agent 发送问题/权限请求
          ↓
    EventProcessor 解析事件
          ↓
-   StreamingCardSession (飞书) / StreamingSession (Telegram)
+   StreamingCardSession (飞书)
          ↓
    发送交互式卡片到用户
          ↓
@@ -194,7 +126,7 @@ Agent 发送问题/权限请求
 
 ## 配置选项
 
-在 `opencode-im-bridge.jsonc` 中：
+在 `config/opencode-im.jsonc` 中：
 
 ```jsonc
 {
@@ -205,20 +137,10 @@ Agent 发送问题/权限请求
 }
 ```
 
-Telegram 流式更新：固定 900ms 防抖 (`TELEGRAM_STREAM_THROTTLE_MS`)
-
 ---
 
 ## 注意事项
 
-### 飞书
-
 - CardKit 卡片有最大元素数量限制，长文本需截断或分页
 - Webhook 服务器需公网可达（开发时可用 ngrok）
 - Token 自动刷新，99991663 错误码触发重试
-
-### Telegram
-
-- `callback_data` 限制 64 字节，复杂数据需压缩
-- 只能编辑 Bot 发送的消息，不能编辑用户消息
-- `answerCallbackQuery` 的 text 限制 180 字符

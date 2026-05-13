@@ -105,10 +105,6 @@ export function parseSchedule(text: string): ParsedTaskSchedule {
   throw new Error(`无法识别 "${text}"。支持格式: "每天19:00", "每周三14:30", "every Nm", "every Nh", "daily HH:MM", "cron表达式", "YYYY-MM-DD HH:MM"`)
 }
 
-export function getScheduleSummary(parsed: ParsedTaskSchedule): string {
-  return parsed.summary
-}
-
 function isValidCronFields(fields: string[]): boolean {
   const fieldCount = fields.length
   if (fieldCount !== 5 && fieldCount !== 6) return false

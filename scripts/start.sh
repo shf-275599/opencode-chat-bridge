@@ -7,8 +7,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load env
-set -a && source .env && set +a
+# Load env from config directory
+set -a && source config/.env.bot 2>/dev/null || source .env 2>/dev/null || true && set +a
 
 PORT=${OPENCODE_SERVER_PORT:-4097}
 

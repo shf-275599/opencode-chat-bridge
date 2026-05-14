@@ -1175,14 +1175,14 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       lines.push(t(locale, "status.cannotConnect"))
     }
 
-    const modelStr = await getCurrentModelFromFile()
+    const mapping = sessionManager.getSession(feishuKey)
+
+    const modelStr = mapping?.model ?? await getCurrentModelFromFile()
     if (modelStr) {
       lines.push(t(locale, "status.model", { model: modelStr }))
     } else {
       lines.push(t(locale, "status.modelUnconfigured"))
     }
-
-    const mapping = sessionManager.getSession(feishuKey)
     if (mapping) {
       lines.push(t(locale, "status.sessionBound", { sessionId: mapping.session_id }))
       lines.push(t(locale, "status.agent", { agent: mapping.agent }))

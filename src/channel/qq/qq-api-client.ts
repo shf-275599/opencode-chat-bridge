@@ -54,7 +54,7 @@ export async function resolveDownloadDir(): Promise<string> {
     cachedDownloadDir = primaryDir
     return primaryDir
   } catch {
-    const fallbackDir = join(tmpdir(), "opencode-lark-downloads")
+    const fallbackDir = join(tmpdir(), "opencode-im-bridge-downloads")
     await mkdir(fallbackDir, { recursive: true })
     cachedDownloadDir = fallbackDir
     return fallbackDir

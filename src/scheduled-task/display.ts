@@ -8,7 +8,7 @@ import type {
 
 export function buildTaskListCard(tasks: TaskDisplayItem[], locale: Locale): string {
   if (tasks.length === 0) {
-    return t(locale, "scheduledTask.list.empty")
+    return t(locale, "scheduledTask.list.empty") + `\n\n**用法：**\n\`/cron 每天19:00提醒我吃饭\`\n\`/cron 每2小时检查一次服务器\`\n\`/cron 每周三14:30开会提醒\``
   }
 
   const lines = tasks.map((task) => {
@@ -37,7 +37,7 @@ export function buildTaskListCard(tasks: TaskDisplayItem[], locale: Locale): str
 
 export function buildTaskListText(tasks: TaskDisplayItem[], locale: Locale): string {
   if (tasks.length === 0) {
-    return t(locale, "scheduledTask.list.empty")
+    return t(locale, "scheduledTask.list.empty") + `\n\n用法：\n/cron 每天19:00提醒我吃饭\n/cron 每2小时检查一次服务器\n/cron 每周三14:30开会提醒`
   }
 
   const lines = tasks.map((task) => {

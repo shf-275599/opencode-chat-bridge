@@ -427,7 +427,6 @@ export function createMessageHandler(
     // ── 4d. Check for natural language schedule intent ──
     const schedulePatterns = [/每天.*[点时]/, /每周.*[点时]/, /每.*小时/, /每.*分钟/, /提醒我/, /定时任务/]
     if (schedulePatterns.some(p => p.test(userText))) {
-      if (channelId !== "feishu") return
       logger.info(`[schedule-intent] Detected schedule intent in: "${userText}"`)
       if (cmdHandlerEx?.handleTaskConfirmation) {
         // Start a new task creation flow

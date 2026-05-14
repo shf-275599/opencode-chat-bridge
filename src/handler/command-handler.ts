@@ -540,12 +540,6 @@ ${t(locale, "help.abort")}`
     const locale = getLocale(channelId)
     const sub = args[0]?.toLowerCase()
 
-    // 定时任务仅飞书支持
-    if (channelId !== "feishu") {
-      await replyText(chatId, messageId, "定时任务功能仅飞书渠道支持。", channelId)
-      return
-    }
-
     if (sub === "list") {
       const tasks = await listScheduledTasks()
       const displayItems: TaskDisplayItem[] = tasks.map((task) => ({

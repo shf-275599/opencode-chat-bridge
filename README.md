@@ -46,31 +46,8 @@
 
 ### 安装与启动
 
-项目支持两种运行方式：**全局安装** 或 **从源码运行**。
-
-#### 方式一：全局安装（推荐）
-
 ```bash
-npm install -g opencode-im-bridge-slim
-```
-
-启动时只需一个命令，配置通过环境变量或交互式向导完成：
-
-```bash
-# 第一次运行（交互式配置向导）
-opencode-im-bridge-slim
-
-# 指定配置文件（多账号切换）
-opencode-im-bridge-slim --config cli_xxxxxxxx
-
-# 重新运行配置向导
-opencode-im-bridge-slim init
-```
-
-#### 方式二：从源码运行
-
-```bash
-git clone https://github.com/ET06731/opencode-im-bridge-slim.git
+git clone https://github.com/shf-275599/opencode-im-bridge-slim.git
 cd opencode-im-bridge-slim
 bun install
 ```

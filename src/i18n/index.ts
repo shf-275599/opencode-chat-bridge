@@ -1,5 +1,6 @@
 import { en } from "./locales/en.js"
 import { zhCN } from "./locales/zh-CN.js"
+import { createLogger } from "../utils/logger.js"
 
 export type Locale = "en" | "zh-CN"
 
@@ -9,6 +10,8 @@ const locales = {
 } as const
 
 export const defaultLocale: Locale = "en"
+
+const logger = createLogger("i18n")
 
 export function getLocale(channelId?: string): Locale {
   if (!channelId) return defaultLocale
@@ -30,13 +33,13 @@ export function t(
     if (value && typeof value === "object" && k in value) {
       value = (value as Record<string, unknown>)[k]
     } else {
-      console.warn(`[i18n] Missing translation key: ${key} for locale ${locale}`)
+      logger.warn(`[i18n] Missing translation key: ${key} for locale ${locale}`)
       return key
     }
   }
 
   if (typeof value !== "string") {
-    console.warn(`[i18n] Translation value is not a string: ${key}`)
+    logger.warn(`[i18n] Translation value is not a string: ${key}`)
     return key
   }
 

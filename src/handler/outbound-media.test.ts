@@ -1,4 +1,4 @@
-import { extractFilePaths } from "../handler/outbound-media.ts"
+import { extractFilePaths } from "../handler/outbound-media.js"
 import { describe, it, expect } from "vitest"
 
 describe("extractFilePaths Windows paths", () => {

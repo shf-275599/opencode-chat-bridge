@@ -28,13 +28,6 @@ const WechatConfigSchema = z.object({
   token: z.string().optional(),
 })
 
-const DingTalkConfigSchema = z.object({
-  appKey: z.string().min(1),
-  appSecret: z.string().min(1),
-  agentId: z.string().optional(),
-  botName: z.string().optional(),
-})
-
 const ProgressConfigSchema = z.object({
   debounceMs: z.number().int().positive().default(500),
   maxDebounceMs: z.number().int().positive().default(3000),
@@ -77,15 +70,14 @@ const AppConfigSchema = z.object({
   feishu: FeishuConfigSchema.optional(),
   qq: QqConfigSchema.optional(),
   wechat: WechatConfigSchema.optional(),
-  dingtalk: DingTalkConfigSchema.optional(),
   defaultAgent: z.string().default("build"),
   dataDir: z.string().default("./data"),
   progress: ProgressConfigSchema.optional(),
   cron: CronConfigSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   messageDebounceMs: z.number().int().min(0).optional().default(10000),
-}).refine(data => data.feishu || data.qq || data.wechat || data.dingtalk, {
-  message: "At least one channel (feishu, qq, wechat, or dingtalk) must be configured."
+}).refine(data => data.feishu || data.qq || data.wechat, {
+  message: "At least one channel (feishu, qq, or wechat) must be configured."
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>
@@ -93,7 +85,6 @@ export type CronConfig = z.infer<typeof CronConfigSchema>
 export type CronJobConfig = z.infer<typeof CronJobSchema>
 export type HeartbeatConfig = z.infer<typeof HeartbeatConfigSchema>
 export type WechatConfig = z.infer<typeof WechatConfigSchema>
-export type DingTalkConfig = z.infer<typeof DingTalkConfigSchema>
 
 /** Replace ${ENV_VAR} placeholders with actual environment variable values */
 function interpolateEnvVars(text: string): string {
@@ -166,12 +157,6 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
         enabled: true,
         sessionFile: process.env["WECHAT_SESSION_FILE"],
         baseUrl: process.env["WECHAT_BASE_URL"],
-      } : undefined,
-      dingtalk: process.env["DINGTALK_APP_KEY"] ? {
-        appKey: process.env["DINGTALK_APP_KEY"],
-        appSecret: process.env["DINGTALK_APP_SECRET"] ?? "",
-        agentId: process.env["DINGTALK_AGENT_ID"],
-        botName: process.env["DINGTALK_BOT_NAME"],
       } : undefined,
       defaultAgent: process.env["OPENCODE_DEFAULT_AGENT"] ?? "build",
       dataDir: process.env["OPENCODE_DATA_DIR"] ?? "./data",

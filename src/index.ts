@@ -39,7 +39,6 @@ import { createInteractiveHandler } from "./handler/interactive-handler.js"
 import { createInteractivePoller } from "./handler/interactive-poller.js"
 import { createFeishuGateway } from "./feishu/webhook-server.js"
 import { FeishuPlugin } from "./channel/feishu/feishu-plugin.js"
-import { DingTalkPlugin } from "./channel/dingtalk/dingtalk-plugin.js"
 import { ChannelManager } from "./channel/manager.js"
 import type { ChannelId } from "./channel/types.js"
 import { HeartbeatService } from "./cron/heartbeat.js"
@@ -88,9 +87,9 @@ async function main(): Promise<void> {
   logger.info("Phase 1: Loading config...")
   const config = await loadConfig()
 
-  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled && (!config.dingtalk?.appKey || !config.dingtalk?.appSecret)) {
+  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled) {
     logger.error(
-      "No valid channel credentials found (Feishu, QQ, WeChat, or DingTalk). Run `opencode-im-bridge init` to configure, " +
+      "No valid channel credentials found (Feishu, QQ, or WeChat). Run `opencode-im-bridge init` to configure, " +
       "or set environment variables.",
     )
     process.exit(1)
@@ -422,14 +421,6 @@ async function main(): Promise<void> {
     channelManager.register(wechatPlugin)
   }
 
-  if (config.dingtalk) {
-    const dingtalkPlugin = new DingTalkPlugin({
-      appConfig: config,
-      logger,
-      onMessage: handleMessage,
-    })
-    channelManager.register(dingtalkPlugin)
-  }
 
   // ═══════════════════════════════════════════
   // Phase 7: Start Channels + Webhook Server

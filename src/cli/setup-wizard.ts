@@ -51,9 +51,8 @@ export async function needsSetup(): Promise<boolean> {
 
   // 3. Env vars already provide credentials → no setup needed
   const hasFeishu = !!(process.env.FEISHU_APP_ID && process.env.FEISHU_APP_SECRET)
-  const hasQq = !!(process.env.QQ_APP_ID && process.env.QQ_SECRET)
   const hasWechat = process.env.WECHAT_ENABLED === "true"
-  if (hasFeishu || hasQq || hasWechat) {
+  if (hasFeishu || hasWechat) {
     return false
   }
 
@@ -215,14 +214,12 @@ export async function runSetupWizard(): Promise<void> {
     process.stdout.write(dim("Step 1/3: Channel Credentials") + "\n")
 
     let setupFeishu = false
-    let setupQq = false
     let setupWechat = false
-    while (!setupFeishu && !setupQq && !setupWechat) {
-      const choice = (await rl.question("  Which channel do you want to configure? [feishu, qq, wechat, all]: ")).trim().toLowerCase()
+    while (!setupFeishu && !setupWechat) {
+      const choice = (await rl.question("  Which channel do you want to configure? [feishu, wechat, all]: ")).trim().toLowerCase()
       if (choice === "feishu" || choice === "all") setupFeishu = true
-      if (choice === "qq" || choice === "all") setupQq = true
       if (choice === "wechat" || choice === "all") setupWechat = true
-      if (!setupFeishu && !setupQq && !setupWechat) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
+      if (!setupFeishu && !setupWechat) process.stdout.write(red("  Please select at least one valid channel.") + "\n")
     }
 
     let feishuAppId = "", feishuAppSecret = ""
@@ -237,27 +234,6 @@ export async function runSetupWizard(): Promise<void> {
         feishuAppSecret = (await readSecret("  Enter your Feishu App Secret: ")).trim()
       }
       process.stdout.write("\n")
-    }
-
-    let qqAppId = "", qqSecret = ""
-    let qqSandbox = false
-    if (setupQq) {
-      // If rl was closed by feishu secret input, reopen it or adjust approach
-      // Wait, readSecret works without readline interface
-      const rlQq = setupFeishu ? readline.createInterface({ input: process.stdin, output: process.stdout }) : rl
-      process.stdout.write("\n" + dim("--- QQ Bot Configuration ---") + "\n")
-      while (!qqAppId) {
-        qqAppId = (await rlQq.question("  Enter your QQ App ID: ")).trim()
-      }
-      if (setupFeishu) rlQq.close()
-      else rl.close()
-
-      while (!qqSecret) {
-        qqSecret = (await readSecret("  Enter your QQ App Secret: ")).trim()
-      }
-      process.stdout.write("\n")
-    } else if (!setupFeishu) {
-      rl.close()
     }
 
     // WeChat uses QR code login, no credentials needed
@@ -306,7 +282,7 @@ export async function runSetupWizard(): Promise<void> {
       process.stdout.write(dim("Step 3/3: Save Configuration") + "\n")
 
       ensureConfigDir()
-      const mainId = feishuAppId || qqAppId || "bot"
+      const mainId = feishuAppId || "bot"
       const envPath = path.join(CONFIG_DIR, `.env.${mainId}`)
 
       // Build .env content
@@ -317,14 +293,6 @@ export async function runSetupWizard(): Promise<void> {
       } else {
         lines.push(`FEISHU_APP_ID=`)
         lines.push(`FEISHU_APP_SECRET=`)
-      }
-      if (setupQq) {
-        lines.push(`QQ_APP_ID=${qqAppId}`)
-        lines.push(`QQ_SECRET=${qqSecret}`)
-        lines.push(`QQ_SANDBOX=false`)
-      } else {
-        lines.push(`QQ_APP_ID=`)
-        lines.push(`QQ_SECRET=`)
       }
       if (setupWechat) {
         lines.push(`WECHAT_ENABLED=true`)
@@ -344,13 +312,6 @@ export async function runSetupWizard(): Promise<void> {
       } else {
         delete process.env.FEISHU_APP_ID
         delete process.env.FEISHU_APP_SECRET
-      }
-      if (setupQq) {
-        process.env.QQ_APP_ID = qqAppId
-        process.env.QQ_SECRET = qqSecret
-      } else {
-        delete process.env.QQ_APP_ID
-        delete process.env.QQ_SECRET
       }
       if (setupWechat) {
         process.env.WECHAT_ENABLED = "true"

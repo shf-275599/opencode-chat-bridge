@@ -360,11 +360,13 @@ async function main(): Promise<void> {
    */
   async function startSseLoop(signal: AbortSignal): Promise<void> {
     let delay = 1_000
+    let retries = 0
     while (!signal.aborted) {
       try {
         const events = await client.event.subscribe()
         logger.info("SSE event stream connected")
-        delay = 1_000  // reset backoff on successful connect
+        delay = 1_000
+        retries = 0
         for await (const event of events.stream) {
           if (signal.aborted) break
           dispatchSseEvent(event)
@@ -377,6 +379,11 @@ async function main(): Promise<void> {
         logger.warn(`SSE subscription error: ${err}. Retrying in ${delay}ms...`)
       }
       if (!signal.aborted) {
+        retries++
+        if (retries >= 3) {
+          logger.error("SSE reconnection failed after 3 attempts, giving up")
+          break
+        }
         await new Promise((r) => setTimeout(r, delay))
         delay = Math.min(delay * 2, 30_000)
       }

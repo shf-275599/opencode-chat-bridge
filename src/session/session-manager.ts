@@ -49,11 +49,6 @@ export function createSessionManager(
     )
   `)
 
-  try {
-    db.exec("ALTER TABLE feishu_sessions ADD COLUMN is_bound INTEGER DEFAULT 0")
-  } catch {
-    // Column already exists.
-  }
 
   try {
     db.exec("ALTER TABLE feishu_sessions ADD COLUMN model TEXT")

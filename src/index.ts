@@ -1,5 +1,5 @@
 /**
- * opencode-im-bridge — IM channel integration for opencode.
+ * opencode-im-bridge-slim — IM channel integration for opencode.
  *
  * Standalone process entry point:
  *   0. Load .env + interactive setup wizard (first run)
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 
   if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled) {
     logger.error(
-      "No valid channel credentials found (Feishu, QQ, or WeChat). Run `opencode-im-bridge init` to configure, " +
+      "No valid channel credentials found (Feishu, QQ, or WeChat). Run `opencode-im-bridge-slim init` to configure, " +
       "or set environment variables.",
     )
     process.exit(1)
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
     // Feishu-specific handlers (only when Feishu is configured)
     if (config.feishu) {
       if (actionType === "view_subagent") {
-        return subAgentCardHandler2?.(action)
+        return subAgentCardHandler?.(action)
       }
       if (actionType === "command_execute") {
         const cmd = (action.action?.value as any)?.command
@@ -545,7 +545,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown("SIGTERM"))
   process.on("SIGINT", shutdown("SIGINT"))
 
-  logger.info("opencode-im-bridge started — channels active")
+  logger.info("opencode-im-bridge-slim started — channels active")
 }
 
 main().catch((err) => {

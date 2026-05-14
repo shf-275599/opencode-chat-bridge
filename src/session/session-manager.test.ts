@@ -233,43 +233,6 @@ describeOrSkip("session-manager", () => {
     })
   })
 
-  describe("migration", () => {
-    it("adds is_bound column to existing table without errors", () => {
-      // Pre-create the old schema
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS feishu_sessions (
-          feishu_key  TEXT PRIMARY KEY,
-          session_id  TEXT NOT NULL,
-          agent       TEXT NOT NULL,
-          created_at  INTEGER NOT NULL,
-          last_active INTEGER NOT NULL
-        )
-      `)
-
-      // Should not throw — ALTER TABLE in try/catch
-      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
-      expect(sm).toBeDefined()
-    })
-
-    it("handles already-migrated table gracefully", () => {
-      // Create table with is_bound already present
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS feishu_sessions (
-          feishu_key  TEXT PRIMARY KEY,
-          session_id  TEXT NOT NULL,
-          agent       TEXT NOT NULL,
-          created_at  INTEGER NOT NULL,
-          last_active INTEGER NOT NULL,
-          is_bound    INTEGER DEFAULT 0
-        )
-      `)
-
-      // Second createSessionManager should not throw even though column exists
-      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
-      expect(sm).toBeDefined()
-    })
-  })
-
   describe("discoverTuiSession validation", () => {
     it("skips discovered session that returns 404 from server", async () => {
       const createdSessionId = "ses-created-after-stale"

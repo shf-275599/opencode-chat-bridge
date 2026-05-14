@@ -40,7 +40,7 @@
 
   // 默认使用的 opencode agent 名称，需与 opencode 配置中的 agent 一致
   // 常见值: "build"、"claude"、"code"
-  "defaultAgent": "build",
+  "defaultAgent": "OpenCode-Builder",
 
   // SQLite 数据库存放目录
   "dataDir": "./data",

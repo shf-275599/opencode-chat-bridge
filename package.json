@@ -1,6 +1,6 @@
 {
   "name": "opencode-im-bridge-slim",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Bridge Feishu/Lark group chats to opencode TUI sessions — real-time two-way messaging with streaming cards / 飞书群聊 ↔ opencode TUI 双向实时桥接",
   "license": "MIT",
   "keywords": [
@@ -46,7 +46,6 @@
     "@wechatbot/wechatbot": "^2.0.1",
     "cron": "^3.5.0",
     "express": "^4.21.0",
-    "qq-official-bot": "^1.0.12",
     "zod": "^3.24.0"
   },
   "devDependencies": {

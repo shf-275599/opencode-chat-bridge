@@ -11,7 +11,6 @@
         "cron": "^3.5.0",
         "express": "^4.21.0",
         "opencode-im-bridge": "^0.40.0",
-        "qq-official-bot": "^1.0.12",
         "qrcode": "^1.5.4",
         "zod": "^3.24.0",
       },
@@ -436,7 +435,6 @@
 
     "on-finished": ["on-finished@2.4.1", "", { "dependencies": { "ee-first": "1.1.1" } }, "sha512-oVlzkg3ENAhCk2zdv7IJwd/QUD4z2RxRwpkcGY8psCVcCYZNq4wYnVWALHM+brtuJjePWiYF/ClmuDr8Ch5+kg=="],
 
-    "opencode-im-bridge": ["opencode-im-bridge@0.40.0", "", { "dependencies": { "@larksuiteoapi/node-sdk": "^1.59.0", "@opencode-ai/sdk": "^1.2.27", "cron": "^3.5.0", "discord.js": "^14.25.1", "express": "^4.21.0", "qq-official-bot": "^1.0.12", "qrcode": "^1.5.4", "zod": "^3.24.0" }, "bin": { "opencode-im-bridge": "bin/opencode-im-bridge.js" } }, "sha512-0r0VkKKtBGvPsZT2HWpi7rIqUdvYlF1aoLikngxjsJ4hr99YNSnVY4yWsvGaGjFeIqGqhPV9XiMSLsxMqbCCWg=="],
 
     "p-limit": ["p-limit@2.3.0", "", { "dependencies": { "p-try": "^2.0.0" } }, "sha512-//88mFWSJx8lxCzwdAABTJL2MyWB12+eIY7MDL2SqLmAkeKU9qxRvWuSyTjm3FUmpBEMuFfckAIqEaVGUDxb6w=="],
 
@@ -468,7 +466,6 @@
 
     "proxy-from-env": ["proxy-from-env@1.1.0", "", {}, "sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg=="],
 
-    "qq-official-bot": ["qq-official-bot@1.0.13", "", { "dependencies": { "@noble/curves": "^1.6.0", "axios": "1.8.2", "formdata-node": "^6.0.3", "log4js": "^6.9.1", "ws": "^8.18.0" } }, "sha512-QoZ2L4BGp1JwGlmTjJtGlYUPbnLVpsTgxDnNleUr6CrY0lZmaxTLQViKPU1Y+HvfBoFmyABiV+GX4+PGHSUXRA=="],
 
     "qrcode": ["qrcode@1.5.4", "", { "dependencies": { "dijkstrajs": "^1.0.1", "pngjs": "^5.0.0", "yargs": "^15.3.1" }, "bin": { "qrcode": "bin/qrcode" } }, "sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg=="],
 
@@ -600,7 +597,6 @@
 
     "finalhandler/debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA=="],
 
-    "qq-official-bot/axios": ["axios@1.8.2", "", { "dependencies": { "follow-redirects": "^1.15.6", "form-data": "^4.0.0", "proxy-from-env": "^1.1.0" } }, "sha512-ls4GYBm5aig9vWx8AWDSGLpnpDQRtWAfrjU+EuytuODrFBkqesN2RkOQCBzrA1RQNHw1SmRMSDDDSwzNAYQ6Rg=="],
 
     "rollup/@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 

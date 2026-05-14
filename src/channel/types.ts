@@ -6,7 +6,7 @@
 
 // ── Core Type Aliases ──
 
-/** Unique identifier for a channel provider (e.g., "feishu", "qq", "wechat") */
+/** Unique identifier for a channel provider (e.g., "feishu", "wechat") */
 export type ChannelId = string & { readonly __brand: "ChannelId" };
 
 /**

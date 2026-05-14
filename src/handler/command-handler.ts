@@ -1208,25 +1208,11 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     } else {
       lines.push(t(locale, "status.modelUnconfigured"))
     }
+
+    let contextUsed = 0
+    let contextLimit = 0
+
     if (mapping) {
-      lines.push(t(locale, "status.sessionBound", { sessionId: mapping.session_id }))
-      lines.push(t(locale, "status.agent", { agent: mapping.agent }))
-
-      try {
-        const sessionResp = await fetch(`${serverUrl}/session/${mapping.session_id}`)
-        if (sessionResp.ok) {
-          const sessionData = (await sessionResp.json()) as {
-            title?: string
-          }
-          if (sessionData.title) lines.push(t(locale, "status.sessionTitle", { title: sessionData.title }))
-        }
-      } catch {
-        // Session info fetch failed — not critical
-      }
-
-      let contextUsed = 0
-      let contextLimit = 0
-
       try {
         const cwd = process.env.OPENCODE_CWD || process.cwd()
         const msgsResp = await fetch(`${serverUrl}/session/${mapping.session_id}/message?limit=1000`, {

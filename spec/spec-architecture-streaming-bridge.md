@@ -103,7 +103,6 @@ interface StreamingBridge {
 |------|-----------|----------|--------------|
 | Feishu | ✅ 有 | ✅ 有 | 通过 `card.close()` 发送，卡片自动更新 |
 | Telegram | ❌ 无 | ❌ 无 | 通过 `plugin.outbound.sendText()` 发送 |
-| feishu | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
 | Discord | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
 | Wechat | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
 

@@ -158,14 +158,11 @@ This project uses **bun** as its runtime and package manager.
 |----------|----------|---------|-------------|
 | `FEISHU_APP_ID` | yes* | | Feishu App ID |
 | `FEISHU_APP_SECRET` | yes* | | Feishu App Secret |
-| `QQ_APP_ID` | yes* | | QQ Bot App ID |
-| `QQ_SECRET` | yes* | | QQ Bot Secret |
 | `WECHAT_ENABLED` | yes* | | Set to `true` to enable WeChat |
 | `OPENCODE_SERVER_URL` | no | `http://localhost:4096` | opencode server URL |
 | `FEISHU_WEBHOOK_PORT` | no | `3001` | Card action callback port |
 | `OPENCODE_CWD` | no | `process.cwd()` | Override session discovery directory |
 
-\* At least one channel (`FEISHU_APP_ID`/`QQ_APP_ID`/`WECHAT_ENABLED`) must be configured.
 
 See `config/.env.example` and `config/opencode-im.example.jsonc` for full reference.
 

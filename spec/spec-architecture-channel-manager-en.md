@@ -8,7 +8,7 @@ tags: [architecture, design, channel, plugin]
 
 # Introduction
 
-This specification defines the architecture, requirements, and constraints for the `ChannelManager` and its associated `ChannelPlugin` ecosystem within `opencode-im-bridge-slim`. The Channel Manager provides a unified abstraction layer over fundamentally different chat platforms (like Feishu, QQ, Telegram, Discord), allowing the core application logic to remain agnostic to underlying network protocols and payload schemas.
+This specification defines the architecture, requirements, and constraints for the `ChannelManager` and its associated `ChannelPlugin` ecosystem within `opencode-im-bridge-slim`. The Channel Manager provides a unified abstraction layer over fundamentally different chat platforms (like Feishu, feishu, Telegram, Discord), allowing the core application logic to remain agnostic to underlying network protocols and payload schemas.
 
 ## 1. Purpose & Scope
 
@@ -16,7 +16,7 @@ The purpose of the `ChannelManager` is to administer the lifecycle (registration
 
 ## 2. Definitions
 
-- **Channel**: A distinct Instant Messaging platform (e.g., `feishu`, `qq`, `wechat`).
+- **Channel**: A distinct Instant Messaging platform (e.g., `feishu`, `feishu`, `wechat`).
 - **ChannelPlugin**: A modular implementation of the channel interfaces required to integrate a specific IM platform into the bridge.
 - **Adapter**: Sub-interfaces of a `ChannelPlugin` responsible for focused domains (e.g., `ChannelGatewayAdapter` for connections, `ChannelOutboundAdapter` for sending messages).
 
@@ -69,8 +69,8 @@ class ChannelManager {
 
 ## 7. Rationale & Context
 
-- **Why Optional Adapters?** Not all platforms function the same way. QQ lacks interactive streaming cards. Webhook-based implementations (like Feishu) heavily rely on HTTP servers externally configured, thus might not use a `gateway` adapter, whereas Discord uses a long-lived WebSockets gateway connection. Optionality enables progressive enhancement.
-- **Why Fault Isolation?** `opencode-im-bridge-slim` is designed to be a unified router. If QQ's external server is down and throws a 502 during startup, Feishu users in their enterprise should still be able to query the agent without interruption.
+- **Why Optional Adapters?** Not all platforms function the same way. feishu lacks interactive streaming cards. Webhook-based implementations (like Feishu) heavily rely on HTTP servers externally configured, thus might not use a `gateway` adapter, whereas Discord uses a long-lived WebSockets gateway connection. Optionality enables progressive enhancement.
+- **Why Fault Isolation?** `opencode-im-bridge-slim` is designed to be a unified router. If feishu's external server is down and throws a 502 during startup, Feishu users in their enterprise should still be able to query the agent without interruption.
 
 ## 8. Dependencies & External Integrations
 

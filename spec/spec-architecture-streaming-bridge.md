@@ -103,7 +103,7 @@ interface StreamingBridge {
 |------|-----------|----------|--------------|
 | Feishu | ✅ 有 | ✅ 有 | 通过 `card.close()` 发送，卡片自动更新 |
 | Telegram | ❌ 无 | ❌ 无 | 通过 `plugin.outbound.sendText()` 发送 |
-| QQ | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
+| feishu | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
 | Discord | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
 | Wechat | ❌ 无 | ✅ 有 | 通过 `plugin.outbound.sendText()` 发送 |
 
@@ -113,7 +113,7 @@ interface StreamingBridge {
 - `skipMessage = true`: 仅当 Feishu 卡片已存在时使用（`!!card`）
 - `skipMessage = false`: 所有其他平台均通过 `plugin.outbound.sendText()` 发送
 
-**历史 bug**: 曾错误地使用 `!!card || !!streamSession` 作为 `skipMessage` 参数，导致拥有流式会话但无卡片的平台（如 QQ、Discord）跳过了消息发送。
+**历史 bug**: 曾错误地使用 `!!card || !!streamSession` 作为 `skipMessage` 参数，导致拥有流式会话但无卡片的平台（如 feishu、Discord）跳过了消息发送。
 
 ### 9.3 流式会话的 flush
 

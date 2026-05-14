@@ -8,7 +8,7 @@ tags: [architecture, design, message-handling]
 
 # Introduction
 
-This specification defines the architecture, requirements, and constraints for the `MessageHandler` component of `opencode-im-bridge-slim`. The message handler serves as the inbound pipeline for processing events from various chat channels (Feishu, QQ, Telegram, Discord) and managing their lifecycle before they are routed to the `opencode` server.
+This specification defines the architecture, requirements, and constraints for the `MessageHandler` component of `opencode-im-bridge-slim`. The message handler serves as the inbound pipeline for processing events from various chat channels (Feishu, feishu, Telegram, Discord) and managing their lifecycle before they are routed to the `opencode` server.
 
 ## 1. Purpose & Scope
 
@@ -16,7 +16,7 @@ The purpose of the Message Handler is to reliably process incoming chat events, 
 
 ## 2. Definitions
 
-- **IM**: Instant Messaging (e.g., Feishu, QQ, Telegram, Discord).
+- **IM**: Instant Messaging (e.g., Feishu, feishu, Telegram, Discord).
 - **SessionId**: The unique identifier for an `opencode` TUI session.
 - **ThreadKey (feishuKey)**: A composite key representing a unique chat thread in the IM (e.g., `chat_id:root_id` or just `chat_id` for p2p).
 - **StreamingBridge**: A component that hooks into Server-Sent Events (SSE) from `opencode` to stream delta updates live to supported IM clients.
@@ -83,7 +83,7 @@ The `createMessageHandler` factory expects `HandlerDeps`, injecting `SessionMana
 - **EXT-002**: opencode SSE Stream - The Server-Sent Events endpoint pushing agent activity events (`TextDelta`, `SessionIdle`).
 
 ### Third-Party Services
-- **SVC-001**: Chat Platforms (Feishu, QQ, Telegram) - Used for fetching message content and media byte streams.
+- **SVC-001**: Chat Platforms (Feishu, feishu, Telegram) - Used for fetching message content and media byte streams.
 
 ### Infrastructure Dependencies
 - **INF-001**: Local Filesystem - Required for maintaining SQLite files and downloading media attachments securely.

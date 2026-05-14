@@ -139,25 +139,6 @@
 ---
 
 ## QQ 机器人配置
-
-本节介绍如何创建 QQ 官方机器人并接入。
-
-### 1. 创建机器人
-1. 访问 [QQ 开放平台](https://q.qq.com/bot/#/home)。
-2. 创建一个“QQ 机器人”。
-3. 在**开发设置**中获取：
-   - **App ID** (即 `QQ_APP_ID`)
-   - **App Secret** (即 `QQ_SECRET`)
-
-### 2. 配置权限
-在开放平台后台，确保开启了以下基础权限：
-- 公域/私域消息回调。
-- 文本/图片消息接收机制。
-
-### 3. 配置 opencode-im-bridge-slim
-运行 `opencode-im-bridge-slim init` 时选择 `qq` 渠道，或直接在 `.env` 中填写 `QQ_APP_ID` 和 `QQ_SECRET`。
-
-
 ## 微信机器人配置
 
 微信使用腾讯官方 **iLink Bot API**，认证方式与其他平台不同。

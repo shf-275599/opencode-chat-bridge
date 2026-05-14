@@ -133,23 +133,3 @@ Navigate to **Development Config → Event Subscriptions → Callback Subscripti
 ---
 
 ## QQ Bot Setup
-
-This section covers how to create and connect a QQ Official Bot.
-
-### 1. Create a Bot
-1. Visit [QQ Open Platform](https://q.qq.com/bot/#/home).
-2. Create a "QQ Bot".
-3. In **Development Settings**, obtain:
-   - **App ID** (mapped to `QQ_APP_ID`)
-   - **App Secret** (mapped to `QQ_SECRET`)
-
-### 2. Configure Permissions
-In the dashboard, ensure you've enabled:
-- Public/Private message callbacks.
-- Text/Image message receiving mechanisms.
-
-### 3. Configure opencode-im-bridge-slim
-Run `opencode-im-bridge-slim init` and select the `qq` channel, or fill in `QQ_APP_ID` and `QQ_SECRET` in your `.env`.
-
-
-

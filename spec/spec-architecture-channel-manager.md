@@ -8,7 +8,7 @@ tags: [architecture, design, channel, plugin]
 
 # 概述
 
-本规范定义了 `opencode-im-bridge-slim` 中 `ChannelManager` 组件及生态关联的 `ChannelPlugin` 接口架构、要求与约束。通道管理器在基础聊天平台（如飞书、QQ、Telegram、Discord）之上提供了一层统一的抽象，使得核心业务逻辑能够与底层的网络协议或数据 Schema 彻底解耦。
+本规范定义了 `opencode-im-bridge-slim` 中 `ChannelManager` 组件及生态关联的 `ChannelPlugin` 接口架构、要求与约束。通道管理器在基础聊天平台（如飞书、feishu、Telegram、Discord）之上提供了一层统一的抽象，使得核心业务逻辑能够与底层的网络协议或数据 Schema 彻底解耦。
 
 ## 1. 目的与范围
 
@@ -16,7 +16,7 @@ tags: [architecture, design, channel, plugin]
 
 ## 2. 术语定义
 
-- **Channel (通道)**: 指一个独立的 IM 平台（例如 `feishu`, `qq`, `wechat`）。
+- **Channel (通道)**: 指一个独立的 IM 平台（例如 `feishu`, `feishu`, `wechat`）。
 - **ChannelPlugin (通道插件)**: 通道接口的模块化实现，用于将特定 IM 平台接入桥接器网络中。
 - **Adapter (适配器)**: `ChannelPlugin` 的子接口实现，负责更细分的业务领域（例如 `ChannelGatewayAdapter` 负责网络连接建立；`ChannelOutboundAdapter` 负责发送消息交互）。
 
@@ -68,8 +68,8 @@ class ChannelManager {
 
 ## 7. 基本原理与背景
 
-- **为何要做可选化抽象适配（Optional Adapters）？** 因为不同的聊天平台行为差异巨大。QQ 平台没有开放动态更新的交互式卡片接口支持能力；基于 Webhook 的系统通常依赖外部 HTTP 代理配置回调，很少需要 gateway 主动管理连接；然而 Discord 却恰恰以内部长连接 WebSocket 作为心跳 Gateway 的立足点。能力集可选赋予了渐进增强 (Progressive enhancement) 最佳支持。
-- **为何必须建立故障隔离（Fault Isolation）机制？** `opencode-im-bridge-slim` 目标是一个统一网关引擎。若 QQ 渠道外的公共服务端宕机进而造成 502 错误导致应用崩溃，绝对不应该令原本服务企业内网的飞书用户集群在质询 Agent 时中断服务。
+- **为何要做可选化抽象适配（Optional Adapters）？** 因为不同的聊天平台行为差异巨大。feishu 平台没有开放动态更新的交互式卡片接口支持能力；基于 Webhook 的系统通常依赖外部 HTTP 代理配置回调，很少需要 gateway 主动管理连接；然而 Discord 却恰恰以内部长连接 WebSocket 作为心跳 Gateway 的立足点。能力集可选赋予了渐进增强 (Progressive enhancement) 最佳支持。
+- **为何必须建立故障隔离（Fault Isolation）机制？** `opencode-im-bridge-slim` 目标是一个统一网关引擎。若 feishu 渠道外的公共服务端宕机进而造成 502 错误导致应用崩溃，绝对不应该令原本服务企业内网的飞书用户集群在质询 Agent 时中断服务。
 
 ## 8. 依赖关系及外部集成
 

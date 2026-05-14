@@ -8,7 +8,7 @@ tags: [architecture, design, message-handling]
 
 # 概述
 
-本规范定义了 `opencode-im-bridge-slim` 中 `MessageHandler` 组件的架构、要求和约束。消息处理器用作入站管道 (inbound pipeline)，负责处理来自各聊天渠道（如飞书、QQ、Telegram、Discord）的事件，并在它们被路由到 `opencode` 服务器之前管理其生命周期。
+本规范定义了 `opencode-im-bridge-slim` 中 `MessageHandler` 组件的架构、要求和约束。消息处理器用作入站管道 (inbound pipeline)，负责处理来自各聊天渠道（如飞书、feishu、Telegram、Discord）的事件，并在它们被路由到 `opencode` 服务器之前管理其生命周期。
 
 ## 1. 目的与范围
 
@@ -16,7 +16,7 @@ tags: [architecture, design, message-handling]
 
 ## 2. 术语定义
 
-- **IM (即时通讯)**: 指飞书、QQ、Telegram、Discord等平台。
+- **IM (即时通讯)**: 指飞书、feishu、Telegram、Discord等平台。
 - **SessionId**: 代表 `opencode` TUI 会话的唯一标识符。
 - **ThreadKey (feishuKey)**: IM 中表示唯一聊天线程的复合键（例如群聊的 `chat_id:root_id`，普通私聊的 `chat_id`）。
 - **StreamingBridge (流式桥接器)**: 挂载 `opencode` 的 Server-Sent Events (SSE) 流并将增量更新实时流式传输至受支持 IM 客户端的组件。
@@ -29,7 +29,7 @@ tags: [architecture, design, message-handling]
 - **REQ-003 (群聊@提及)**: 在群聊中，只有当显式提及 (@) 机器人的 `open_id` 时，才处理该消息。
 - **REQ-004 (富媒体分析支持)**: 处理器必须安全解析、下载并存储所附带的文档或图片至本地，随后将 IM 实体消息的载荷替换为发给 Agent 读取的文件路径指针。必须严格防范路径穿越 (Path traversal) 漏洞。
 - **REQ-005 (消息防抖合并)**: 为了妥善处理媒体，发送来的消息（特别是紧跟着文本发送的各类文件/图片）必须被防抖排队处理批量合并关联的上下文语义。
-- **REQ-006 (跨平台上下文标签)**: 处理器需在传入的消息前附加上平台特定标签（如 `[Lark]`，`[QQ]`），从而赋予后端 Agent 对所处聊天平台的感知能力。
+- **REQ-006 (跨平台上下文标签)**: 处理器需在传入的消息前附加上平台特定标签（如 `[Lark]`，`[feishu]`），从而赋予后端 Agent 对所处聊天平台的感知能力。
 - **REQ-007 (斜杠快捷指令)**: 如果该消息触发预设动作（例如 `/new`, `/status` 等），处理器必须提早阻断，快速响应结束进程。
 - **REQ-008 (多层降级响应)**: 系统的出站必须能按照以下优先级流畅降级回退：Streaming Bridge (流式卡片更新) -> 事件驱动本地收集 -> 同步 POST 响应聚合。
 - **REQ-009 (会话自愈机制)**: 若发现后端返回 HTTP 404 (Session Gone)，说明绑定的代理已不在活动状态，此时处理器必须自主抛弃陈旧映射并隐式衍生出新会话，执行静默无缝重试。
@@ -83,7 +83,7 @@ interface FeishuMessageEvent {
 - **EXT-002**: opencode SSE Stream - The Server-Sent Events Endpoint 实时推送如思考过程、回复内容等 Agent 的运行状态更新。
 
 ### 第三方系统接入
-- **SVC-001**: 中大型企业协同及聊天套件（飞书、QQ、Telegram）- 开放对应 WebAPI 获取会话记录片段及读取二进制文件流。
+- **SVC-001**: 中大型企业协同及聊天套件（飞书、feishu、Telegram）- 开放对应 WebAPI 获取会话记录片段及读取二进制文件流。
 
 ### 基础设施支持
 - **INF-001**: Local Filesystem - 用于长期存储 SQLite 数据落盘防丢失状态文件、及用于临时过渡各种图片附件以策安全保障。

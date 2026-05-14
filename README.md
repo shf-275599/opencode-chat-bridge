@@ -1,13 +1,13 @@
 # opencode-im-bridge-slim
 
-> 将飞书 / QQ / 微信机器人与 opencode TUI session 打通，实现双向实时消息转发。
+> 将飞书 /  / 微信机器人与 opencode TUI session 打通，实现双向实时消息转发。
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## 功能特性
 
 - **实时桥接** — IM 消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回 IM。支持 **Markdown 格式渲染**（标题、列表、代码块）
-- **多渠道支持** — 飞书、QQ、微信，统一插件架构，`ChannelPlugin` 接口设计
+- **多渠道支持** — 飞书、、微信，统一插件架构，`ChannelPlugin` 接口设计
 - **交互式卡片** — Agent 的提问和权限请求以可点击卡片呈现，直接在聊天中回答或审批（飞书支持）
 - **SSE 流式输出** — 订阅 opencode SSE 事件流，实时更新回复内容（飞书支持 CardKit v2 流式卡片）
 - **文件与图片** — 支持图片、文档、音频、视频消息的收发，带路径安全检查，50MB 下载限制，100MB 上传限制
@@ -23,7 +23,7 @@
 
 ### 平台对比
 
-| 维度 | 飞书 | QQ | 微信 |
+| 维度 | 飞书 |  | 微信 |
 |------|------|----|----|
 | **连接协议** | WebSocket (SDK) | WebSocket (SDK) | HTTP 长轮询 (SDK) |
 | **认证方式** | App ID + Secret | App ID + Secret | **QR 码扫码登录** |
@@ -190,7 +190,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 | 平台 | 命令返回形式 |
 |------|-------------|
 | **飞书** | 交互式卡片，支持点击按钮操作 |
-| **QQ** | 纯文本 Markdown 格式 |
+| **** | 纯文本 Markdown 格式 |
 | **微信** | 纯文本格式 |
 
 ---
@@ -350,13 +350,13 @@ opencode-im-bridge-slim
 
 ---
 
-### QQ 配置
+###  配置
 
-QQ 机器人通过 WebSocket 连接，支持 Markdown 消息、文件和 C2C 私聊。
+ 机器人通过 WebSocket 连接，支持 Markdown 消息、文件和 C2C 私聊。
 
-#### 第一步：创建 QQ 机器人
+#### 第一步：创建  机器人
 
-1. 访问 [QQ 开放平台](https://q.qq.com/bot/#/home)
+1. 访问 [ 开放平台](https://q..com/bot/#/home)，确保**全部认证**通过后，再进行下一步
 2. 登录后点击**创建机器人**
 3. 填写机器人名称、头像、简介等信息
 4. 创建成功后进入机器人详情页
@@ -367,7 +367,7 @@ QQ 机器人通过 WebSocket 连接，支持 Markdown 消息、文件和 C2C 私
 2. 找到以下信息：
    - **App ID（机器人 ID）** — 例如 `102xxxxxx`
    - **App Secret（机器人密钥）** — 点击「查看」获取
-3. 这两个值对应环境变量 `QQ_APP_ID` 和 `QQ_SECRET`
+3. 这两个值对应环境变量 `_ID` 和 `RET`
 
 #### 第三步：配置 WebSocket 连接
 
@@ -388,39 +388,39 @@ QQ 机器人通过 WebSocket 连接，支持 Markdown 消息、文件和 C2C 私
 
 #### 第五步：配置沙箱模式（可选）
 
-- QQ 开放平台支持**沙箱模式**：在沙箱中测试无需审核，但只有添加的测试人员可以使用
+-  开放平台支持**沙箱模式**：在沙箱中测试无需审核，但只有添加的测试人员可以使用
 - 如果不需要沙箱，确保你的机器人已提交审核并通过
 
 #### 第六步：配置环境变量并启动
 
 ```bash
-export QQ_APP_ID=你的QQ_APP_ID
-export QQ_SECRET=你的QQ_SECRET
+export _ID=你的_ID
+export RET=你的RET
 
 # 可选：启用沙箱模式
-export QQ_SANDBOX=true
+export _SANDBOX=true
 
 opencode-im-bridge-slim
 ```
 
 启动成功后日志中会出现：
 ```
-[QQPlugin] QQ Gateway received message from xxx
-[QQPlugin] Installed WebSocket invalid-session hotfix
+[Plugin]  Gateway received message from xxx
+[Plugin] Installed WebSocket invalid-session hotfix
 ```
 
 #### 第七步：测试验证
 
-1. 使用配置了测试权限的 QQ 号
+1. 使用配置了测试权限的  号
 2. 向机器人发送一条私聊消息（如"你好"）
 3. 应该收到绑定通知和 AI 回复
 
-#### QQ 平台限制
+####  平台限制
 
-- QQ 仅支持 **C2C 私聊**，不支持群聊
-- QQ 文件发送因平台限制，文件名会被修改，发送后会自动提示原始文件名
+-  仅支持 **C2C 私聊**，不支持群聊
+-  文件发送因平台限制，文件名会被修改，发送后会自动提示原始文件名
 - 消息格式为 Markdown（不支持交互式卡片）
-- QQ 不支持流式输出，AI 回复会等全部生成完毕后一次性发送
+-  不支持流式输出，AI 回复会等全部生成完毕后一次性发送
 
 ---
 
@@ -473,7 +473,7 @@ opencode-im-bridge-slim
 3. 终端中会显示二维码链接：
 
 ```
-[WechatPlugin] QR Code URL: https://ilinkai.weixin.qq.com/...
+[WechatPlugin] QR Code URL: https://ilinkai.weixin..com/...
 ```
 
 4. 在微信中操作：
@@ -538,13 +538,13 @@ opencode-im-bridge-slim
 | `FEISHU_VERIFICATION_TOKEN` | 否 | | 事件订阅验证 Token |
 | `FEISHU_ENCRYPT_KEY` | 否 | | 事件加密密钥 |
 
-#### QQ
+#### 
 
 | 变量名 | 必需 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `QQ_APP_ID` | 是* | | QQ 机器人 App ID |
-| `QQ_SECRET` | 是* | | QQ 机器人 App Secret |
-| `QQ_SANDBOX` | 否 | `false` | 是否启用沙箱模式 |
+| `_ID` | 是* | |  机器人 App ID |
+| `RET` | 是* | |  机器人 App Secret |
+| `_SANDBOX` | 否 | `false` | 是否启用沙箱模式 |
 
 #### 微信
 
@@ -574,9 +574,9 @@ cp config/opencode-im.example.jsonc config/opencode-im.jsonc
     "webhookPort": 3001,
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
-  "qq": {
-    "appId": "${QQ_APP_ID}",
-    "secret": "${QQ_SECRET}",
+  "": {
+    "appId": "${_ID}",
+    "secret": "${RET}",
     "sandbox": false
   },
   "wechat": {
@@ -634,11 +634,11 @@ config/                 # 用户配置文件（凭证、渠道、调度等）
 src/
 ├── index.ts            # 入口，9 阶段启动 + 优雅关闭
 ├── types.ts            # 共享类型定义
-├── channel/            # 渠道插件（飞书、QQ、微信）+ 统一接口
+├── channel/            # 渠道插件（飞书、、微信）+ 统一接口
 │   ├── types.ts        # ChannelPlugin 核心契约
 │   ├── manager.ts      # ChannelManager 注册/启动/停止
 │   ├── base-plugin.ts  # BaseChannelPlugin 抽象基类
-│   └── feishu|qq|wechat/  # 各平台插件实现
+│   └── feishu||wechat/  # 各平台插件实现
 ├── handler/            # 消息处理（去重→路由→POST→流式桥接）
 │   ├── message-handler.ts      # 核心入站管道
 │   ├── command-handler.ts      # 斜杠命令处理

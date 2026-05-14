@@ -2,8 +2,6 @@
  * opencode-im-bridge-slim — IM channel integration for opencode.
  *
  * Standalone process entry point:
- *   0. Load .env + interactive setup wizard (first run)
- *   1. Load config
  *   1. Load config
  *   2. Connect to existing opencode server (createOpencodeClient)
  *   3. Initialize SQLite database
@@ -255,7 +253,6 @@ async function main(): Promise<void> {
   })
 
   // Create card action handlers (Feishu only)
-  const subAgentCardHandler2 = subAgentCardHandler  // alias already defined above
 
   const interactiveHandler = createInteractiveHandler({
     serverUrl,

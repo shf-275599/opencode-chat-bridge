@@ -1,5 +1,5 @@
 /**
- * End-to-end smoke tests for the full opencode-lark pipeline.
+ * End-to-end smoke tests for the full opencode-im-bridge-slim pipeline.
  *
  * Exercises real module instantiation with fetch-level mocking.
  * 7 scenarios across 2 suites:

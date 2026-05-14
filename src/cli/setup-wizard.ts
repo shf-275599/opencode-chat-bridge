@@ -1,5 +1,5 @@
 /**
- * Interactive CLI setup wizard for opencode-lark.
+ * Interactive CLI setup wizard for opencode-im-bridge-slim.
  * Guides new users through Feishu credentials, server connection, and .env creation.
  */
 

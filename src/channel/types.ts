@@ -1,5 +1,5 @@
 /**
- * ChannelPlugin type definitions for opencode-lark
+ * ChannelPlugin type definitions for opencode-im-bridge-slim
  * Defines the core plugin contract for channel integrations.
  * Inspired by openclaw but independently defined.
  */

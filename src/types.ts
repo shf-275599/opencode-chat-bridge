@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for opencode-lark
+ * Shared type definitions for opencode-im-bridge-slim
  */
 
 // ── Feishu Webhook Event Types ──

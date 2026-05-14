@@ -27,7 +27,7 @@ export interface ScheduledTask {
   agent: string
   projectId: string
   projectWorktree: string
-  /** 目标回复频道（feishu / qq / wechat） */
+  /** 目标回复频道（feishu / wechat） */
   channelId: string
   /** 目标回复的 chat/group ID */
   chatId: string

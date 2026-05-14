@@ -12,7 +12,7 @@ Always use this instead of constructing attachment paths manually.
 ### `config.ts`
 Loads configuration from `opencode-im.jsonc` (supports comments via jsonc parsing) and merges with environment variables. Environment variables take precedence over file values.
 
-Returns a typed `Config` object. The config schema lives in `src/types.ts`. Don't access `process.env` directly in other modules — import from here instead.
+Returns a typed `Config` object. The config schema lives in `src/utils/config.ts` using Zod.
 
 ### `logger.ts`
 Factory that returns a named `Logger` instance backed by a structured logging library. Every module should create its logger at the top of the file:
@@ -23,7 +23,7 @@ log.info("starting up")
 log.error({ err }, "something went wrong")
 ```
 
-Never use `console.log` anywhere in the codebase. The logger writes structured JSON in production and pretty-printed output in dev (controlled by `LOG_FORMAT` env var).
+Never use `console.log` anywhere in the codebase. The logger writes timestamped output with module namespace in dev.
 
 ### `db.ts`
 Initializes the SQLite databases using `bun:sqlite`. Exports `initDatabase(dataDir)` which returns an `AppDatabase` object containing `sessions` and `memory` `Database` handles plus a `close()` method. Enables WAL mode for better concurrent read performance. Import and call this once at startup (Phase 3 in `src/index.ts`) — all other modules that need SQLite should receive the `Database` handle via dependency injection, not open their own connection.

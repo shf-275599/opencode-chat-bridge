@@ -1,6 +1,6 @@
 # channel/
 
-The plugin system that makes opencode-im-bridge platform-agnostic. Define the contract here; implement it per platform.
+The plugin system that makes opencode-im-bridge-slim platform-agnostic. Define the contract here; implement it per platform.
 
 ## Files
 

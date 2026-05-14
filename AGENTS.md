@@ -6,14 +6,14 @@
 
 ## What This Project Does
 
-`opencode-im-bridge` bridges IM chats (Feishu, QQ, WeChat) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/WeChat), while tool and sub-agent status are shown via separate cards.
+`opencode-im-bridge-slim` bridges IM chats (Feishu, QQ, WeChat) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/WeChat), while tool and sub-agent status are shown via separate cards.
 
 ```
 Feishu client
     ↕  WebSocket (long-lived)
 Feishu Open Platform
     ↕  WebSocket / Webhook
-opencode-im-bridge  (this project)
+opencode-im-bridge-slim  (this project)
     ↕  HTTP API + SSE
 opencode server  (localhost:4096)
     ↕  stdin/stdout
@@ -120,7 +120,7 @@ opencode SSE stream
 ## Development Guidelines
 
 ### Package Manager
-This project uses **npm** as its primary package manager. Please ensure you run `npm install` to keep the lockfile (`package-lock.json`) consistent.
+This project uses **bun** as its runtime and package manager.
 
 ### Code Style & Conventions
 - **TypeScript**: The project is written in strictly typed TypeScript (`ES2022` target, `NodeNext` modules).
@@ -143,7 +143,7 @@ This project uses **npm** as its primary package manager. Please ensure you run 
 ### Adding a Cron Job
 
 
-1. Open `src/cron/cron-service.ts`.
+1. Open `src/cron/heartbeat.ts`.
 2. Add your job definition to the cron config schema in `src/types.ts`.
 3. Register the new job inside `CronService.start()` with a cron expression and handler function.
 4. Enable it in `config/opencode-im.jsonc` under the `cron` key.

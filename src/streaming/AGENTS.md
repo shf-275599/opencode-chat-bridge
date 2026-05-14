@@ -26,6 +26,12 @@ Also handles a secondary path: if a message was sent from the opencode TUI direc
 ### `streaming-card.ts`
 Builds and manages a live Feishu streaming card during a session. Uses queue-based update serialization (not debouncing). Key methods: `start()` creates the CardKit streaming card, `setToolStatus(name, state, title?)` adds/updates tool status indicators on the card, `addSubtaskButton(label, actionValue)` adds sub-agent buttons, and `close(finalText?)` sends the final content update and closes streaming mode.
 
+### `subagent-tracker.ts`
+Tracks sub-agent lifecycle by polling the opencode API for child sessions on `SubtaskDiscovered` events. Key methods: `onSubtaskDiscovered(action)` registers a new sub-agent and starts background polling, `pollChildSession(parentSessionId)` retries up to 5 times with exponential backoff, and `getChildMessages(childSessionId, limit)` fetches messages from a child session.
+
+### `subagent-card.ts`
+Handles Feishu card button clicks for viewing sub-agent session conversations. `createSubAgentCardHandler` returns a handler that fetches child session messages and sends them as Feishu cards. `formatSubAgentMessages` formats messages with role icons and truncation.
+
 ## Design notes
 
 The split between `EventProcessor` (parses events, stateful but passive) and `SessionObserver` (routes to Feishu chats, manages busy/free state) keeps concerns clean. If you want to add a new consumer of SSE events, register a listener in `EventListenerMap` from `src/index.ts`. If you want to react to TUI-initiated events for a specific session, use `SessionObserver.observe()`.

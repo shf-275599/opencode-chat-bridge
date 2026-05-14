@@ -5,8 +5,6 @@ data/
 *.db-wal
 *.db-shm
 .env
-opencode-feishu.jsonc
-opencode-lark.jsonc
 .sisyphus/
 
 # 配置目录 — 排除敏感凭证，保留模板文件
@@ -19,11 +17,3 @@ config/opencode-im*.jsonc
 
 .opencode-lark/
 bin/
-temp-claude-to-im/
-video-intro/
-inferencesh-cli-windows-amd64.tar.gz
-
-
-.agents/workflows/publish.md
-
-.opencode/opencode.jsonc

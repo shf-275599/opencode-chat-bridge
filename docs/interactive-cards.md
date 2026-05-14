@@ -1,6 +1,6 @@
 # Q&A 卡片交互文档
 
-本文档描述 opencode-im-bridge 如何在飞书中实现问答卡片交互。
+本文档描述 opencode-im-bridge-slim 如何在飞书中实现问答卡片交互。
 
 ## 交互类型
 

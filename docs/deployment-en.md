@@ -1,6 +1,6 @@
 # Deployment Guide
 
-`opencode-lark` can run in various environments. For production, we recommend using PM2 or Docker.
+`opencode-im-bridge-slim` can run in various environments. For production, we recommend using PM2 or Docker.
 
 ## 1. Deployment with PM2 (Recommended)
 
@@ -15,30 +15,30 @@ The project includes a `scripts/start.sh` script that handles environment variab
 
 ```bash
 # Start the service
-pm2 start ./scripts/start.sh --name opencode-im-bridge
+pm2 start ./scripts/start.sh --name opencode-im-bridge-slim
 
 # View logs
-pm2 logs opencode-lark
+pm2 logs opencode-im-bridge-slim
 
 # Stop the service
-pm2 stop opencode-lark
+pm2 stop opencode-im-bridge-slim
 ```
 
 ## 2. Deployment with Docker
 
 1. **Build Image**:
    ```bash
-   docker build -t opencode-lark .
+   docker build -t opencode-im-bridge-slim .
    ```
 
 2. **Run Container**:
    ```bash
-   docker run -d \
-     --name opencode-lark \
-     -e FEISHU_APP_ID=your_id \
-     -e FEISHU_APP_SECRET=your_secret \
-     -e OPENCODE_SERVER_URL=http://your_ip:4096 \
-     opencode-lark
+    docker run -d \
+      --name opencode-im-bridge-slim \
+      -e FEISHU_APP_ID=your_id \
+      -e FEISHU_APP_SECRET=your_secret \
+      -e OPENCODE_SERVER_URL=http://your_ip:4096 \
+      opencode-im-bridge-slim
    ```
 
 ## 3. Running from Source
@@ -47,7 +47,7 @@ Best for development and quick testing.
 
 ```bash
 # Global installation mode
-opencode-im-bridge
+opencode-im-bridge-slim
 
 # Source development mode
 bun install

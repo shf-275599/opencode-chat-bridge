@@ -21,7 +21,7 @@
 - **App ID** → 设为 `FEISHU_APP_ID`
 - **App Secret** → 设为 `FEISHU_APP_SECRET`
 
-步骤 6 配置 opencode-im-bridge 时需要这些凭证。
+步骤 6 配置 opencode-im-bridge-slim 时需要这些凭证。
 
 ### 4. 配置权限
 
@@ -59,19 +59,19 @@
 
 > **注意**：测试阶段，应用管理员可直接使用，无需等待审核通过。
 
-### 6. 配置并启动 opencode-im-bridge
+### 6. 配置并启动 opencode-im-bridge-slim
 
-在配置事件订阅之前，需要先启动 opencode-im-bridge，飞书才能检测到 WebSocket 连接。
+在配置事件订阅之前，需要先启动 opencode-im-bridge-slim，飞书才能检测到 WebSocket 连接。
 
 1. 安装并配置：
    ```bash
    # 全局安装
-   bun add -g opencode-im-bridge
-   # 或：npm install -g opencode-im-bridge
+   bun add -g opencode-im-bridge-slim
+   # 或：npm install -g opencode-im-bridge-slim
 
    # 或从源码运行
-   # git clone https://github.com/ET06731/opencode-im-bridge.git
-   # cd opencode-im-bridge && bun install
+   # git clone https://github.com/ET06731/opencode-im-bridge-slim.git
+   # cd opencode-im-bridge-slim && bun install
    ```
 
 2. 在一个终端启动 opencode server：
@@ -83,9 +83,9 @@
    $env:OPENCODE_SERVER_PORT=4096; opencode serve
    ```
 
-3. 在另一个终端启动 opencode-im-bridge：
+3. 在另一个终端启动 opencode-im-bridge-slim：
    ```bash
-   opencode-im-bridge
+   opencode-im-bridge-slim
    ```
    交互式向导会引导你输入凭证并验证服务器连接。如从源码运行：`bun run dev`
 
@@ -95,7 +95,7 @@
 > ```bash
 > opencode attach http://127.0.0.1:4096 --session {session_id}
 > ```
-> `session_id` 会在 opencode-im-bridge 启动日志中显示（如 `Bound to TUI session: ... → ses_xxxxx`）。
+> `session_id` 会在 opencode-im-bridge-slim 启动日志中显示（如 `Bound to TUI session: ... → ses_xxxxx`）。
 
 ### 7. 订阅事件
 
@@ -108,7 +108,7 @@
 |---|---|---|---|
 | 接收消息 | `im.message.receive_v1` | 接收用户消息 | ✅ |
 
-> ⚠️ **重要**：保存长连接模式前 opencode-im-bridge 必须处于运行状态（步骤 6）。如果看到"应用未建立长连接"错误，请返回步骤 6 确认应用已启动。
+> ⚠️ **重要**：保存长连接模式前 opencode-im-bridge-slim 必须处于运行状态（步骤 6）。如果看到"应用未建立长连接"错误，请返回步骤 6 确认应用已启动。
 
 ### 8. 订阅回调（交互式卡片）
 
@@ -134,7 +134,7 @@
 | 收到消息但无回复 | opencode server 未启动 | 确保先启动 opencode server：`OPENCODE_SERVER_PORT=4096 opencode serve` |
 | 卡片不实时更新 | 频率限制或防抖延迟 | 正常行为，防抖处理避免触发频率限制 |
 | 点击卡片按钮报错 `200340` | 回调订阅未配置 | 进入**回调订阅** → 选择长连接 → 添加 `card.action.trigger` |
-| 保存长连接模式时报"应用未建立长连接" | 应用未启动，飞书要求先建立连接 | 先完成步骤 6 启动 opencode-im-bridge，再回飞书后台保存设置 |
+| 保存长连接模式时报"应用未建立长连接" | 应用未启动，飞书要求先建立连接 | 先完成步骤 6 启动 opencode-im-bridge-slim，再回飞书后台保存设置 |
 
 ---
 
@@ -154,8 +154,8 @@
 - 公域/私域消息回调。
 - 文本/图片消息接收机制。
 
-### 3. 配置 opencode-im-bridge
-运行 `opencode-im-bridge init` 时选择 `qq` 渠道，或直接在 `.env` 中填写 `QQ_APP_ID` 和 `QQ_SECRET`。
+### 3. 配置 opencode-im-bridge-slim
+运行 `opencode-im-bridge-slim init` 时选择 `qq` 渠道，或直接在 `.env` 中填写 `QQ_APP_ID` 和 `QQ_SECRET`。
 
 
 ## 微信机器人配置

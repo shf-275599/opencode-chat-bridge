@@ -1,4 +1,4 @@
-# Contributing to opencode-im-bridge
+# Contributing to opencode-im-bridge-slim
 
 Thanks for your interest in contributing. This guide covers everything you need to get started.
 
@@ -15,8 +15,8 @@ For architecture details, see [AGENTS.md](./AGENTS.md).
 
 ```bash
 # Clone and install
-git clone <repo-url> opencode-im-bridge
-cd opencode-im-bridge
+git clone <repo-url> opencode-im-bridge-slim
+cd opencode-im-bridge-slim
 bun install
 
 # Configure environment
@@ -24,7 +24,7 @@ cp .env.example .env
 # Fill in FEISHU_APP_ID and FEISHU_APP_SECRET
 
 # Configure the app (optional, auto-derived from .env if absent)
-cp opencode-im-bridge.example.jsonc opencode-im-bridge.jsonc
+cp config/opencode-im.example.jsonc config/opencode-im.jsonc
 # Customize as needed
 ```
 

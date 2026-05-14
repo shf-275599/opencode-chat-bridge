@@ -1,6 +1,6 @@
 # 部署指南 (Deployment)
 
-`opencode-im-bridge` 可以在多种环境下运行，支持 PM2、Docker，直接运行等多种部署方式，并提供开机自启动配置。
+`opencode-im-bridge-slim` 可以在多种环境下运行，支持 PM2、Docker，直接运行等多种部署方式，并提供开机自启动配置。
 
 ## 1. 使用 PM2 部署 (推荐)
 
@@ -15,16 +15,16 @@ PM2 可以确保服务在崩溃或重启后自动恢复。
 
 ```bash
 # 启动服务
-pm2 start ./scripts/start.sh --name opencode-im-bridge
+pm2 start ./scripts/start.sh --name opencode-im-bridge-slim
 
 # 查看日志
-pm2 logs opencode-lark
+pm2 logs opencode-im-bridge-slim
 
 # 停止服务
-pm2 stop opencode-lark
+pm2 stop opencode-im-bridge-slim
 
 # 重启服务
-pm2 restart opencode-lark
+pm2 restart opencode-im-bridge-slim
 ```
 
 ---
@@ -41,20 +41,20 @@ pm2 startup windows
 pm2 save
 
 # Windows + 任务计划程序（管理员 PowerShell）
-schtasks /Create /TN "opencode-im-bridge" /SC ONSTART /RL HIGHEST /F /TR "\"C:\\path\\to\\bun.exe\" run \"C:\\path\\to\\your\\project\\src\\index.ts\""
+schtasks /Create /TN "opencode-im-bridge-slim" /SC ONSTART /RL HIGHEST /F /TR "\"C:\\path\\to\\bun.exe\" run \"C:\\path\\to\\your\\project\\src\\index.ts\""
 
 ```
 
 ```bash
 # Linux + systemd
-sudo systemctl enable opencode-im-bridge
-sudo systemctl start opencode-im-bridge
+sudo systemctl enable opencode-im-bridge-slim
+sudo systemctl start opencode-im-bridge-slim
 
 # macOS + launchd
 launchctl load ~/Library/LaunchAgents/com.opencode.imbridge.plist
 
 # Docker
-docker run -d --restart unless-stopped --name opencode-im-bridge opencode-im-bridge
+docker run -d --restart unless-stopped --name opencode-im-bridge-slim opencode-im-bridge-slim
 ```
 
 建议：
@@ -74,16 +74,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Trigger Startup
 
 # 自定义计划任务名
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -TaskName "opencode-im-bridge-dev"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -TaskName "opencode-im-bridge-slim-dev"
 
 # 指定仓库根目录（适合从其他目录执行脚本）
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -RepoRoot "C:\Path\To\opencode-im-bridge"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -RepoRoot "C:\Path\To\opencode-im-bridge-slim"
 
 # 绑定多份配置中的指定配置以跳过终端交互
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -ConfigId my_config_name
 
 # 当 bun 不在 PATH 中时，显式指定 bun 路径
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -RepoRoot "C:\Path\To\opencode-im-bridge" -BunPath "C:\Path\To\bun.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -RepoRoot "C:\Path\To\opencode-im-bridge-slim" -BunPath "C:\Path\To\bun.exe"
 
 # 移除自启动
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-autostart.ps1 -Remove
@@ -112,7 +112,7 @@ pm2 save
 ### Windows — 使用任务计划程序
 
 1. 打开「任务计划程序」
-2. 创建基本任务 → 命名为 `opencode-im-bridge`
+2. 创建基本任务 → 命名为 `opencode-im-bridge-slim`
 3. 触发器：计算机启动时
 4. 操作：启动程序
    - 程序：`C:\path\to\bun.exe`
@@ -122,7 +122,7 @@ pm2 save
 
 ### Linux — 使用 systemd
 
-创建服务文件 `/etc/systemd/system/opencode-im-bridge.service`:
+创建服务文件 `/etc/systemd/system/opencode-im-bridge-slim.service`:
 
 ```ini
 [Unit]
@@ -132,7 +132,7 @@ After=network.target
 [Service]
 Type=simple
 User=your_username
-WorkingDirectory=/path/to/opencode-im-bridge
+WorkingDirectory=/path/to/opencode-im-bridge-slim
 ExecStart=/path/to/bun run src/index.ts
 Restart=always
 RestartSec=10
@@ -145,9 +145,9 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable opencode-im-bridge
-sudo systemctl start opencode-im-bridge
-sudo systemctl status opencode-im-bridge
+sudo systemctl enable opencode-im-bridge-slim
+sudo systemctl start opencode-im-bridge-slim
+sudo systemctl status opencode-im-bridge-slim
 ```
 
 ### macOS — 使用 launchd
@@ -165,14 +165,14 @@ sudo systemctl status opencode-im-bridge
     <array>
         <string>/path/to/bun</string>
         <string>run</string>
-        <string>/path/to/opencode-im-bridge/src/index.ts</string>
+        <string>/path/to/opencode-im-bridge-slim/src/index.ts</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>WorkingDirectory</key>
-    <string>/path/to/opencode-im-bridge</string>
+    <string>/path/to/opencode-im-bridge-slim</string>
 </dict>
 </plist>
 ```
@@ -191,16 +191,16 @@ launchctl load ~/Library/LaunchAgents/com.opencode.imbridge.plist
 
 ```bash
 # 构建镜像
-docker build -t opencode-im-bridge .
+docker build -t opencode-im-bridge-slim .
 
 # 运行容器
 docker run -d \
-  --name opencode-im-bridge \
+  --name opencode-im-bridge-slim \
   -e FEISHU_APP_ID=xxx \
   -e FEISHU_APP_SECRET=xxx \
   -e OPENCODE_SERVER_URL=http://host.docker.internal:4096 \
   -v /path/to/data:/app/data \
-  opencode-im-bridge
+  opencode-im-bridge-slim
 ```
 
 ### Docker Compose (推荐)
@@ -210,9 +210,9 @@ docker run -d \
 ```yaml
 version: '3.8'
 services:
-  opencode-im-bridge:
+  opencode-im-bridge-slim:
     build: .
-    container_name: opencode-im-bridge
+    container_name: opencode-im-bridge-slim
     restart: unless-stopped
     environment:
       - FEISHU_APP_ID=${FEISHU_APP_ID}
@@ -234,7 +234,7 @@ docker-compose logs -f
 
 ```bash
 # 重启策略: unless-stopped 确保容器在 Docker 启动时自动运行
-docker run -d --restart unless-stopped opencode-im-bridge
+docker run -d --restart unless-stopped opencode-im-bridge-slim
 ```
 
 ---
@@ -245,7 +245,7 @@ docker run -d --restart unless-stopped opencode-im-bridge
 
 ```bash
 # 全局安装模式
-opencode-im-bridge
+opencode-im-bridge-slim
 
 # 源码开发模式
 bun install

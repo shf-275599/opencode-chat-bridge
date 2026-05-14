@@ -19,7 +19,7 @@ Navigate to **Credentials & Basic Info** to find:
 - **App ID** → set as `FEISHU_APP_ID`
 - **App Secret** → set as `FEISHU_APP_SECRET`
 
-You'll need these in Step 6 to configure opencode-im-bridge.
+You'll need these in Step 6 to configure opencode-im-bridge-slim.
 
 ### 4. Configure Permissions
 
@@ -57,19 +57,19 @@ Navigate to **App Release → Version Management & Release**, create a version a
 
 > **Note**: Internal apps in trial status can be used by app administrators immediately without review for testing.
 
-### 6. Configure & Start opencode-im-bridge
+### 6. Configure & Start opencode-im-bridge-slim
 
-Before configuring event subscriptions, start opencode-im-bridge so Feishu can detect the WebSocket connection.
+Before configuring event subscriptions, start opencode-im-bridge-slim so Feishu can detect the WebSocket connection.
 
 1. Install and configure:
    ```bash
    # Install globally
-   bun add -g opencode-im-bridge
-   # or: npm install -g opencode-im-bridge
+   bun add -g opencode-im-bridge-slim
+   # or: npm install -g opencode-im-bridge-slim
 
    # Or run from source
-   # git clone https://github.com/ET06731/opencode-im-bridge.git
-   # cd opencode-im-bridge && bun install
+   # git clone https://github.com/ET06731/opencode-im-bridge-slim.git
+   # cd opencode-im-bridge-slim && bun install
    ```
 
 2. Start opencode server in one terminal:
@@ -77,9 +77,9 @@ Before configuring event subscriptions, start opencode-im-bridge so Feishu can d
    OPENCODE_SERVER_PORT=4096 opencode serve
    ```
 
-3. Start opencode-im-bridge in another terminal:
+3. Start opencode-im-bridge-slim in another terminal:
    ```bash
-   opencode-im-bridge
+   opencode-im-bridge-slim
    ```
    The interactive setup wizard will guide you through entering credentials and validating the server connection. If running from source: `bun run dev`
 
@@ -89,7 +89,7 @@ Before configuring event subscriptions, start opencode-im-bridge so Feishu can d
 > ```bash
 > opencode attach http://127.0.0.1:4096 --session {session_id}
 > ```
-> The `session_id` is shown in opencode-im-bridge's startup logs (e.g. `Bound to TUI session: ... → ses_xxxxx`).
+> The `session_id` is shown in opencode-im-bridge-slim's startup logs (e.g. `Bound to TUI session: ... → ses_xxxxx`).
 
 ### 7. Subscribe to Events
 
@@ -102,7 +102,7 @@ Navigate to **Development Config → Event Subscriptions** and:
 |---|---|---|---|
 | 接收消息 | `im.message.receive_v1` | Receive all user messages | ✅ |
 
-> ⚠️ **Important**: opencode-im-bridge must be running (Step 6) before you can save Long Connection mode. If you see "应用未建立长连接", go back to Step 6 and ensure the app is running.
+> ⚠️ **Important**: opencode-im-bridge-slim must be running (Step 6) before you can save Long Connection mode. If you see "应用未建立长连接", go back to Step 6 and ensure the app is running.
 
 ### 8. Subscribe to Callbacks (Interactive Cards)
 
@@ -128,7 +128,7 @@ Navigate to **Development Config → Event Subscriptions → Callback Subscripti
 | Messages received but no reply | opencode server not running | Ensure opencode server is running: `OPENCODE_SERVER_PORT=4096 opencode serve` |
 | Card not updating in real-time | Rate limit or debounce delay | Normal behavior — updates are debounced to stay within Feishu rate limits |
 | Error `200340` when clicking card buttons | Callback subscription not configured | Go to **Callback Subscription** (回调订阅) → select Long Connection → add `card.action.trigger` |
-| "应用未建立长连接" when saving Long Connection mode | App not running — Feishu requires an active WebSocket connection before saving | Start opencode-im-bridge first (Step 6), then save the setting in Feishu console |
+| "应用未建立长连接" when saving Long Connection mode | App not running — Feishu requires an active WebSocket connection before saving | Start opencode-im-bridge-slim first (Step 6), then save the setting in Feishu console |
 
 ---
 
@@ -148,8 +148,8 @@ In the dashboard, ensure you've enabled:
 - Public/Private message callbacks.
 - Text/Image message receiving mechanisms.
 
-### 3. Configure opencode-im-bridge
-Run `opencode-im-bridge init` and select the `qq` channel, or fill in `QQ_APP_ID` and `QQ_SECRET` in your `.env`.
+### 3. Configure opencode-im-bridge-slim
+Run `opencode-im-bridge-slim init` and select the `qq` channel, or fill in `QQ_APP_ID` and `QQ_SECRET` in your `.env`.
 
 
 

@@ -51,27 +51,27 @@
 #### 方式一：全局安装（推荐）
 
 ```bash
-npm install -g opencode-im-bridge
+npm install -g opencode-im-bridge-slim
 ```
 
 启动时只需一个命令，配置通过环境变量或交互式向导完成：
 
 ```bash
 # 第一次运行（交互式配置向导）
-opencode-im-bridge
+opencode-im-bridge-slim
 
 # 指定配置文件（多账号切换）
-opencode-im-bridge --config cli_xxxxxxxx
+opencode-im-bridge-slim --config cli_xxxxxxxx
 
 # 重新运行配置向导
-opencode-im-bridge init
+opencode-im-bridge-slim init
 ```
 
 #### 方式二：从源码运行
 
 ```bash
-git clone https://github.com/ET06731/opencode-im-bridge.git
-cd opencode-im-bridge
+git clone https://github.com/ET06731/opencode-im-bridge-slim.git
+cd opencode-im-bridge-slim
 bun install
 ```
 
@@ -108,8 +108,8 @@ $env:OPENCODE_SERVER_PORT=4096; opencode serve
 **终端 2 — bridge：**
 
 ```bash
-opencode-im-bridge
-# 或从源码：cd opencode-im-bridge && bun run dev
+opencode-im-bridge-slim
+# 或从源码：cd opencode-im-bridge-slim && bun run dev
 ```
 
 > 两者**启动顺序无关**（bridge 有指数退避重连，最多重试 10 次），但都必须在运行状态。
@@ -121,7 +121,7 @@ bridge 启动成功后，日志中应出现：
 ```
 [feishu-api] Token refreshed, expires in 7200s
 [feishu-ws] Feishu WebSocket client started
-opencode-im-bridge started — channels active
+opencode-im-bridge-slim started — channels active
 ```
 
 然后发送测试消息（见下方）。
@@ -146,13 +146,13 @@ FEISHU_APP_SECRET=secret_b
 
 ```bash
 # 自动列出所有配置，交互式选择
-opencode-im-bridge
+opencode-im-bridge-slim
 
 # 或直接指定
-opencode-im-bridge --config cli_abc123
+opencode-im-bridge-slim --config cli_abc123
 
 # 或通过环境变量指定
-OPENCODE_IM_CONFIG=cli_abc123 opencode-im-bridge
+OPENCODE_IM_CONFIG=cli_abc123 opencode-im-bridge-slim
 ```
 
 ### 发送测试消息
@@ -281,7 +281,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 4. 所有权限状态变为「已开通」后，点击右上角的**批量开通**（如果飞书版本显示此按钮）
 5. 权限开通后需要**管理员审批**，联系企业管理员在飞书管理后台通过你的权限申请
 
-#### 第五步：启动 opencode-im-bridge（必须在配置事件订阅之前）
+#### 第五步：启动 opencode-im-bridge-slim（必须在配置事件订阅之前）
 
 ⚠️ **重要：飞书要求在保存长连接配置之前，应用必须已在运行。**
 
@@ -291,7 +291,7 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 OPENCODE_SERVER_PORT=4096 opencode serve
 ```
 
-2. 在另一个终端启动 opencode-im-bridge：
+2. 在另一个终端启动 opencode-im-bridge-slim：
 
 ```bash
 # 设置环境变量
@@ -299,7 +299,7 @@ export FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxx
 export FEISHU_APP_SECRET=your_app_secret_here
 
 # 启动
-opencode-im-bridge
+opencode-im-bridge-slim
 ```
 
 3. 确认日志中出现类似内容：
@@ -423,7 +423,7 @@ export QQ_SECRET=你的QQ_SECRET
 # 可选：启用沙箱模式
 export QQ_SANDBOX=true
 
-opencode-im-bridge
+opencode-im-bridge-slim
 ```
 
 启动成功后日志中会出现：
@@ -454,7 +454,7 @@ opencode-im-bridge
 #### 第一步：前置条件
 
 - 微信版本需支持 **ClawBot 插件**（在微信设置中查找）
-- opencode-im-bridge 运行在可访问互联网的环境中
+- opencode-im-bridge-slim 运行在可访问互联网的环境中
 
 #### 第二步：启用微信渠道
 
@@ -487,10 +487,10 @@ export WECHAT_SESSION_FILE=./data/wechat-session.json
 OPENCODE_SERVER_PORT=4096 opencode serve
 ```
 
-2. 启动 opencode-im-bridge：
+2. 启动 opencode-im-bridge-slim：
 
 ```bash
-opencode-im-bridge
+opencode-im-bridge-slim
 ```
 
 3. 终端中会显示二维码链接：

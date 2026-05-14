@@ -506,18 +506,19 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     if (channelId !== "feishu") {
       const helpText = `**${t(locale, "help.title")}**
 
-\`/new\` - ${t(locale, "help.new")}
-\`/sessions\` - ${t(locale, "help.sessions")}
-\`/projects\` - ${t(locale, "help.projects")}
-\`/status\` - ${t(locale, "help.status")}
-\`/compact\` - ${t(locale, "help.compact")}
-\`/share\` - ${t(locale, "help.share")}
-\`/unshare\` - ${t(locale, "help.unshare")}
-\`/rename\` - ${t(locale, "help.rename")}
-\`/abort\` - ${t(locale, "help.abort")}
-\`/agent\` - ${t(locale, "help.agent")}
-\`/models\` - ${t(locale, "help.models")}
-\`/help\` - ${t(locale, "help.help")}`
+${t(locale, "help.help")}
+${t(locale, "help.new")}
+${t(locale, "help.sessions")}
+${t(locale, "help.projects")}
+${t(locale, "help.status")}
+${t(locale, "help.agent")}
+${t(locale, "help.models")}
+${t(locale, "help.compact")}
+${t(locale, "help.share")}
+${t(locale, "help.unshare")}
+${t(locale, "help.rename")}
+${t(locale, "help.cron")}
+${t(locale, "help.abort")}`
       await replyText(chatId, messageId, helpText, channelId)
       return
     }

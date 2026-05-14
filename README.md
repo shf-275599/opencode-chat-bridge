@@ -1,4 +1,4 @@
-# opencode-im-bridge
+# opencode-im-bridge-slim
 
 > 将飞书 / QQ / 微信机器人与 opencode TUI session 打通，实现双向实时消息转发。
 

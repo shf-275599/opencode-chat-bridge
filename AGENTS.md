@@ -1,4 +1,4 @@
-# AGENTS.md — opencode-im-bridge
+# AGENTS.md — opencode-im-bridge-slim
 
 **Generated:** 2026-03-23
 **Commit:** 896c349

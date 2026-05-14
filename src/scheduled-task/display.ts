@@ -8,7 +8,7 @@ import type {
 
 export function buildTaskListCard(tasks: TaskDisplayItem[], locale: Locale): string {
   if (tasks.length === 0) {
-    return t(locale, "scheduledTask.list.empty") + `\n\n**用法：**\n\`/cron 每天19:00提醒我吃饭\`\n\`/cron 每2小时检查一次服务器\`\n\`/cron 每周三14:30开会提醒\``
+    return t(locale, "scheduledTask.list.empty") + `\n\n**📋 使用说明：**\n**创建任务：**\n\`/cron 每天19:00提醒我吃饭\`\n\`/cron 每2小时检查一次服务器\`\n\`/cron 每周三14:30开会提醒\`\n\n**查看任务：**\n\`/cron list\`\n\n**删除任务：**\n\`/cron remove {id}\` （ID 可通过 \`/cron list\` 查看）`
   }
 
   const lines = tasks.map((task) => {
@@ -37,7 +37,17 @@ export function buildTaskListCard(tasks: TaskDisplayItem[], locale: Locale): str
 
 export function buildTaskListText(tasks: TaskDisplayItem[], locale: Locale): string {
   if (tasks.length === 0) {
-    return t(locale, "scheduledTask.list.empty") + `\n\n用法：\n/cron 每天19:00提醒我吃饭\n/cron 每2小时检查一次服务器\n/cron 每周三14:30开会提醒`
+    return t(locale, "scheduledTask.list.empty") + `\n\n使用说明：
+创建任务：
+/cron 每天19:00提醒我吃饭
+/cron 每2小时检查一次服务器
+/cron 每周三14:30开会提醒
+
+查看任务：
+/cron list
+
+删除任务：
+/cron remove {id}（ID 可通过 /cron list 查看）`
   }
 
   const lines = tasks.map((task) => {

@@ -298,33 +298,9 @@ function parseChineseSchedule(text: string): ParsedTaskSchedule | null {
     }
   }
 
-  // 每隔几分钟 - 支持阿拉伯数字和中文数字
-  function parseChineseNum(text: string): number | null {
-    if (/^\d+$/.test(text)) return parseInt(text, 10)
-    let result = 0
-    let temp = 0
-    for (const char of text) {
-      if (char === "十") {
-        if (temp === 0) {
-          result += result === 0 ? 10 : result * 10
-        } else {
-          result += temp * 10
-          temp = 0
-        }
-      } else {
-        const val = chineseDigit[char]
-        if (val !== undefined && val < 10) {
-          temp = temp * 10 + val
-        }
-      }
-    }
-    result += temp
-    return result > 0 ? result : null
-  }
-
   const everyMinMatch = t.match(/每[隔个]?([零一二三四五六七八九十\d]+)分钟/)
   if (everyMinMatch) {
-    const mins = parseChineseNum(everyMinMatch[1]!)
+    const mins = parseChineseNumeral(everyMinMatch[1]!)
     if (mins !== null && mins > 0 && mins <= 60) {
       return {
         cronExpression: `0 */${mins} * * * *`,

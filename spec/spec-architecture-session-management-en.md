@@ -2,13 +2,13 @@
 title: Session Management Architecture Specification
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge team
+owner: opencode-im-bridge-slim team
 tags: [architecture, design, session, sqlite]
 ---
 
 # Introduction
 
-This specification defines the architecture, requirements, and constraints for the `SessionManager` and `ProgressTracker` components within `opencode-im-bridge`. These components are responsible for maintaining persistent state between stateless IM chats and stateful `opencode` TUI instances, and providing synchronous UX feedback when streaming is unavailable.
+This specification defines the architecture, requirements, and constraints for the `SessionManager` and `ProgressTracker` components within `opencode-im-bridge-slim`. These components are responsible for maintaining persistent state between stateless IM chats and stateful `opencode` TUI instances, and providing synchronous UX feedback when streaming is unavailable.
 
 ## 1. Purpose & Scope
 
@@ -57,7 +57,7 @@ interface SessionManager {
 
 ## 5. Acceptance Criteria
 
-- **AC-001**: Given a restart of the `opencode-im-bridge` service, When a user resumes chatting in an existing thread, Then their previous `session_id` is retrieved from SQLite correctly without losing agent context.
+- **AC-001**: Given a restart of the `opencode-im-bridge-slim` service, When a user resumes chatting in an existing thread, Then their previous `session_id` is retrieved from SQLite correctly without losing agent context.
 - **AC-002**: Given a pristine initialization, When a user sends their first message and an active TUI window is open running an opencode session natively, Then the bridge binds their chat implicitly to the open native session instead of spawning a background ghost session.
 - **AC-003**: Given a startup sequence where the opencode server purged a memory session, When `validateAndCleanupStale()` runs, Then the HTTP 404 response causes the stale `feishu_key` mapping to drop from SQLite.
 

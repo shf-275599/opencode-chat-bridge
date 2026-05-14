@@ -2,13 +2,13 @@
 title: 流式桥接器架构规范 (Streaming Bridge Architecture Specification)
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge 团队
+owner: opencode-im-bridge-slim 团队
 tags: [architecture, design, streaming, UI]
 ---
 
 # 概述
 
-本规范定义了 `opencode-im-bridge` 中 `StreamingBridge` 组件的架构、要求和约束。Streaming Bridge 负责将来自 `opencode` 后端的 Server-Sent Events (SSE) 转换为动态的聊天 UI 元素（如：更新文本卡片、工具进度指示器），从而提供实时、互动的用户体验。
+本规范定义了 `opencode-im-bridge-slim` 中 `StreamingBridge` 组件的架构、要求和约束。Streaming Bridge 负责将来自 `opencode` 后端的 Server-Sent Events (SSE) 转换为动态的聊天 UI 元素（如：更新文本卡片、工具进度指示器），从而提供实时、互动的用户体验。
 
 ## 1. 目的与范围
 

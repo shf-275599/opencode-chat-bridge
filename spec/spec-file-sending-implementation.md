@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add file/document sending functionality to the Feishu channel in opencode-im-bridge. Currently only images are supported via `sendImage`. This plan adds `sendFile` support for documents (PDF, DOC, XLS, etc.) following the same security model and architecture patterns.
+Add file/document sending functionality to the Feishu channel in opencode-im-bridge-slim. Currently only images are supported via `sendImage`. This plan adds `sendFile` support for documents (PDF, DOC, XLS, etc.) following the same security model and architecture patterns.
 
 ---
 
@@ -459,7 +459,7 @@ Expected: All tests pass
 
 ### Integration Test (Manual)
 1. Start opencode server
-2. Start opencode-im-bridge
+2. Start opencode-im-bridge-slim
 3. Send message to Feishu bot that generates a file (e.g., "create a report.pdf")
 4. Verify file is uploaded and sent to Feishu chat
 5. Verify file appears in chat with correct name

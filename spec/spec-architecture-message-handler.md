@@ -2,13 +2,13 @@
 title: 消息处理器架构规范 (Message Handler Architecture Specification)
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge 团队
+owner: opencode-im-bridge-slim 团队
 tags: [architecture, design, message-handling]
 ---
 
 # 概述
 
-本规范定义了 `opencode-im-bridge` 中 `MessageHandler` 组件的架构、要求和约束。消息处理器用作入站管道 (inbound pipeline)，负责处理来自各聊天渠道（如飞书、QQ、Telegram、Discord）的事件，并在它们被路由到 `opencode` 服务器之前管理其生命周期。
+本规范定义了 `opencode-im-bridge-slim` 中 `MessageHandler` 组件的架构、要求和约束。消息处理器用作入站管道 (inbound pipeline)，负责处理来自各聊天渠道（如飞书、QQ、Telegram、Discord）的事件，并在它们被路由到 `opencode` 服务器之前管理其生命周期。
 
 ## 1. 目的与范围
 

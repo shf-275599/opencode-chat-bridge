@@ -2,13 +2,13 @@
 title: 通道管理器架构规范 (Channel Manager Architecture Specification)
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge 团队
+owner: opencode-im-bridge-slim 团队
 tags: [architecture, design, channel, plugin]
 ---
 
 # 概述
 
-本规范定义了 `opencode-im-bridge` 中 `ChannelManager` 组件及生态关联的 `ChannelPlugin` 接口架构、要求与约束。通道管理器在基础聊天平台（如飞书、QQ、Telegram、Discord）之上提供了一层统一的抽象，使得核心业务逻辑能够与底层的网络协议或数据 Schema 彻底解耦。
+本规范定义了 `opencode-im-bridge-slim` 中 `ChannelManager` 组件及生态关联的 `ChannelPlugin` 接口架构、要求与约束。通道管理器在基础聊天平台（如飞书、QQ、Telegram、Discord）之上提供了一层统一的抽象，使得核心业务逻辑能够与底层的网络协议或数据 Schema 彻底解耦。
 
 ## 1. 目的与范围
 
@@ -69,7 +69,7 @@ class ChannelManager {
 ## 7. 基本原理与背景
 
 - **为何要做可选化抽象适配（Optional Adapters）？** 因为不同的聊天平台行为差异巨大。QQ 平台没有开放动态更新的交互式卡片接口支持能力；基于 Webhook 的系统通常依赖外部 HTTP 代理配置回调，很少需要 gateway 主动管理连接；然而 Discord 却恰恰以内部长连接 WebSocket 作为心跳 Gateway 的立足点。能力集可选赋予了渐进增强 (Progressive enhancement) 最佳支持。
-- **为何必须建立故障隔离（Fault Isolation）机制？** `opencode-im-bridge` 目标是一个统一网关引擎。若 QQ 渠道外的公共服务端宕机进而造成 502 错误导致应用崩溃，绝对不应该令原本服务企业内网的飞书用户集群在质询 Agent 时中断服务。
+- **为何必须建立故障隔离（Fault Isolation）机制？** `opencode-im-bridge-slim` 目标是一个统一网关引擎。若 QQ 渠道外的公共服务端宕机进而造成 502 错误导致应用崩溃，绝对不应该令原本服务企业内网的飞书用户集群在质询 Agent 时中断服务。
 
 ## 8. 依赖关系及外部集成
 

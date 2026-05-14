@@ -2,13 +2,13 @@
 title: Event Processor Architecture Specification
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge team
+owner: opencode-im-bridge-slim team
 tags: [architecture, design, events, sse]
 ---
 
 # Introduction
 
-This specification defines the architecture, requirements, and constraints for the `EventProcessor` and `SessionObserver` components within `opencode-im-bridge`. These components are responsible for ingesting, filtering, and parsing the raw Server-Sent Events (SSE) stream emitted by the `opencode` server and converting it into typed, actionable events for the bridge's routing layers.
+This specification defines the architecture, requirements, and constraints for the `EventProcessor` and `SessionObserver` components within `opencode-im-bridge-slim`. These components are responsible for ingesting, filtering, and parsing the raw Server-Sent Events (SSE) stream emitted by the `opencode` server and converting it into typed, actionable events for the bridge's routing layers.
 
 ## 1. Purpose & Scope
 

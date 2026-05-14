@@ -2,13 +2,13 @@
 title: Message Handler Architecture Specification
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge team
+owner: opencode-im-bridge-slim team
 tags: [architecture, design, message-handling]
 ---
 
 # Introduction
 
-This specification defines the architecture, requirements, and constraints for the `MessageHandler` component of `opencode-im-bridge`. The message handler serves as the inbound pipeline for processing events from various chat channels (Feishu, QQ, Telegram, Discord) and managing their lifecycle before they are routed to the `opencode` server.
+This specification defines the architecture, requirements, and constraints for the `MessageHandler` component of `opencode-im-bridge-slim`. The message handler serves as the inbound pipeline for processing events from various chat channels (Feishu, QQ, Telegram, Discord) and managing their lifecycle before they are routed to the `opencode` server.
 
 ## 1. Purpose & Scope
 

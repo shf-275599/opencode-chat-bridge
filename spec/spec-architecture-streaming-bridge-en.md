@@ -2,13 +2,13 @@
 title: Streaming Bridge Architecture Specification
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge team
+owner: opencode-im-bridge-slim team
 tags: [architecture, design, streaming, UI]
 ---
 
 # Introduction
 
-This specification defines the architecture, requirements, and constraints for the `StreamingBridge` component of `opencode-im-bridge`. The Streaming Bridge is responsible for providing a real-time, interactive user experience by translating Server-Sent Events (SSE) from the `opencode` agent backend into dynamic chat UI elements (e.g., updating text cards, tool progress indicators).
+This specification defines the architecture, requirements, and constraints for the `StreamingBridge` component of `opencode-im-bridge-slim`. The Streaming Bridge is responsible for providing a real-time, interactive user experience by translating Server-Sent Events (SSE) from the `opencode` agent backend into dynamic chat UI elements (e.g., updating text cards, tool progress indicators).
 
 ## 1. Purpose & Scope
 

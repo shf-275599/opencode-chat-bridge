@@ -2,13 +2,13 @@
 title: 事件处理器架构规范 (Event Processor Architecture Specification)
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge 团队
+owner: opencode-im-bridge-slim 团队
 tags: [architecture, design, events, sse]
 ---
 
 # 概述
 
-本规范定义了 `opencode-im-bridge` 中 `EventProcessor` 和 `SessionObserver` 组件的架构、要求和约束。这些组件负责接收、过滤和解析由 `opencode` 服务器发出的原始 Server-Sent Events (SSE) 流，并将其转换为强类型的、可执行的事件，供桥接器的路由层使用。
+本规范定义了 `opencode-im-bridge-slim` 中 `EventProcessor` 和 `SessionObserver` 组件的架构、要求和约束。这些组件负责接收、过滤和解析由 `opencode` 服务器发出的原始 Server-Sent Events (SSE) 流，并将其转换为强类型的、可执行的事件，供桥接器的路由层使用。
 
 ## 1. 目的与范围
 

@@ -2,13 +2,13 @@
 title: 会话管理器架构规范 (Session Management Architecture Specification)
 version: 1.0
 date_created: 2026-03-21
-owner: opencode-im-bridge 团队
+owner: opencode-im-bridge-slim 团队
 tags: [architecture, design, session, sqlite]
 ---
 
 # 概述
 
-本规范定义了 `opencode-im-bridge` 中 `SessionManager` 和 `ProgressTracker` 组件的架构、要求和约束。这些组件负责在无状态的 IM（即时通讯）聊天和有状态的 `opencode` TUI 实例之间维护持久化状态，并在流式传输不可用时提供同步的 UX 反馈。
+本规范定义了 `opencode-im-bridge-slim` 中 `SessionManager` 和 `ProgressTracker` 组件的架构、要求和约束。这些组件负责在无状态的 IM（即时通讯）聊天和有状态的 `opencode` TUI 实例之间维护持久化状态，并在流式传输不可用时提供同步的 UX 反馈。
 
 ## 1. 目的与范围
 

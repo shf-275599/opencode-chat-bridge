@@ -17,3 +17,4 @@ config/opencode-im*.jsonc
 
 .opencode-lark/
 bin/
+.opencode-im-bridge/

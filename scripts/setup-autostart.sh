@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TASK_NAME="opencode-im-bridge"
+TASK_NAME="opencode-im-bridge-slim"
 REMOVE=0
 CONFIG_ID=""
 BUN_PATH="${BUN_PATH:-$(command -v bun || true)}"
@@ -16,7 +16,7 @@ Usage:
 Options:
   --bun-path PATH           Explicit bun binary path.
   --repo-root PATH          Explicit repository root.
-  --task-name NAME          Service/agent name. Default: opencode-im-bridge
+  --task-name NAME          Service/agent name. Default: opencode-im-bridge-slim
   --config-id ID            Optional configuration identifier.
   --remove                  Remove autostart configuration.
   -h, --help                Show this help.

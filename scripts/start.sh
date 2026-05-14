@@ -1,5 +1,5 @@
 #!/bin/bash
-# opencode-im-bridge 一体化启动脚本
+# opencode-im-bridge-slim 一体化启动脚本
 # 同时启动 opencode server + bridge bot
 
 set -e
@@ -26,7 +26,7 @@ for i in $(seq 1 20); do
   sleep 1
 done
 
-echo "[start] Starting opencode-im-bridge bot..."
+echo "[start] Starting opencode-im-bridge-slim bot..."
 bun run src/index.ts &
 BOT_PID=$!
 echo "[start] bot PID: $BOT_PID"

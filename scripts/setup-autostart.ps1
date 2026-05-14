@@ -1,6 +1,6 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-  [string]$TaskName = "opencode-im-bridge",
+  [string]$TaskName = "opencode-im-bridge-slim",
   [ValidateSet("Logon", "Startup")]
   [string]$Trigger = "Logon",
   [string]$RepoRoot,
@@ -99,7 +99,7 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register scheduled task")) {
     -Trigger $taskTrigger `
     -Principal $principal `
     -Settings $settings `
-    -Description "Start opencode-im-bridge automatically on Windows" `
+    -Description "Start opencode-im-bridge-slim automatically on Windows" `
     -Force | Out-Null
 
   Write-Output "Registered scheduled task: $TaskName"

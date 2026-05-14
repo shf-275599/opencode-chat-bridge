@@ -29,7 +29,7 @@ SessionManager + opencode HTTP API
 
 ## Key Differences from Other Channels
 
-| Aspect | Feishu/QQ/DingTalk | WeChat |
+| Aspect | Feishu/QQ | WeChat |
 |--------|-------------------|--------|
 | Protocol | WebSocket | HTTP Long Polling |
 | Auth | App credentials | QR code login |

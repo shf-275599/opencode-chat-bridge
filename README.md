@@ -1,14 +1,14 @@
 # opencode-im-bridge
 
-> 将飞书 / QQ / 微信 / 钉钉机器人与 opencode TUI session 打通，实现双向实时消息转发。
+> 将飞书 / QQ / 微信机器人与 opencode TUI session 打通，实现双向实时消息转发。
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## 功能特性
 
 - **实时桥接** — IM 消息即时出现在 opencode TUI，agent 回复以动态卡片形式推送回 IM。支持 **Markdown 格式渲染**（标题、列表、代码块）
-- **多渠道支持** — 飞书、QQ、微信、钉钉，统一插件架构，`ChannelPlugin` 接口设计
-- **交互式卡片** — Agent 的提问和权限请求以可点击卡片呈现，直接在聊天中回答或审批（飞书/钉钉支持）
+- **多渠道支持** — 飞书、QQ、微信，统一插件架构，`ChannelPlugin` 接口设计
+- **交互式卡片** — Agent 的提问和权限请求以可点击卡片呈现，直接在聊天中回答或审批（飞书支持）
 - **SSE 流式输出** — 订阅 opencode SSE 事件流，实时更新回复内容（飞书支持 CardKit v2 流式卡片）
 - **文件与图片** — 支持图片、文档、音频、视频消息的收发，带路径安全检查，50MB 下载限制，100MB 上传限制
 - **文件自动发送** — Agent 将文件保存到 attachments 目录后，系统通过 snapshot 机制自动检测并发送给用户
@@ -23,16 +23,16 @@
 
 ### 平台对比
 
-| 维度 | 飞书 | QQ | 微信 | 钉钉 |
-|------|------|----|----|------|
-| **连接协议** | WebSocket (SDK) | WebSocket (SDK) | HTTP 长轮询 (SDK) | HTTP 长轮询 |
-| **认证方式** | App ID + Secret | App ID + Secret | **QR 码扫码登录** | App Key + Secret |
-| **流式输出** | ✅ CardKit v2 流式卡片 | ❌ 累积后一次发送 | ❌ 累积后一次发送 | ⚠️ 基础流式 |
-| **文件收发** | ✅ 图/文/音/视 | ✅ 两步上传 | ✅ CDN 加密上传 | ✅ 多媒体上传 |
-| **交互卡片** | ✅ 按钮交互 | ❌ 纯文本 | ❌ 纯文本 | ⚠️ 基础卡片 |
-| **群聊支持** | ✅ @提及过滤 | ❌ 仅 C2C | ❌ 仅 C2C | ❌ 仅 C2C |
-| **消息去重** | ✅ SQLite 去重 | ❌ | ❌ | ❌ |
-| **思考中指示** | ✅ 表情反应 + 输入态 | ❌ | ✅ 正在输入 | ❌ |
+| 维度 | 飞书 | QQ | 微信 |
+|------|------|----|----|
+| **连接协议** | WebSocket (SDK) | WebSocket (SDK) | HTTP 长轮询 (SDK) |
+| **认证方式** | App ID + Secret | App ID + Secret | **QR 码扫码登录** |
+| **流式输出** | ✅ CardKit v2 流式卡片 | ❌ 累积后一次发送 | ❌ 累积后一次发送 |
+| **文件收发** | ✅ 图/文/音/视 | ✅ 两步上传 | ✅ CDN 加密上传 |
+| **交互卡片** | ✅ 按钮交互 | ❌ 纯文本 | ❌ 纯文本 |
+| **群聊支持** | ✅ @提及过滤 | ❌ 仅 C2C | ❌ 仅 C2C |
+| **消息去重** | ✅ SQLite 去重 | ❌ | ❌ |
+| **思考中指示** | ✅ 表情反应 + 输入态 | ❌ | ✅ 正在输入 |
 
 ---
 
@@ -215,7 +215,6 @@ opencode attach http://127.0.0.1:4096 --session {session_id}
 | **飞书** | 交互式卡片，支持点击按钮操作 |
 | **QQ** | 纯文本 Markdown 格式 |
 | **微信** | 纯文本格式 |
-| **钉钉** | 纯文本格式 |
 
 ---
 
@@ -538,100 +537,6 @@ opencode-im-bridge
 
 ---
 
-### 钉钉配置
-
-钉钉使用 HTTP 长轮询接收消息，支持多媒体上传和基础卡片。
-
-#### 第一步：创建企业自建应用
-
-1. 打开[钉钉开放平台](https://open.dingtalk.com/)
-2. 点击**应用开发 → 企业内部开发**
-3. 点击**创建应用**
-4. 填写应用名称（例如 "opencode-bridge"）、描述，选择目标企业
-5. 点击**确定创建**
-
-#### 第二步：获取凭证
-
-1. 在应用详情页，点击**凭证与基础信息**
-2. 记下以下信息：
-   - **App Key** — 对应环境变量 `DINGTALK_APP_KEY`
-   - **App Secret** — 对应环境变量 `DINGTALK_APP_SECRET`
-3. 可选：如需指定 Agent，记录 **Agent ID**（对应环境变量 `DINGTALK_AGENT_ID`）
-
-#### 第三步：开启机器人能力
-
-1. 在左侧菜单点击**应用功能 → 机器人**
-2. 点击**开启**机器人能力
-3. 配置机器人名称和头像
-
-#### 第四步：配置权限
-
-进入**权限管理**，搜索并开通以下权限：
-
-| 权限名称 | 用途 | 必需 |
-|----------|------|------|
-| 获取与发送单聊消息 | 发送和接收私聊消息 | ✅ |
-| 企业内获取用户信息 | 获取发送者信息 | ✅ |
-| 上传媒体文件 | 上传图片、文件等 | ✅ |
-
-⚠️ 权限名称可能因钉钉版本而异，请按功能描述搜索。确认所有权限状态为「已开通」。
-
-#### 第五步：配置事件订阅（长连接模式）
-
-1. 进入**开发配置 → 事件与回调**
-2. 在**订阅方式**中选择**长连接**模式
-3. 在**事件订阅**中添加：
-   - **接收消息** (`im.message.receive_v1`)
-4. 点击**保存**
-
-> ⚠️ **重要**：长连接模式要求 opencode-im-bridge 已在运行。请在完成第六步启动 bridge 后，再保存此配置。
-
-#### 第六步：配置环境变量并启动
-
-```bash
-export DINGTALK_APP_KEY=your_app_key
-export DINGTALK_APP_SECRET=your_app_secret
-# 可选
-export DINGTALK_AGENT_ID=your_agent_id
-
-opencode-im-bridge
-```
-
-启动成功后日志中会出现：
-
-```
-[DingTalkPlugin] Starting DingTalk long polling...
-[DingTalkPlugin] Received event: text from xxx
-```
-
-#### 第七步：发布应用
-
-1. 在左侧菜单点击**应用发布 → 版本管理与发布**
-2. 创建版本并提交审核
-3. 审核通过后，在钉钉客户端搜索机器人名称即可使用
-
-#### 第八步：测试验证
-
-1. 在钉钉中搜索你的机器人名称
-2. 发送一条测试消息（如"你好"）
-3. 应该收到绑定通知和 AI 回复
-4. 群聊中需要 @机器人才能触发响应
-
-#### 钉钉平台特性
-
-- 使用 HTTP 长轮询（约 25 秒超时）接收消息
-- 支持文本、图片、文件、音频、视频消息
-- access_token 自动缓存和刷新
-- 支持基础的交互式卡片
-- 连续性失败处理：连续 5 次失败后进入 30 秒退避等待
-
-#### 注意事项
-
-- 确保钉钉应用已发布并添加机器人到群聊/私聊
-- 长连接模式下，opencode-im-bridge 必须保持运行
-- 群聊中需要 **@机器人** 才能触发响应
-- 钉钉不支持流式输出，AI 回复会等全部生成完毕后一次性发送
-
 ---
 
 ## 配置说明
@@ -671,14 +576,6 @@ opencode-im-bridge
 | `WECHAT_ENABLED` | 是* | | 设为 `true` 启用微信 |
 | `WECHAT_SESSION_FILE` | 否 | `./data/wechat-session.json` | 登录态保存路径 |
 
-#### 钉钉
-
-| 变量名 | 必需 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `DINGTALK_APP_KEY` | 是* | | 钉钉应用 App Key |
-| `DINGTALK_APP_SECRET` | 是* | | 钉钉应用 App Secret |
-| `DINGTALK_AGENT_ID` | 否 | | 钉钉 Agent ID |
-
 > \* 至少需要配置一个渠道。
 
 ### JSONC 配置文件
@@ -708,11 +605,6 @@ cp config/opencode-im.example.jsonc config/opencode-im.jsonc
   "wechat": {
     "enabled": true,
     "sessionFile": "./data/wechat-session.json"
-  },
-  "dingtalk": {
-    "appKey": "${DINGTALK_APP_KEY}",
-    "appSecret": "${DINGTALK_APP_SECRET}",
-    "agentId": "${DINGTALK_AGENT_ID}"
   },
   "defaultAgent": "build",
   "dataDir": "./data",
@@ -765,11 +657,11 @@ config/                 # 用户配置文件（凭证、渠道、调度等）
 src/
 ├── index.ts            # 入口，9 阶段启动 + 优雅关闭
 ├── types.ts            # 共享类型定义
-├── channel/            # 渠道插件（飞书、QQ、微信、钉钉）+ 统一接口
+├── channel/            # 渠道插件（飞书、QQ、微信）+ 统一接口
 │   ├── types.ts        # ChannelPlugin 核心契约
 │   ├── manager.ts      # ChannelManager 注册/启动/停止
 │   ├── base-plugin.ts  # BaseChannelPlugin 抽象基类
-│   └── feishu|qq|wechat|dingtalk/  # 各平台插件实现
+│   └── feishu|qq|wechat/  # 各平台插件实现
 ├── handler/            # 消息处理（去重→路由→POST→流式桥接）
 │   ├── message-handler.ts      # 核心入站管道
 │   ├── command-handler.ts      # 斜杠命令处理

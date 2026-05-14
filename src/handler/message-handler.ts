@@ -25,7 +25,6 @@ import { writeFile, mkdir, access } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { randomBytes } from "node:crypto"
-import { downloadQQMedia, parseQQMediaMessage, type QQMediaMessage } from "../channel/qq/qq-api-client.js"
 
 // ── Dependency injection interface ──
 
@@ -159,46 +158,6 @@ async function handleFileOrImageMessage(
   logger.info(`Saved file to ${filepath}`)
 
   return `User sent a file: ${fileName}\nSaved to: ${filepath}\nPlease review this file.`
-}
-
-// ── Helper: handle QQ media messages ──
-
-async function handleQQMediaMessage(
-  content: string,
-  rawMessage: any[],
-  messageId: string,
-  logger: Logger,
-): Promise<string> {
-  let parsed: { media?: any[]; text?: string }
-  try {
-    parsed = JSON.parse(content)
-  } catch {
-    return content || ""
-  }
-
-  const mediaItems: any[] = parsed.media || parseQQMediaMessage(rawMessage)
-
-  if (mediaItems.length === 0) {
-    return parsed.text || content || ""
-  }
-
-  const results: string[] = []
-
-  for (const media of mediaItems) {
-    try {
-      const localPath = await downloadQQMedia(media, logger)
-      results.push(`User sent a ${media.type}: ${media.fileName || "unnamed"}\nSaved to: ${localPath}\nPlease look at this ${media.type}.`)
-    } catch (err) {
-      logger.error(`[QQPlugin] Failed to download ${media.type}: ${err}`)
-      results.push(`User sent a ${media.type} (${media.fileName || "unnamed"}) but download failed: ${err}`)
-    }
-  }
-
-  if (parsed.text) {
-    results.push(parsed.text)
-  }
-
-  return results.join("\n\n")
 }
 
 // ── Helper: extract text from Feishu post rich content ──
@@ -371,12 +330,9 @@ export function createMessageHandler(
     const messageType = event.message.message_type
 
     const feishuSupportedTypes = ["text", "post", "image", "file"]
-    const qqSupportedTypes = ["text", "image", "file"]
     const wechatSupportedTypes = ["text", "image", "file", "voice", "video"]
     let supportedTypes: string[]
-    if (channelId === "qq") {
-      supportedTypes = qqSupportedTypes
-    } else if (channelId === "wechat") {
+    if (channelId === "wechat") {
       supportedTypes = wechatSupportedTypes
     } else {
       supportedTypes = feishuSupportedTypes
@@ -393,14 +349,7 @@ export function createMessageHandler(
     let userText: string
     if (messageType === "image" || messageType === "file") {
       try {
-        if (channelId === "qq") {
-          userText = await handleQQMediaMessage(
-            event.message.content,
-            (event as any)._rawMessage || [],
-            event.message_id,
-            logger,
-          )
-        } else if (channelId === "wechat") {
+        if (channelId === "wechat") {
           // 微信：使用已提取的文本内容（包含媒体类型和文件信息）
           // 微信的图片/文件消息已经在 normalizeInbound 中提取了文本
           const parsed = JSON.parse(event.message.content)
@@ -892,9 +841,8 @@ export function createMessageHandler(
     if (!notifiedFeishuKeys.has(feishuKey)) {
       notifiedFeishuKeys.add(feishuKey)
       const bindMsg = "已连接 session: " + sessionId
-      const qqPlugin = deps.channelManager?.getChannel("qq")
       const feishuPlugin = deps.channelManager?.getChannel("feishu")
-      const plugin = (event as any)._channelId === "qq" ? qqPlugin : feishuPlugin
+      const plugin = feishuPlugin
 
       if (plugin?.outbound) {
         await plugin.outbound.sendText({ address: event.chat_id }, bindMsg)

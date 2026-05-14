@@ -15,12 +15,6 @@ const FeishuConfigSchema = z.object({
   encryptKey: z.string().optional(),
 })
 
-const QqConfigSchema = z.object({
-  appId: z.string().min(1),
-  secret: z.string().min(1),
-  sandbox: z.boolean().optional().default(false),
-})
-
 const WechatConfigSchema = z.object({
   enabled: z.boolean().default(true),
   sessionFile: z.string().optional(),
@@ -68,7 +62,6 @@ const HeartbeatConfigSchema = z.object({
 
 const AppConfigSchema = z.object({
   feishu: FeishuConfigSchema.optional(),
-  qq: QqConfigSchema.optional(),
   wechat: WechatConfigSchema.optional(),
   defaultAgent: z.string().default("build"),
   dataDir: z.string().default("./data"),
@@ -76,8 +69,8 @@ const AppConfigSchema = z.object({
   cron: CronConfigSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   messageDebounceMs: z.number().int().min(0).optional().default(10000),
-}).refine(data => data.feishu || data.qq || data.wechat, {
-  message: "At least one channel (feishu, qq, or wechat) must be configured."
+}).refine(data => data.feishu || data.wechat, {
+  message: "At least one channel (feishu or wechat) must be configured."
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>
@@ -147,11 +140,6 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
           "3001",
         ),
         encryptKey: process.env["FEISHU_ENCRYPT_KEY"],
-      } : undefined,
-      qq: process.env["QQ_APP_ID"] ? {
-        appId: process.env["QQ_APP_ID"],
-        secret: process.env["QQ_SECRET"] ?? "",
-        sandbox: String(process.env["QQ_SANDBOX"]) === "true",
       } : undefined,
       wechat: process.env["WECHAT_ENABLED"] === "true" ? {
         enabled: true,

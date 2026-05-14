@@ -87,9 +87,9 @@ async function main(): Promise<void> {
   logger.info("Phase 1: Loading config...")
   const config = await loadConfig()
 
-  if ((!config.feishu?.appId || !config.feishu?.appSecret) && (!config.qq?.appId || !config.qq?.secret) && !config.wechat?.enabled) {
+  if ((!config.feishu?.appId || !config.feishu?.appSecret) && !config.wechat?.enabled) {
     logger.error(
-      "No valid channel credentials found (Feishu, QQ, or WeChat). Run `opencode-im-bridge-slim init` to configure, " +
+      "No valid channel credentials found (Feishu or WeChat). Run `opencode-im-bridge-slim init` to configure, " +
       "or set environment variables.",
     )
     process.exit(1)
@@ -275,7 +275,7 @@ async function main(): Promise<void> {
     logger.info("Interactive poller started (interval=3000ms)")
   }
 
-  // Handle card actions from all channels (Feishu, QQ, WeChat, etc.)
+  // Handle card actions from all channels
   // question_answer and permission_reply are channel-agnostic - always route to interactiveHandler
   // which POSTs to opencode server APIs directly
   const handleCardAction = async (action: FeishuCardAction): Promise<void> => {
@@ -398,17 +398,6 @@ async function main(): Promise<void> {
       onCardAction: handleCardAction,
     })
     channelManager.register(feishuPlugin)
-  }
-
-  if (config.qq) {
-    // QQPlugin imported asynchronously to avoid top-level require if not used
-    const { QQPlugin } = await import("./channel/qq/index.js") as any
-    const qqPlugin = new QQPlugin({
-      appConfig: config,
-      logger,
-      onMessage: handleMessage,
-    })
-    channelManager.register(qqPlugin)
   }
 
   if (config.wechat) {

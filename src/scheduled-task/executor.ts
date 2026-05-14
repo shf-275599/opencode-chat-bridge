@@ -144,8 +144,9 @@ async function waitForResponse(
           type MsgPart = { type?: string; text?: string }
           type Message = { role?: string; parts?: MsgPart[] }
           const messages = (await msgResp.json()) as Message[]
-          const assistantMsgs = messages.filter((m) => m.role === "assistant")
-          const last = assistantMsgs[assistantMsgs.length - 1]
+          // 跳过第一条（用户 prompt），取最后一条有 text 的消息
+          const responseMsgs = messages.slice(1)
+          const last = responseMsgs[responseMsgs.length - 1]
           if (last?.parts) {
             const text = last.parts
               .filter((p) => p.type === "text" && p.text)

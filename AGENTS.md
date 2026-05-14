@@ -6,7 +6,7 @@
 
 ## What This Project Does
 
-`opencode-im-bridge-slim` bridges IM chats (Feishu, WeChat) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (QQ/WeChat), while tool and sub-agent status are shown via separate cards.
+`opencode-im-bridge-slim` bridges IM chats (Feishu, WeChat) with opencode TUI sessions. Messages sent in a chat flow into opencode as if typed in the terminal. Agent replies stream back to the chat — `StreamingBridge` accumulates `TextDelta` events and queues them into card updates (Feishu) or direct messages (WeChat), while tool and sub-agent status are shown via separate cards.
 
 ```
 Feishu client

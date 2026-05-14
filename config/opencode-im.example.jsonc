@@ -17,17 +17,6 @@
     "encryptKey": "${FEISHU_ENCRYPT_KEY}"
   },
 
-  // QQ 机器人配置
-  "qq": {
-    // QQ 开放平台 App ID（环境变量: QQ_APP_ID）
-    "appId": "${QQ_APP_ID}",
-  
-    // QQ 开放平台 App Secret（环境变量: QQ_SECRET）
-    "secret": "${QQ_SECRET}",
-  
-    // 是否启用沙箱模式（默认: false）
-    "sandbox": false
-  },
 
   // 微信机器人配置
   "wechat": {

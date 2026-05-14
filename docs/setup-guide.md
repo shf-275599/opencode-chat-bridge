@@ -132,4 +132,3 @@ Navigate to **Development Config → Event Subscriptions → Callback Subscripti
 
 ---
 
-## QQ Bot Setup

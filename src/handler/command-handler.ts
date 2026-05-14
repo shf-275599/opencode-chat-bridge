@@ -1177,7 +1177,32 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 
     const mapping = sessionManager.getSession(feishuKey)
 
-    const modelStr = mapping?.model ?? await getCurrentModelFromFile()
+    // 模型优先级：session 映射 > opencode API > model.json 全局
+    let modelStr: string | undefined = mapping?.model ?? undefined
+    if (mapping) {
+      lines.push(t(locale, "status.sessionBound", { sessionId: mapping.session_id }))
+      lines.push(t(locale, "status.agent", { agent: mapping.agent }))
+
+      try {
+        const sessionResp = await fetch(`${serverUrl}/session/${mapping.session_id}`)
+        if (sessionResp.ok) {
+          const sessionData = (await sessionResp.json()) as {
+            title?: string
+            model?: { providerID?: string; id?: string }
+          }
+          if (sessionData.title) lines.push(t(locale, "status.sessionTitle", { title: sessionData.title }))
+          const m = sessionData.model
+          if (!modelStr && m?.providerID && m?.id) {
+            modelStr = `${m.providerID}/${m.id}`
+          }
+        }
+      } catch {
+        // Session info fetch failed — not critical
+      }
+    }
+    if (!modelStr) {
+      modelStr = await getCurrentModelFromFile()
+    }
     if (modelStr) {
       lines.push(t(locale, "status.model", { model: modelStr }))
     } else {

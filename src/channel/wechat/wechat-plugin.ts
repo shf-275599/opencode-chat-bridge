@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises"
-import { basename } from "node:path"
+import { basename, resolve as pathResolve } from "node:path"
 import { WeChatBot, type IncomingMessage } from "@wechatbot/wechatbot"
 import { BaseChannelPlugin } from "../base-plugin.js"
 import type {
@@ -72,9 +72,9 @@ export class WechatPlugin extends BaseChannelPlugin {
         
         this.bot = new WeChatBot({
           storage: "file",
-          storageDir: wechatConfig.sessionFile 
+          storageDir: pathResolve(wechatConfig.sessionFile 
             ? this.getDirName(wechatConfig.sessionFile)
-            : undefined,
+            : "./data"),
           logLevel: "info",
           loginCallbacks: {
             onQrUrl: (url: string) => {

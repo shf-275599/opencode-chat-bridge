@@ -13,11 +13,21 @@ import { FileTooLargeError, type FeishuApiClient } from "../feishu/api-client.js
 import type { ProgressTracker } from "../session/progress-tracker.js"
 import type { Logger } from "../utils/logger.js"
 import type { FeishuMessageEvent } from "../types.js"
+
+/** Extended event type with optional channel routing metadata added by plugins. */
+type ChannelRoutedEvent = FeishuMessageEvent & { _channelId?: string }
+
+/** Extract channel ID from an event, defaulting to "feishu" for backward compatibility. */
+function getChannelId(event: FeishuMessageEvent): ChannelId {
+  return ((event as ChannelRoutedEvent)._channelId || "feishu") as ChannelId
+}
 import type { StreamingBridge } from "./streaming-integration.js"
 import type { SessionObserver } from "../streaming/session-observer.js"
 import type { EventListenerMap } from "../utils/event-listeners.js"
 import { addListener, removeListener } from "../utils/event-listeners.js"
 import type { CommandHandlerEx } from "./command-handler.js"
+import type { ChannelManager } from "../channel/manager.js"
+import type { ChannelId } from "../channel/types.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
 import { MessageDebouncer, type BufferedMessage, type BatchContext } from "./message-debounce.js"
 import { getAttachmentsDir } from "../utils/paths.js"
@@ -44,7 +54,7 @@ export interface HandlerDeps {
   botOpenId?: string
   outboundMedia?: OutboundMediaHandler
   debounceMs?: number
-  channelManager?: any // ChannelManager type
+  channelManager?: ChannelManager
 }
 
 // ── Constants ──
@@ -312,9 +322,9 @@ export function createMessageHandler(
     }
 
     // ── 0. Channel detection ──
-    const channelId = (event as any)._channelId || "feishu"
+    const channelId = getChannelId(event)
     const plugin = deps.channelManager?.getChannel(channelId)
-    logger.info(`MessageHandler handleMessage: channelId detected as ${channelId} (raw _channelId: ${(event as any)._channelId})`)
+    logger.info(`MessageHandler handleMessage: channelId detected as ${channelId} (raw _channelId: ${getChannelId(event)})`)
 
     // ── 1b. Skip group messages that don't @mention the bot ──
     if (event.chat_type === "group") {
@@ -657,7 +667,7 @@ export function createMessageHandler(
         currentSessionId = sid
 
         try {
-          const channelId = (event as any)._channelId || "feishu"
+          const channelId = getChannelId(event)
           await deps.streamingBridge!.handleMessage(
             event.chat_id,
             sid,
@@ -840,7 +850,7 @@ export function createMessageHandler(
     if (!notifiedFeishuKeys.has(feishuKey)) {
       notifiedFeishuKeys.add(feishuKey)
       const bindMsg = "已连接 session: " + sessionId
-      const feishuPlugin = deps.channelManager?.getChannel("feishu")
+      const feishuPlugin = deps.channelManager?.getChannel("feishu" as ChannelId)
       const plugin = feishuPlugin
 
       if (plugin?.outbound) {
@@ -876,7 +886,7 @@ export function createMessageHandler(
 
     // Add platform context signature
     if (parts[0]) {
-      const channelId = (event as any)._channelId || "feishu"
+      const channelId = getChannelId(event)
       const platformPlugin = deps.channelManager?.getChannel(channelId)
       parts[0] = {
         type: "text",
@@ -957,7 +967,7 @@ export function createMessageHandler(
         currentSessionId = sid
 
         try {
-          const channelId = (event as any)._channelId || "feishu"
+          const channelId = getChannelId(event)
           await deps.streamingBridge!.handleMessage(
             event.chat_id,
             sid,
@@ -1013,7 +1023,7 @@ export function createMessageHandler(
         } catch (postErr) {
           logger.error(`Sync fallback POST also failed in debounced path: ${postErr}`)
           const errorMessage = "处理请求时出错了。"
-          const channelId = (lastEvent as any)._channelId || "feishu"
+          const channelId = getChannelId(lastEvent)
           const plugin = deps.channelManager?.getChannel(channelId)
           if (plugin?.outbound) {
             await plugin.outbound.sendText({ address: lastEvent.chat_id }, errorMessage)
@@ -1106,7 +1116,7 @@ export function createMessageHandler(
                 // When streaming bridge is active, it handles outbound media in its own SessionIdle.
                 if (deps.outboundMedia && !deps.streamingBridge) {
                   try {
-                    const channelId = (event as any)._channelId || "feishu"
+                    const channelId = getChannelId(event)
                     const adapter = deps.channelManager?.getChannel(channelId)?.outbound
                     await deps.outboundMedia.sendDetectedFiles({ address: event.chat_id }, responseText, adapter)
                   } catch (err) {
@@ -1193,7 +1203,7 @@ export function createMessageHandler(
     await sendResponse(responseText, event, thinkingMessageId)
     if (deps.outboundMedia) {
       try {
-        const channelId = (event as any)._channelId || "feishu"
+        const channelId = getChannelId(event)
         const adapter = deps.channelManager?.getChannel(channelId)?.outbound
         await deps.outboundMedia.sendDetectedFiles({ address: event.chat_id }, responseText, adapter)
       } catch (err) {
@@ -1209,7 +1219,7 @@ export function createMessageHandler(
     event: FeishuMessageEvent,
     thinkingMessageId: string | null,
   ): Promise<void> {
-    const channelId = (event as any)._channelId || "feishu"
+    const channelId = getChannelId(event)
     const plugin = deps.channelManager?.getChannel(channelId)
 
     if (thinkingMessageId) {

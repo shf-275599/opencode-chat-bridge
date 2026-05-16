@@ -5,7 +5,7 @@ import { createLogger } from "../utils/logger.js"
 const logger = createLogger("progress-tracker")
 
 interface ProgressTrackerOptions {
-  feishuClient: FeishuApiClient
+  feishuClient: FeishuApiClient | undefined
 }
 
 export interface ProgressTracker {
@@ -19,6 +19,7 @@ export function createProgressTracker(options: ProgressTrackerOptions): Progress
 
   return {
     async sendThinking(chatId) {
+      if (!feishuClient) return null
       try {
         const card = buildThinkingCard()
         const result = await feishuClient.sendMessage(chatId, {
@@ -38,6 +39,7 @@ export function createProgressTracker(options: ProgressTrackerOptions): Progress
     },
 
     async updateWithResponse(messageId, text) {
+      if (!feishuClient) return
       try {
         const card = buildResponseCard(text)
         await feishuClient.updateMessage(messageId, JSON.stringify(card))
@@ -47,6 +49,7 @@ export function createProgressTracker(options: ProgressTrackerOptions): Progress
     },
 
     async updateWithError(messageId, msg) {
+      if (!feishuClient) return
       try {
         const card = buildErrorCard(msg)
         await feishuClient.updateMessage(messageId, JSON.stringify(card))

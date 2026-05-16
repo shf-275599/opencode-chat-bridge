@@ -446,7 +446,7 @@ ${t(locale, "help.abort")}`
     const locale = getLocale(channelId)
     const sub = args[0]?.toLowerCase()
 
-    if (sub === "list") {
+    if (sub === "list" || sub === undefined) {
       const tasks = await listScheduledTasks()
       const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
         id: task.id,

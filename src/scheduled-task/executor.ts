@@ -56,16 +56,18 @@ export async function executeScheduledTask(
     const attachmentsDir = getAttachmentsDir()
     const imContext = `[Task Context: ${task.channelId} (chatId: ${task.chatId})] Save files -> ${attachmentsDir} (auto-send to user). You can save files to this directory after task completed.
 
-${task.prompt}`
+${task.prompt}
+
+Do not ask questions or request permissions. Just complete the task and output the result directly.`
 
     const resp = await fetch(`${serverUrl}/session/${sessionId}/prompt_async`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         parts: [{ type: "text", text: imContext }],
-        modelId: task.model?.modelID || undefined,
-        providerId: task.model?.providerID || undefined,
+        model: task.model?.modelID ? { providerID: task.model.providerID || "", modelID: task.model.modelID } : undefined,
         agent: task.agent || undefined,
+        noReply: true,
       }),
     })
 

@@ -459,10 +459,18 @@ ${t(locale, "help.abort")}`
         enabled: task.enabled,
       }))
 
-      const text = channelId === "feishu"
-        ? buildTaskListCard(displayItems, locale)
-        : buildTaskListText(displayItems, locale)
-      await replyText(chatId, messageId, text, channelId)
+      if (channelId === "feishu") {
+        const card = buildTaskListCard(displayItems, locale)
+        const text = sub === undefined
+          ? `📋 **定时任务**\n\n用法:\n/cron \`每天19:10提醒我吃饭\` — 创建任务\n/cron list — 查看列表\n/cron remove — 删除任务\n\n${tasks.length > 0 ? `当前 ${tasks.length} 个任务:` : "暂无定时任务"}\n\n`
+          : `📋 **定时任务** (共 ${tasks.length} 个)\n\n`
+        await replyText(chatId, messageId, text + (card as string), channelId)
+      } else {
+        const usage = sub === undefined
+          ? "用法: /cron <描述> | /cron list | /cron remove\n\n"
+          : ""
+        await replyText(chatId, messageId, usage + buildTaskListText(displayItems, locale), channelId)
+      }
       return
     }
 

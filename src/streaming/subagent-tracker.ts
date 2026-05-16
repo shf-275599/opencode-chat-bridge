@@ -4,9 +4,6 @@
 // ═══════════════════════════════════════════
 
 import type { SubtaskDiscovered } from "./event-processor.js"
-import { createLogger } from "../utils/logger.js"
-
-const defaultLogger = createLogger("subagent-tracker")
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,8 +26,7 @@ export interface MessageSummary {
 
 export interface SubAgentTrackerOptions {
   serverUrl: string
-  maxDepth?: number
-  logger?: { warn(msg: string, ...args: unknown[]): void; debug?(msg: string, ...args: unknown[]): void }
+  maxDepth?: number // default 1, max 1
 }
 
 // ---------------------------------------------------------------------------
@@ -48,12 +44,10 @@ export class SubAgentTracker {
   private readonly serverUrl: string
   private readonly maxDepth: number
   private readonly tracked: TrackedSubAgent[] = []
-  private readonly logger: { warn(msg: string, ...args: unknown[]): void; debug?(msg: string, ...args: unknown[]): void }
 
   constructor(options: SubAgentTrackerOptions) {
     this.serverUrl = options.serverUrl
     this.maxDepth = Math.min(options.maxDepth ?? 1, 1)
-    this.logger = options.logger ?? defaultLogger
   }
 
   /**
@@ -90,8 +84,7 @@ export class SubAgentTracker {
           agent.status = "failed"
         }
       })
-      .catch((err) => {
-        this.logger.warn("Sub-agent poll failed", { err, parentSessionId: action.sessionId })
+      .catch(() => {
         agent.status = "failed"
       })
 
@@ -121,8 +114,8 @@ export class SubAgentTracker {
             return children[children.length - 1]!.id
           }
         }
-      } catch (err) {
-        this.logger.debug?.("Sub-agent poll network error", { err, parentSessionId, attempt: attempt + 1 })
+      } catch {
+        // Network error — will retry
       }
 
       // Don't sleep after the last attempt
@@ -165,8 +158,7 @@ export class SubAgentTracker {
         }
         return summary
       })
-    } catch (err) {
-      this.logger.warn("Failed to fetch sub-agent messages", { err, childSessionId })
+    } catch {
       return []
     }
   }

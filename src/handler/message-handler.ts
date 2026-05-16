@@ -721,9 +721,7 @@ export function createMessageHandler(
 
         // Sync fallback — reaction cleanup only here (not during 404 retry)
         if (reactionId) {
-          await feishuClient.deleteReaction(event.message_id, reactionId).catch((err) => {
-            logger.warn("deleteReaction failed in streaming fallback", { err })
-          })
+          await feishuClient.deleteReaction(event.message_id, reactionId).catch(() => { })
         }
         if (deps.outboundMedia) {
           await deps.outboundMedia.snapshotAttachments(event.chat_id)
@@ -959,9 +957,7 @@ export function createMessageHandler(
 
         // Sync fallback — reaction cleanup only here
         if (reactionId) {
-          await feishuClient.deleteReaction(reactionMsgId, reactionId).catch((err) => {
-            logger.warn("deleteReaction failed in debounced fallback", { err })
-          })
+          await feishuClient.deleteReaction(reactionMsgId, reactionId).catch(() => { })
         }
         try {
           const rawText = await postWithRecovery()

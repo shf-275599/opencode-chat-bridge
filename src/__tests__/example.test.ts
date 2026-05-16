@@ -21,7 +21,6 @@ describe("Test Setup", () => {
   it("should create a mock database", () => {
     const db = createMockDb()
     expect(db.sessions).toBeDefined()
-    expect(db.memory).toBeDefined()
     expect(db.close).toBeDefined()
     db.close()
   })

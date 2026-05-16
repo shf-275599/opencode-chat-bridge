@@ -12,7 +12,6 @@ const logger = createLogger("db")
 
 export interface AppDatabase {
   sessions: Database
-  memory: Database
   close(): void
 }
 
@@ -31,17 +30,12 @@ export function initDatabase(dataDir: string): AppDatabase {
   sessionsDb.exec("PRAGMA journal_mode = WAL")
 
 
-  const memoryDbPath = path.join(resolvedDir, "memory.db")
-  const memoryDb = new Database(memoryDbPath)
-  memoryDb.exec("PRAGMA journal_mode = WAL")
   logger.info(`Database initialized at ${sessionsDbPath}`)
 
   return {
     sessions: sessionsDb,
-    memory: memoryDb,
     close() {
       sessionsDb.close()
-      memoryDb.close()
       logger.info("Database connections closed")
     },
   }

@@ -31,7 +31,6 @@ export function createMockDb(): AppDatabase {
   }
   return {
     sessions: mockDb as any,
-    memory: mockDb as any,
     close() {
       mockDb.close()
     },

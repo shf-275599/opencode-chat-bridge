@@ -64,6 +64,7 @@ interface AgentInfo {
   description?: string
   mode: "subagent" | "primary" | "all"
   hidden?: boolean | null
+  native?: boolean
 }
 
 interface VariantInfo {
@@ -703,17 +704,30 @@ ${t(locale, "help.abort")}`
 
     const agents = (await resp.json()) as AgentInfo[]
     const available = agents.filter((agent) => (agent.mode === "primary" || agent.mode === "all") && !agent.hidden)
-    const names = available.map((agent) => agent.name)
+    // 分组：内置 (native) / 自定义
+    const builtin = available.filter(a => a.native).sort((a, b) => a.name.localeCompare(b.name))
+    const custom = available.filter(a => !a.native).sort((a, b) => a.name.localeCompare(b.name))
+    const grouped = [...builtin, ...custom]
+    const names = grouped.map((agent) => agent.name)
     const current = mapping.agent || "build"
     const targetRaw = args[0]
 
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
-      const listText = names.length
-        ? names.map((name) => (name.toLowerCase() === current.toLowerCase() ? `✓ ${name}` : `- ${name}`)).join("\n")
+      const listText = grouped.length
+        ? [
+            builtin.length ? "**内置**" : "",
+            ...builtin.map((a) => (a.name.toLowerCase() === current.toLowerCase() ? `✓ ${a.name}` : `- ${a.name}`)),
+            custom.length ? "**自定义**" : "",
+            ...custom.map((a) => (a.name.toLowerCase() === current.toLowerCase() ? `✓ ${a.name}` : `- ${a.name}`)),
+          ].filter(Boolean).join("\n")
         : "No agents available"
 
       if (channelId === "feishu") {
-        const card = buildAgentSelectorCard(names, current)
+        const agentGroups = [
+          ...(builtin.length ? [{ label: "内置", names: builtin.map(a => a.name) }] : []),
+          ...(custom.length ? [{ label: "自定义", names: custom.map(a => a.name) }] : []),
+        ]
+        const card = buildAgentSelectorCard(agentGroups, current)
         await replyCard(chatId, messageId, {
           text: listText,
           card,

@@ -194,50 +194,56 @@ export function buildHelpCard(): Record<string, unknown> {
 }
 
 export function buildAgentSelectorCard(
-  agents: string[],
+  agentGroups: Array<{ label: string; names: string[] }>,
   currentAgent?: string,
 ): Record<string, unknown> {
-  const visibleAgents = agents.slice(0, 12)
-  const truncatedCount = Math.max(0, agents.length - visibleAgents.length)
+  const allNames = agentGroups.flatMap(g => g.names)
+  const visibleNames = allNames.slice(0, 12)
+  const truncatedCount = Math.max(0, allNames.length - 12)
+
+  const elements: Record<string, unknown>[] = [
+    {
+      tag: "markdown",
+      content: currentAgent
+        ? `**Current agent:** \`${currentAgent}\`\n\nChoose an agent below.`
+        : "**Choose an agent below.**",
+    },
+  ]
+
+  for (const group of agentGroups) {
+    const groupNames = group.names.filter(n => visibleNames.includes(n))
+    if (!groupNames.length) continue
+    elements.push({ tag: "hr" })
+    elements.push({
+      tag: "markdown",
+      content: `**${group.label}**`,
+    })
+    for (const name of groupNames) {
+      const isCurrent = name.toLowerCase() === currentAgent?.toLowerCase()
+      elements.push({
+        tag: "button",
+        text: { tag: "plain_text", content: `${isCurrent ? "* " : ""}${name}` },
+        type: isCurrent ? "primary" : "default",
+        value: { action: "command_execute", command: `/agent ${name}` },
+      })
+    }
+  }
+
+  if (truncatedCount > 0) {
+    elements.push({
+      tag: "markdown",
+      content: `And ${truncatedCount} more. Use \`/agent {name}\` to switch directly.`,
+    })
+  }
 
   return {
     schema: "2.0",
     config: { wide_screen_mode: true },
     header: {
-      title: {
-        tag: "plain_text",
-        content: "🤖 Agent",
-      },
+      title: { tag: "plain_text", content: "🤖 Agent" },
       template: "blue",
     },
-    body: {
-      elements: [
-        {
-          tag: "markdown",
-          content: currentAgent
-            ? `**Current agent:** \`${currentAgent}\`\n\nChoose an agent below.`
-            : "**Choose an agent below.**",
-        },
-        ...visibleAgents.map((agent) => {
-          const isCurrent = agent.toLowerCase() === currentAgent?.toLowerCase()
-          return {
-            tag: "button",
-            text: {
-              tag: "plain_text",
-              content: `${isCurrent ? "* " : ""}${agent}`,
-            },
-            type: isCurrent ? "primary" : "default",
-            value: { action: "command_execute", command: `/agent ${agent}` },
-          }
-        }),
-        ...(truncatedCount > 0
-          ? [{
-            tag: "markdown",
-            content: `And ${truncatedCount} more. Use \`/agent {name}\` to switch directly.`,
-          }]
-          : []),
-      ],
-    },
+    body: { elements },
   }
 }
 

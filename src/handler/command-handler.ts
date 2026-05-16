@@ -10,7 +10,7 @@ import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
-import { buildResponseCard, buildProjectSelectorCard, buildProjectCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard, buildVariantSelectorCard } from "../feishu/card-builder.js"
+import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard, buildVariantSelectorCard } from "../feishu/card-builder.js"
 import { t, getLocale } from "../i18n/index.js"
 
 import type { ChannelManager } from "../channel/manager.js"
@@ -145,10 +145,9 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, payload.text, channelId)
   }
 
-  interface ProjectInfo {
+  interface Session {
     id: string
-    worktree: string
-    name?: string
+    title?: string
   }
 
   async function handleNew(
@@ -405,100 +404,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     await replyText(chatId, messageId, t(locale, "command.executing", { command, sessionId: mapping.session_id }), channelId)
   }
 
-  async function handleProjects(
-    feishuKey: string,
-    chatId: string,
-    messageId: string,
-    channelId: string,
-    args: string[],
-  ): Promise<void> {
-    const locale = getLocale(channelId)
-
-    if (args[0]) {
-      const targetProjectArg = args.join(" ").trim()
-      const resp = await fetch(`${serverUrl}/project`)
-      if (!resp.ok) {
-        throw new Error(`List projects failed: HTTP ${resp.status}`)
-      }
-
-      const projects = (await resp.json()) as ProjectInfo[]
-      const normalizedArg = targetProjectArg.replace(/\\/g, "/").toLowerCase()
-
-      const matched = projects.find((p) => {
-        const name = p.name || p.worktree.split("/").pop() || p.worktree
-        const normalizedName = name.replace(/\\/g, "/").toLowerCase()
-        const normalizedWorktree = p.worktree.replace(/\\/g, "/").toLowerCase()
-        return normalizedName === normalizedArg || normalizedWorktree === normalizedArg || p.id === normalizedArg
-      })
-
-      if (!matched) {
-        await replyText(chatId, messageId, t(locale, "command.projectCreating", { project: targetProjectArg }), channelId)
-
-        const baseDir = process.env.OPENCODE_CWD || process.cwd()
-        const newProjectDir = `${baseDir}/${targetProjectArg}`
-
-        const createResp = await fetch(`${serverUrl}/session?directory=${encodeURIComponent(newProjectDir)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: targetProjectArg }),
-        })
-
-        if (!createResp.ok) {
-          const errText = await createResp.text()
-          await replyText(chatId, messageId, t(locale, "command.projectCreateFailed", { project: targetProjectArg, error: errText }), channelId)
-          return
-        }
-
-        const newData = (await createResp.json()) as { id: string; directory?: string }
-        process.env.OPENCODE_CWD = newData.directory || newProjectDir
-        sessionManager.setMapping(feishuKey, newData.id)
-        logger.info(`/projects: created and switched to project "${targetProjectArg}" (${newData.directory || newProjectDir})`)
-        await replyText(chatId, messageId, t(locale, "command.projectCreated", { project: targetProjectArg, sessionId: newData.id }), channelId)
-        return
-      }
-
-      process.env.OPENCODE_CWD = matched.worktree
-      logger.info(`/projects: switched to project "${matched.name || matched.worktree}" (${matched.worktree})`)
-
-      const newSessionResp = await fetch(`${serverUrl}/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: matched.id }),
-      })
-
-      if (newSessionResp.ok) {
-        const data = (await newSessionResp.json()) as { id: string }
-        sessionManager.setMapping(feishuKey, data.id)
-        await replyText(chatId, messageId, t(locale, "command.projectSwitched", { project: matched.name || matched.worktree, sessionId: data.id }), channelId)
-      } else {
-        await replyText(chatId, messageId, t(locale, "command.projectSwitchedNoSession", { project: matched.name || matched.worktree }), channelId)
-      }
-      return
-    }
-
-    const resp = await fetch(`${serverUrl}/project`)
-    if (!resp.ok) {
-      throw new Error(`List projects failed: HTTP ${resp.status}`)
-    }
-
-    const projects = (await resp.json()) as ProjectInfo[]
-    if (projects.length === 0) {
-      await replyText(chatId, messageId, t(locale, "command.noProjects"), channelId)
-      return
-    }
-
-    const currentWorktree = process.env.OPENCODE_CWD || process.cwd()
-
-    const card = buildProjectCard(projects, currentWorktree)
-    await replyCard(chatId, messageId, {
-      text: projects.slice(0, 10).map((p) => {
-        const name = p.name || p.worktree.split("/").pop() || p.worktree
-        return `- ${name}`
-      }).join("\n"),
-      card,
-    }, channelId)
-  }
-
   async function handleHelp(
     chatId: string,
     messageId: string,
@@ -511,7 +416,6 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
 ${t(locale, "help.help")}
 ${t(locale, "help.new")}
 ${t(locale, "help.sessions")}
-${t(locale, "help.projects")}
 ${t(locale, "help.status")}
 ${t(locale, "help.agent")}
 ${t(locale, "help.models")}
@@ -1349,9 +1253,6 @@ ${t(locale, "help.abort")}`
           return true
         case "/sessions":
           await handleSessions(feishuKey, chatId, messageId, channelId)
-          return true
-        case "/projects":
-          await handleProjects(feishuKey, chatId, messageId, channelId, parts.slice(1))
           return true
         case "/connect": {
           const targetSessionId = parts[1]

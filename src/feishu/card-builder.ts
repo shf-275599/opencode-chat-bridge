@@ -144,11 +144,6 @@ export function buildHelpCard(): Record<string, unknown> {
         },
         {
           tag: "button",
-          text: { tag: "plain_text", content: "📂 项目 - /projects" },
-          value: { action: "command_execute", command: "/projects" },
-        },
-        {
-          tag: "button",
           text: { tag: "plain_text", content: "📊 状态 - /status" },
           value: { action: "command_execute", command: "/status" },
         },

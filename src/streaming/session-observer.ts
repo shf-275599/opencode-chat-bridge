@@ -66,6 +66,8 @@ export function createSessionObserver(
   const knownMessageIds = new Set<string>()
   // Sessions with an active streaming bridge — skip TextDelta/SessionIdle
   const busySessions = new Set<string>()
+  // Sessions already processed in this turn — skip duplicate SessionIdle from opencode
+  const settledSessions = new Set<string>()
   // Per-messageId text accumulation
   const textBuffers = new Map<string, string>()
   // Active observation state per session
@@ -110,12 +112,15 @@ export function createSessionObserver(
 
         switch (action.type) {
           case "TextDelta": {
+            settledSessions.delete(action.sessionId)
             if (!messageId) break
             const current = textBuffers.get(messageId) ?? ""
             textBuffers.set(messageId, current + action.text)
             break
           }
           case "SessionIdle": {
+            if (settledSessions.has(action.sessionId)) break
+            settledSessions.add(action.sessionId)
             flushBuffers(chatId)
             break
           }
@@ -172,6 +177,7 @@ export function createSessionObserver(
 
     markSessionBusy(sessionId: string): void {
       busySessions.add(sessionId)
+      settledSessions.delete(sessionId)
     },
 
     markSessionFree(sessionId: string): void {

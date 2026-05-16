@@ -249,17 +249,16 @@ export function buildAgentSelectorCard(
 
 
 export function buildModelSelectorCard(
-  models: Array<{ id: string; providerName: string; modelName: string }>,
+  models: Array<{ id: string; providerId: string; providerName: string; modelName: string }>,
   currentModelId?: string,
 ): Record<string, unknown> {
   const currentModel = models.find((m) => m.id === currentModelId)
-  const otherModels = models.filter((m) => m.id !== currentModelId)
 
-  const byProvider = new Map<string, typeof otherModels>()
-  for (const m of otherModels) {
-    const p = m.providerName
-    if (!byProvider.has(p)) byProvider.set(p, [])
-    byProvider.get(p)!.push(m)
+  const byProvider = new Map<string, { id: string; name: string; models: typeof models }>()
+  for (const m of models) {
+    const pid = m.providerId
+    if (!byProvider.has(pid)) byProvider.set(pid, { id: pid, name: m.providerName, models: [] })
+    byProvider.get(pid)!.models.push(m)
   }
 
   const elements: Record<string, unknown>[] = [
@@ -278,102 +277,54 @@ export function buildModelSelectorCard(
           content: "**当前模型:** 点击按钮切换",
         },
       }]),
+    { tag: "markdown", content: "**选择提供商：**" },
   ]
 
-  if (otherModels.length === 0) {
-    if (!currentModel) {
-      elements.push({ tag: "markdown", content: "暂无可用模型。" })
-    }
-    return {
-      schema: "2.0",
-      config: { wide_screen_mode: true },
-      header: { title: { tag: "plain_text", content: "🧠 Model" }, template: "indigo" },
-      body: { elements },
-    }
-  }
-
-  elements.push({ tag: "markdown", content: "**选择要切换的模型：**" })
-
-  const providers = [...byProvider.entries()]
-  const maxButtons = 10
-  const minPerProvider = 2
-
-  const perProviderButtons = new Map<string, number>()
-  let usedSlots = 0
-  for (const [name, list] of providers) {
-    const take = Math.min(minPerProvider, list.length)
-    perProviderButtons.set(name, take)
-    usedSlots += take
-  }
-
-  if (usedSlots < maxButtons) {
-    const remainingSlots = maxButtons - usedSlots
-    const providersToFill = [...providers]
-      .map(([name, list]) => ({ name, unfilled: list.length - perProviderButtons.get(name)!, list }))
-      .filter(p => p.unfilled > 0)
-      .sort((a, b) => b.unfilled - a.unfilled)
-    for (const p of providersToFill) {
-      if (remainingSlots <= 0) break
-      const extra = Math.min(remainingSlots, p.unfilled)
-      perProviderButtons.set(p.name, (perProviderButtons.get(p.name) ?? 0) + extra)
-      usedSlots += extra
-      if (usedSlots >= maxButtons) break
-    }
-  }
-
-  let totalShown = 0
-  for (const [provider, providerModels] of providers) {
-    const take = perProviderButtons.get(provider) ?? 0
-    if (take === 0) continue
-
-    const slice = providerModels.slice(0, take)
-
-    elements.push({ tag: "hr" })
-    elements.push({ tag: "markdown", content: `**${provider}**` })
-
-    for (const m of slice) {
-      elements.push({
-        tag: "button",
-        text: { tag: "plain_text", content: m.modelName },
-        type: "default",
-        value: { action: "command_execute", command: `/models ${m.id}` },
-      })
-      totalShown++
-    }
-  }
-
-  const shownIds = new Set<string>()
-  for (const [provider, providerModels] of providers) {
-    const take = perProviderButtons.get(provider) ?? 0
-    for (let i = 0; i < take && i < providerModels.length; i++) {
-      shownIds.add(providerModels[i]!.id)
-    }
-  }
-
-  const allRemaining = otherModels.filter(m => !shownIds.has(m.id))
-  const overflowCount = allRemaining.length
-
-  if (overflowCount > 0) {
-    elements.push({ tag: "hr" })
+  const providerEntries = [...byProvider.entries()]
+    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+  for (const [pid, info] of providerEntries) {
     elements.push({
-      tag: "overflow",
-      options: allRemaining.slice(0, 10).map((m) => ({
-        text: { tag: "plain_text", content: `${m.providerName} / ${m.modelName}` },
-        value: `/models ${m.id}`,
-      })),
+      tag: "button",
+      text: { tag: "plain_text", content: `${info.name} (${info.models.length})` },
+      type: "primary",
+      value: { action: "command_execute", command: `/models provider:${pid}` },
     })
-    if (overflowCount > 10) {
-      elements.push({
-        tag: "markdown",
-        content: `_还有 ${overflowCount - 10} 个模型，使用 \`/models provider/model\` 直接切换_`,
-      })
-    }
   }
 
   return {
     schema: "2.0",
     config: { wide_screen_mode: true },
     header: { title: { tag: "plain_text", content: "🧠 Model" }, template: "indigo" },
+    body: { elements },
+  }
+}
+
+export function buildProviderModelCard(
+  providerName: string,
+  models: Array<{ id: string; providerName: string; modelName: string }>,
+  currentModelId?: string,
+): Record<string, unknown> {
+  const elements: Record<string, unknown>[] = [
+    {
+      tag: "markdown",
+      content: `**${providerName}** — 选择模型：`,
+    },
+  ]
+
+  for (const m of models.sort((a, b) => a.modelName.localeCompare(b.modelName))) {
+    const isCurrent = m.id === currentModelId
+    elements.push({
+      tag: "button",
+      text: { tag: "plain_text", content: `${isCurrent ? "▶ " : ""}${m.modelName}` },
+      type: isCurrent ? "primary" : "default",
+      value: { action: "command_execute", command: `/models ${m.id}` },
+    })
+  }
+
+  return {
+    schema: "2.0",
+    config: { wide_screen_mode: true },
+    header: { title: { tag: "plain_text", content: `🧠 ${providerName}` }, template: "indigo" },
     body: { elements },
   }
 }

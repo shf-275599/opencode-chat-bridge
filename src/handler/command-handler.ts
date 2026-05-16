@@ -10,7 +10,7 @@ import type { SessionManager } from "../session/session-manager.js"
 import type { FeishuApiClient } from "../feishu/api-client.js"
 import type { Logger } from "../utils/logger.js"
 import type { SessionMapping } from "../types.js"
-import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard, buildVariantSelectorCard } from "../feishu/card-builder.js"
+import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelSelectorCard, buildAgentSelectorCard, buildVariantSelectorCard, buildProviderModelCard } from "../feishu/card-builder.js"
 import { t, getLocale } from "../i18n/index.js"
 
 import type { ChannelManager } from "../channel/manager.js"
@@ -888,8 +888,12 @@ ${t(locale, "help.abort")}`
 
   async function getCurrentModelFromFile(): Promise<string | undefined> {
     const { favorites, recent } = await getFavoriteAndRecentFromFile()
-    if (favorites.length > 0) return favorites[0]
-    if (recent.length > 0) return recent[0]
+    const stripVariant = (id: string) => {
+      const hashIdx = id.indexOf("#")
+      return hashIdx > 0 ? id.slice(0, hashIdx) : id
+    }
+    if (favorites.length > 0) return stripVariant(favorites[0]!)
+    if (recent.length > 0) return stripVariant(recent[0]!)
     return undefined
   }
 
@@ -909,6 +913,24 @@ ${t(locale, "help.abort")}`
 
     const models = await listModels(feishuKey)
     const targetRaw = args[0]
+
+    if (targetRaw?.startsWith("provider:")) {
+      const providerId = targetRaw.slice("provider:".length)
+      const providerModels = models.filter(m => m.providerId === providerId)
+      const providerName = providerModels[0]?.providerName || providerId
+      if (channelId === "feishu" && providerModels.length > 0) {
+        const fileModelId = await getCurrentModelFromFile()
+        const localModelId = detectCurrentModel(mapping)
+        const card = buildProviderModelCard(providerName, providerModels, fileModelId ?? localModelId)
+        await replyCard(chatId, messageId, {
+          text: providerModels.map(m => m.id).join("\n"),
+          card,
+        }, channelId)
+      } else {
+        await replyText(chatId, messageId, providerModels.map(m => m.id).join("\n"), channelId)
+      }
+      return
+    }
 
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
       const fileModelId = await getCurrentModelFromFile()

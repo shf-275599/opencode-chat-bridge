@@ -408,7 +408,9 @@ export function createStreamingBridge(
             settled = true
             clearTimeout(firstEventTimer)
             removeListener(eventListeners, sessionId, myListener)
-            if (card) card.close().catch(() => { })
+            if (card) card.close().catch((err) => {
+              logger.warn("card.close failed in timeout fallback", { err })
+            })
             reject(err)
           })
       })

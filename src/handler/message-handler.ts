@@ -313,62 +313,6 @@ export function createMessageHandler(
     ? new MessageDebouncer(deps.debounceMs, handleBatchFlush, logger)
     : null
 
-  /** Shared: resolve session, fire first-bind notification, wire observer. Returns sessionId. */
-  async function resolveSession(feishuKey: string, chatId: string, channelId: ChannelId): Promise<string> {
-    const sid = await sessionManager.getOrCreate(feishuKey)
-    ownedSessions.add(sid)
-    if (!notifiedFeishuKeys.has(feishuKey)) {
-      notifiedFeishuKeys.add(feishuKey)
-      const bindText = "已连接 session: " + sid
-      const plugin = deps.channelManager?.getChannel(channelId)
-      if (plugin?.outbound) {
-        await plugin.outbound.sendText({ address: chatId }, bindText)
-      } else {
-        await feishuClient.sendMessage(chatId, {
-          msg_type: "text",
-          content: JSON.stringify({ text: bindText }),
-        })
-      }
-    }
-    if (deps.observer) deps.observer.observe(sid, chatId)
-    return sid
-  }
-
-  /** Shared: build POST body and return a function that POSTs with 404 self-healing. */
-  function createPostFn(feishuKey: string, sessionIdRef: { current: string }, parts: Array<{ type: string; text: string }>) {
-    const preferredAgent = sessionManager.getSession(feishuKey)?.agent
-    const postBody = JSON.stringify({ parts, agent: preferredAgent })
-
-    async function postToOpencode(): Promise<string> {
-      const url = `${serverUrl}/session/${sessionIdRef.current}/message`
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: postBody,
-      })
-      if (resp.status === 404) throw new SessionGoneError(sessionIdRef.current, 404)
-      if (!resp.ok) throw new Error(`Prompt HTTP error: ${resp.status}`)
-      const rawText = await resp.text()
-      logger.info(`Prompt response (${rawText.length} bytes): ${rawText.slice(0, 200)}`)
-      return rawText
-    }
-
-    async function postWithRecovery(): Promise<string> {
-      try { return await postToOpencode() } catch (err) {
-        if (!(err instanceof SessionGoneError)) throw err
-        logger.warn(`Session ${sessionIdRef.current} returned 404 — clearing stale mapping and retrying`)
-        sessionManager.deleteMapping(feishuKey)
-        const newSid = await sessionManager.getOrCreate(feishuKey, preferredAgent)
-        ownedSessions.add(newSid)
-        logger.info(`Session self-healed: ${sessionIdRef.current} → ${newSid}`)
-        sessionIdRef.current = newSid
-        return await postToOpencode()
-      }
-    }
-
-    return { postToOpencode, postWithRecovery }
-  }
-
   async function handleMessage(
     event: FeishuMessageEvent,
   ): Promise<void> {
@@ -606,7 +550,26 @@ export function createMessageHandler(
     }
 
     // ── 6. Get/create session ──
-    let sessionId = await resolveSession(feishuKey, event.chat_id, channelId)
+    let sessionId = await sessionManager.getOrCreate(feishuKey)
+    ownedSessions.add(sessionId)
+    // ── 6a. First-bind notification ──
+    if (!notifiedFeishuKeys.has(feishuKey)) {
+      notifiedFeishuKeys.add(feishuKey)
+      const bindText = "已连接 session: " + sessionId
+      if (plugin?.outbound) {
+        await plugin.outbound.sendText({ address: event.chat_id }, bindText)
+      } else {
+        await feishuClient.sendMessage(event.chat_id, {
+          msg_type: "text",
+          content: JSON.stringify({ text: bindText }),
+        })
+      }
+    }
+
+    // ── 6b. Wire observer ──
+    if (deps.observer) {
+      deps.observer.observe(sessionId, event.chat_id)
+    }
 
     // ── 7. Build parts ──
     const parts: Array<{ type: string; text: string }> = [
@@ -639,8 +602,47 @@ export function createMessageHandler(
     }
 
     // ── 8. Build the POST-to-opencode function ──
-    const sessionRef = { current: sessionId }
-    const { postToOpencode, postWithRecovery } = createPostFn(feishuKey, sessionRef, parts)
+    let currentSessionId = sessionId
+    const preferredAgent = sessionManager.getSession(feishuKey)?.agent
+    const postBody = JSON.stringify({ parts, agent: preferredAgent })
+
+    async function postToOpencode(): Promise<string> {
+      const url = `${serverUrl}/session/${currentSessionId}/message`
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: postBody,
+      })
+      if (resp.status === 404) {
+        throw new SessionGoneError(currentSessionId, 404)
+      }
+      if (!resp.ok) {
+        throw new Error(`Prompt HTTP error: ${resp.status}`)
+      }
+      const rawText = await resp.text()
+      logger.info(
+        `Prompt response (${rawText.length} bytes): ${rawText.slice(0, 200)}`,
+      )
+      return rawText
+    }
+
+    /** Recover from 404: clear stale mapping, re-resolve session, retry POST once. */
+    async function postWithRecovery(): Promise<string> {
+      try {
+        return await postToOpencode()
+      } catch (err) {
+        if (!(err instanceof SessionGoneError)) throw err
+        logger.warn(`Session ${currentSessionId} returned 404 — clearing stale mapping and retrying`)
+        sessionManager.deleteMapping(feishuKey)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey, preferredAgent)
+        ownedSessions.add(newSessionId)
+        logger.info(`Session self-healed: ${currentSessionId} → ${newSessionId}`)
+        currentSessionId = newSessionId
+        sessionId = newSessionId
+        // Retry once with new session
+        return await postToOpencode()
+      }
+    }
 
     // ── 9. Try streaming bridge (registers listener BEFORE POST) → sync fallback ──
     if (deps.streamingBridge) {
@@ -662,7 +664,7 @@ export function createMessageHandler(
         }
 
         // Capture current session in closure for postToOpencode
-        sessionRef.current = sid
+        currentSessionId = sid
 
         try {
           const channelId = getChannelId(event)
@@ -705,7 +707,6 @@ export function createMessageHandler(
           ownedSessions.add(newSessionId)
           logger.info(`Session self-healed (streaming): ${sessionId} → ${newSessionId}`)
           sessionId = newSessionId
-          sessionRef.current = newSessionId
 
           try {
             await runStreamingBridge(newSessionId)
@@ -728,7 +729,6 @@ export function createMessageHandler(
         }
         try {
           const rawText = await postWithRecovery()
-          sessionId = sessionRef.current
           await handleSyncFallback(
             rawText,
             sessionId,
@@ -757,7 +757,6 @@ export function createMessageHandler(
     let rawText: string
     try {
       rawText = await postWithRecovery()
-      sessionId = sessionRef.current
     } catch (err) {
       logger.error(`POST to opencode failed: ${err}`)
       if (thinkingMessageId) {
@@ -844,8 +843,30 @@ export function createMessageHandler(
     )
 
     // Get/create session
-    const channelId2 = getChannelId(event)
-    let sessionId = await resolveSession(feishuKey, event.chat_id, channelId2)
+    let sessionId = await sessionManager.getOrCreate(feishuKey)
+    ownedSessions.add(sessionId)
+
+    // First-bind notification
+    if (!notifiedFeishuKeys.has(feishuKey)) {
+      notifiedFeishuKeys.add(feishuKey)
+      const bindMsg = "已连接 session: " + sessionId
+      const feishuPlugin = deps.channelManager?.getChannel("feishu" as ChannelId)
+      const plugin = feishuPlugin
+
+      if (plugin?.outbound) {
+        await plugin.outbound.sendText({ address: event.chat_id }, bindMsg)
+      } else {
+        await feishuClient.sendMessage(event.chat_id, {
+          msg_type: "text",
+          content: JSON.stringify({ text: bindMsg }),
+        })
+      }
+    }
+
+    // Wire observer
+    if (deps.observer) {
+      deps.observer.observe(sessionId, event.chat_id)
+    }
 
     // Build parts from merged text
     const parts: Array<{ type: string; text: string }> = [
@@ -880,8 +901,46 @@ export function createMessageHandler(
     }
 
     // Build POST function
-    const sessionRef2 = { current: sessionId }
-    const { postToOpencode, postWithRecovery } = createPostFn(feishuKey, sessionRef2, parts)
+    let currentSessionId = sessionId
+    const postBody = JSON.stringify({ parts })
+
+    async function postToOpencode(): Promise<string> {
+      const url = `${serverUrl}/session/${currentSessionId}/message`
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: postBody,
+      })
+      if (resp.status === 404) {
+        throw new SessionGoneError(currentSessionId, 404)
+      }
+      if (!resp.ok) {
+        throw new Error(`Prompt HTTP error: ${resp.status}`)
+      }
+      const rawText = await resp.text()
+      logger.info(
+        `Prompt response (${rawText.length} bytes): ${rawText.slice(0, 200)}`,
+      )
+      return rawText
+    }
+
+    /** Recover from 404: clear stale mapping, re-resolve session, retry POST once. */
+    async function postWithRecovery(): Promise<string> {
+      try {
+        return await postToOpencode()
+      } catch (err) {
+        if (!(err instanceof SessionGoneError)) throw err
+        logger.warn(`Session ${currentSessionId} returned 404 in debounced path — clearing stale mapping and retrying`)
+        sessionManager.deleteMapping(feishuKey)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey)
+        ownedSessions.add(newSessionId)
+        logger.info(`Session self-healed (debounced): ${currentSessionId} → ${newSessionId}`)
+        currentSessionId = newSessionId
+        sessionId = newSessionId
+        // Retry once with new session
+        return await postToOpencode()
+      }
+    }
 
     // Use streaming bridge or event-driven/sync path (same as non-debounced flow)
     if (deps.streamingBridge) {
@@ -905,7 +964,7 @@ export function createMessageHandler(
         }
 
         // Capture current session in closure for postToOpencode
-        sessionRef2.current = sid
+        currentSessionId = sid
 
         try {
           const channelId = getChannelId(event)
@@ -942,7 +1001,6 @@ export function createMessageHandler(
           ownedSessions.add(newSessionId)
           logger.info(`Session self-healed (debounced streaming): ${sessionId} → ${newSessionId}`)
           sessionId = newSessionId
-          sessionRef2.current = newSessionId
 
           try {
             await runStreamingBridge(newSessionId)
@@ -961,7 +1019,6 @@ export function createMessageHandler(
         }
         try {
           const rawText = await postWithRecovery()
-          sessionId = sessionRef2.current
           await handleSyncFallback(rawText, sessionId, mergedText, event, thinkingMessageId)
         } catch (postErr) {
           logger.error(`Sync fallback POST also failed in debounced path: ${postErr}`)
@@ -985,7 +1042,6 @@ export function createMessageHandler(
     let rawText: string
     try {
       rawText = await postWithRecovery()
-      sessionId = sessionRef2.current
     } catch (err) {
       logger.error(`POST to opencode failed in debounced path: ${err}`)
       if (thinkingMessageId) {

@@ -63,6 +63,7 @@ interface AgentInfo {
   name: string
   description?: string
   mode: "subagent" | "primary" | "all"
+  hidden?: boolean | null
 }
 
 interface VariantInfo {
@@ -797,7 +798,7 @@ ${t(locale, "help.abort")}`
     }
 
     const agents = (await resp.json()) as AgentInfo[]
-    const available = agents.filter((agent) => agent.mode === "primary" || agent.mode === "all")
+    const available = agents.filter((agent) => (agent.mode === "primary" || agent.mode === "all") && !agent.hidden)
     const names = available.map((agent) => agent.name)
     const current = mapping.agent || "build"
     const targetRaw = args[0]

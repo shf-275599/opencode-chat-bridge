@@ -102,10 +102,60 @@ export function createFeishuWSGateway(options: WSClientOptions) {
   })
 
   return {
-    start() {
-      logger.info("Starting Feishu WebSocket connection...")
-      wsClient.start({ eventDispatcher })
-      logger.info("Feishu WebSocket client started (long-polling Feishu servers)")
+    /**
+     * Start the Feishu WebSocket connection.
+     * Returns a Promise that resolves when the connection is established.
+     * The promise rejects if the initial connection fails.
+     * When `signal` is aborted, the connection is stopped and the promise resolves.
+     */
+    start(signal?: AbortSignal): Promise<void> {
+      return new Promise<void>((resolve, reject) => {
+        let settled = false
+
+        const done = (err?: Error) => {
+          if (settled) return
+          settled = true
+          if (signal) signal.removeEventListener("abort", onAbort)
+          if (err) reject(err)
+          else resolve()
+        }
+
+        const onAbort = () => {
+          logger.info("Feishu WebSocket aborted via signal")
+          try {
+            // Attempt graceful disconnect if SDK supports it
+            ;(wsClient as any).stop?.()
+          } catch { /* best-effort */ }
+          done()
+        }
+
+        if (signal?.aborted) {
+          done()
+          return
+        }
+
+        if (signal) {
+          signal.addEventListener("abort", onAbort)
+        }
+
+        try {
+          logger.info("Starting Feishu WebSocket connection...")
+          wsClient.start({ eventDispatcher })
+          logger.info("Feishu WebSocket client started (long-polling Feishu servers)")
+          // Connection initiated — the SDK manages ongoing reconnection internally.
+          // We keep the promise pending until signal.aborted triggers cleanup.
+        } catch (err) {
+          done(err instanceof Error ? err : new Error(String(err)))
+        }
+      })
+    },
+
+    /** Stop the WebSocket connection gracefully. */
+    stop(): void {
+      try {
+        ;(wsClient as any).stop?.()
+      } catch { /* best-effort */ }
+      logger.info("Feishu WebSocket client stopped")
     },
   }
 }

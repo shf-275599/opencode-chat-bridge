@@ -80,24 +80,48 @@ export class FeishuPlugin extends BaseChannelPlugin {
       resolveAccount: (_id: string) => this.appConfig,
     }
 
-    // 2. Gateway adapter
+    // 2. Gateway adapter (with exponential-backoff reconnection)
     this.gateway = {
       startAccount: async (_accountId: string, _signal: AbortSignal): Promise<void> => {
         if (!this.appConfig.feishu) {
           throw new Error("Feishu config missing but FeishuPlugin was started")
         }
-        const gw = createFeishuWSGateway({
-          appId: this.appConfig.feishu.appId,
-          appSecret: this.appConfig.feishu.appSecret,
-          onMessage: async (event) => {
-            this.logger.info(`Gateway received message: ${event.message_id}`)
-            if (deps.onMessage) {
-              await deps.onMessage(event)
-            }
-          },
-          onCardAction: deps.onCardAction,
-        })
-        gw.start()
+
+        const MAX_RETRIES = 5
+        let delay = 1_000
+        let retries = 0
+
+        while (!_signal.aborted) {
+          const gw = createFeishuWSGateway({
+            appId: this.appConfig.feishu.appId,
+            appSecret: this.appConfig.feishu.appSecret,
+            onMessage: async (event) => {
+              this.logger.info(`Gateway received message: ${event.message_id}`)
+              if (deps.onMessage) {
+                await deps.onMessage(event)
+              }
+            },
+            onCardAction: deps.onCardAction,
+          })
+
+          try {
+            await gw.start(_signal)
+            if (_signal.aborted) break
+            this.logger.warn("Feishu WebSocket disconnected, reconnecting...")
+          } catch (err) {
+            if (_signal.aborted) break
+            this.logger.warn(`Feishu WebSocket error: ${err}. Retrying in ${delay}ms...`)
+          }
+
+          retries++
+          if (retries >= MAX_RETRIES) {
+            this.logger.error(`Feishu WebSocket reconnection failed after ${MAX_RETRIES} attempts, giving up`)
+            break
+          }
+
+          await new Promise((r) => setTimeout(r, delay))
+          delay = Math.min(delay * 2, 30_000)
+        }
       },
     }
 

@@ -298,10 +298,12 @@ async function main(): Promise<void> {
       }
       // Handle string value directly (e.g., overflow options)
       const rawVal = action.action?.value as unknown
-      if (typeof rawVal === "string" && rawVal.startsWith("/")) {
+      const overflowOpt = action.action?.option as string | undefined
+      const cmdStr = typeof rawVal === "string" ? rawVal : overflowOpt
+      if (cmdStr && typeof cmdStr === "string" && cmdStr.startsWith("/")) {
         const chatId = action.open_chat_id
         const messageId = action.open_message_id
-        await commandHandler(chatId, chatId, messageId, rawVal)
+        await commandHandler(chatId, chatId, messageId, cmdStr)
         return
       }
       // Handle object with command property

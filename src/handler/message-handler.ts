@@ -593,8 +593,17 @@ export function createMessageHandler(
 
     // ── 8. Build the POST-to-opencode function ──
     let currentSessionId = sessionId
-    const preferredAgent = sessionManager.getSession(feishuKey)?.agent
-    const postBody = JSON.stringify({ parts, agent: preferredAgent })
+    const mapping = sessionManager.getSession(feishuKey)
+    const preferredAgent = mapping?.agent
+    const preferredModel = mapping?.model ? (() => {
+      const raw = mapping.model!
+      const hashIdx = raw.indexOf("#")
+      const modelStr = hashIdx > 0 ? raw.slice(0, hashIdx) : raw
+      const [pid, mid] = modelStr.includes("/") ? modelStr.split("/") : [modelStr, modelStr]
+      const variant = hashIdx > 0 ? raw.slice(hashIdx + 1) : undefined
+      return { providerID: pid, modelID: mid, variant }
+    })() : undefined
+    const postBody = JSON.stringify({ parts, agent: preferredAgent, ...(preferredModel ? { model: { providerID: preferredModel.providerID, modelID: preferredModel.modelID }, variant: preferredModel.variant } : {}) })
 
     async function postToOpencode(): Promise<string> {
       const url = `${serverUrl}/session/${currentSessionId}/message`
@@ -892,7 +901,17 @@ export function createMessageHandler(
 
     // Build POST function
     let currentSessionId = sessionId
-    const postBody = JSON.stringify({ parts })
+    const postMapping = sessionManager.getSession(feishuKey)
+    const postAgent = postMapping?.agent
+    const postModel = postMapping?.model ? (() => {
+      const raw = postMapping.model!
+      const hashIdx = raw.indexOf("#")
+      const modelStr = hashIdx > 0 ? raw.slice(0, hashIdx) : raw
+      const [pid, mid] = modelStr.includes("/") ? modelStr.split("/") : [modelStr, modelStr]
+      const variant = hashIdx > 0 ? raw.slice(hashIdx + 1) : undefined
+      return { providerID: pid, modelID: mid, variant }
+    })() : undefined
+    const postBody = JSON.stringify({ parts, agent: postAgent, ...(postModel ? { model: { providerID: postModel.providerID, modelID: postModel.modelID }, variant: postModel.variant } : {}) })
 
     async function postToOpencode(): Promise<string> {
       const url = `${serverUrl}/session/${currentSessionId}/message`

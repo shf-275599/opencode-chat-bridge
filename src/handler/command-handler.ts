@@ -14,7 +14,6 @@ import { buildResponseCard, buildProjectSelectorCard, buildHelpCard, buildModelS
 import { t, getLocale } from "../i18n/index.js"
 
 import type { ChannelManager } from "../channel/manager.js"
-import type { ChannelId } from "../channel/types.js"
 
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
@@ -102,7 +101,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   }
 
   function getPlugin(channelId: string) {
-    return deps.channelManager?.getChannel(channelId as ChannelId)
+    return deps.channelManager?.getChannel(channelId as any)
   }
 
   async function replyText(

@@ -20,7 +20,6 @@ import { createLogger } from "./utils/logger.js"
 import type { EventListenerMap } from "./utils/event-listeners.js"
 import type { FeishuCardAction } from "./types.js"
 import { createFeishuApiClient } from "./feishu/api-client.js"
-import type { FeishuApiClient } from "./feishu/api-client.js"
 import { CardKitClient } from "./feishu/cardkit-client.js"
 import { MessageDedup } from "./feishu/message-dedup.js"
 import { createSessionManager } from "./session/session-manager.js"
@@ -30,7 +29,6 @@ import { SubAgentTracker } from "./streaming/subagent-tracker.js"
 import { createMessageHandler } from "./handler/message-handler.js"
 import { createStreamingBridge } from "./handler/streaming-integration.js"
 import { createCommandHandler } from "./handler/command-handler.js"
-import type { CommandHandlerEx } from "./handler/command-handler.js"
 import { createOutboundMediaHandler } from "./handler/outbound-media.js"
 import { createSessionObserver } from "./streaming/session-observer.js"
 import { addListener, removeListener } from "./utils/event-listeners.js"
@@ -38,7 +36,6 @@ import { createSubAgentCardHandler } from "./streaming/subagent-card.js"
 import { createInteractiveHandler } from "./handler/interactive-handler.js"
 import { createInteractivePoller } from "./handler/interactive-poller.js"
 import { createFeishuGateway } from "./feishu/webhook-server.js"
-import type { WebhookServer } from "./feishu/webhook-server.js"
 import { FeishuPlugin } from "./channel/feishu/feishu-plugin.js"
 import { ChannelManager } from "./channel/manager.js"
 import type { ChannelId } from "./channel/types.js"
@@ -143,8 +140,8 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   logger.info("Phase 4: Creating shared services...")
 
-  let feishuClient: FeishuApiClient | undefined
-  let cardkitClient: CardKitClient | undefined
+  let feishuClient: any = undefined
+  let cardkitClient: any = undefined
   let botOpenId: string | undefined
 
   if (config.feishu) {
@@ -190,7 +187,7 @@ async function main(): Promise<void> {
 
   const dedup = new MessageDedup({ db: db.sessions, ttlMs: 60_000 })
 
-  const progressTracker = createProgressTracker({ feishuClient })
+  const progressTracker = createProgressTracker({ feishuClient: feishuClient as any })
 
   const ownedSessions = new Set<string>()
   const eventListeners: EventListenerMap = new Map()
@@ -207,7 +204,7 @@ async function main(): Promise<void> {
 
   const streamingBridge = createStreamingBridge({
     cardkitClient,
-    feishuClient: feishuClient!,
+    feishuClient,
     subAgentTracker,
     logger,
     seenInteractiveIds,
@@ -216,7 +213,7 @@ async function main(): Promise<void> {
   })
 
   const observer = createSessionObserver({
-    feishuClient: feishuClient!,
+    feishuClient,
     eventProcessor,
     addListener: (sessionId, fn) => addListener(eventListeners, sessionId, fn),
     removeListener: (sessionId, fn) => removeListener(eventListeners, sessionId, fn),
@@ -225,13 +222,13 @@ async function main(): Promise<void> {
   })
 
   const subAgentCardHandler = config.feishu
-    ? createSubAgentCardHandler({ subAgentTracker, feishuClient: feishuClient!, logger })
+    ? createSubAgentCardHandler({ subAgentTracker, feishuClient, logger })
     : undefined
 
   const commandHandler = createCommandHandler({
     serverUrl,
     sessionManager,
-    feishuClient: feishuClient!,
+    feishuClient,
     logger,
     channelManager,
   })
@@ -241,14 +238,14 @@ async function main(): Promise<void> {
     sessionManager,
     dedup,
     eventProcessor,
-    feishuClient: feishuClient!,
+    feishuClient,
     progressTracker,
     eventListeners,
     ownedSessions,
     logger,
     streamingBridge,
     observer,
-    commandHandler: commandHandler as unknown as CommandHandlerEx,
+    commandHandler: commandHandler as any,
     botOpenId,
     outboundMedia,
     debounceMs: config.messageDebounceMs,
@@ -266,7 +263,7 @@ async function main(): Promise<void> {
   if (config.feishu && observer) {
     interactivePoller = createInteractivePoller({
       serverUrl,
-      feishuClient: feishuClient!,
+      feishuClient,
       logger,
       getChatForSession: (sessionId) => observer.getChatForSession(sessionId),
       seenInteractiveIds,
@@ -291,8 +288,7 @@ async function main(): Promise<void> {
         return subAgentCardHandler?.(action)
       }
       if (actionType === "command_execute") {
-        const value = action.action?.value as Record<string, string> | undefined
-        const cmd = value?.command
+        const cmd = (action.action?.value as any)?.command
         if (cmd) {
           const chatId = action.open_chat_id
           const messageId = action.open_message_id
@@ -309,14 +305,11 @@ async function main(): Promise<void> {
         return
       }
       // Handle object with command property
-      if (rawVal && typeof rawVal === "object" && "command" in rawVal) {
-        const obj = rawVal as Record<string, unknown>
-        if (typeof obj.command === "string" && obj.command.startsWith("/")) {
-          const chatId = action.open_chat_id
-          const messageId = action.open_message_id
-          await commandHandler(chatId, chatId, messageId, obj.command)
-          return
-        }
+      if (rawVal && typeof rawVal === "object" && "command" in rawVal && typeof (rawVal as any).command === "string" && (rawVal as any).command.startsWith("/")) {
+        const chatId = action.open_chat_id
+        const messageId = action.open_message_id
+        await commandHandler(chatId, chatId, messageId, (rawVal as any).command)
+        return
       }
     }
 
@@ -402,7 +395,7 @@ async function main(): Promise<void> {
   if (config.feishu && feishuClient && cardkitClient) {
     const feishuPlugin = new FeishuPlugin({
       appConfig: config,
-      feishuClient: feishuClient!,
+      feishuClient,
       cardkitClient,
       logger,
       onMessage: handleMessage,
@@ -435,7 +428,7 @@ async function main(): Promise<void> {
     logger.error(`SSE loop crashed unexpectedly: ${err}`)
   })
 
-  let webhookServer: WebhookServer | undefined
+  let webhookServer: any = undefined
   if (config.feishu) {
     // Start webhook server for card action callbacks (non-blocking fallback)
     logger.info("Phase 7b: Starting webhook server for card actions...")
@@ -465,7 +458,7 @@ async function main(): Promise<void> {
       config: config.heartbeat,
       sessionManager,
       serverUrl,
-      feishuClient: feishuClient!,
+      feishuClient,
       logger,
     })
     heartbeatService.start()
@@ -489,7 +482,7 @@ async function main(): Promise<void> {
         fullMessage,
       )
       logger.info(`[sendTaskDelivery] Message sent via plugin`)
-    } else if (delivery.channelId === "feishu" && feishuClient) {
+    } else if (delivery.channelId === "feishu") {
       logger.info(`[sendTaskDelivery] Using feishuClient directly`)
       await feishuClient.sendMessage(delivery.chatId, {
         msg_type: "text",

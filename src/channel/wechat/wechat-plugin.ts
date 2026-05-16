@@ -19,18 +19,11 @@ import type {
 } from "../types.js"
 import type { AppConfig } from "../../utils/config.js"
 import type { Logger } from "../../utils/logger.js"
-import type { FeishuMessageEvent } from "../../types.js"
-
-/** WeChat channel event extends FeishuMessageEvent with channel routing metadata. */
-export interface WechatChannelEvent extends FeishuMessageEvent {
-  _channelId: "wechat"
-  _rawMessage: IncomingMessage
-}
 
 interface WechatPluginDeps {
   appConfig: AppConfig
   logger: Logger
-  onMessage?: (event: WechatChannelEvent) => Promise<void>
+  onMessage?: (event: any) => Promise<void>
 }
 
 export class WechatPlugin extends BaseChannelPlugin {
@@ -108,7 +101,7 @@ export class WechatPlugin extends BaseChannelPlugin {
           this.logger.info(`[WechatPlugin] Received message: userId=${msg.userId}, type=${msg.type}, text="${msg.text}"`)
 
           if (deps.onMessage) {
-            const event: WechatChannelEvent = {
+            const event = {
               event_id: msg.raw.message_id?.toString() || crypto.randomUUID(),
               event_type: "message",
               chat_id: msg.userId,
@@ -164,8 +157,8 @@ export class WechatPlugin extends BaseChannelPlugin {
     }
 
     this.messaging = {
-      normalizeInbound: (raw: WechatChannelEvent): NormalizedMessage => {
-        const msg = raw._rawMessage
+      normalizeInbound: (raw: any): NormalizedMessage => {
+        const msg = raw._rawMessage as IncomingMessage
         return {
           messageId: msg.raw.message_id?.toString() || "",
           senderId: msg.userId,

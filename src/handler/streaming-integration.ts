@@ -11,8 +11,6 @@ import { StreamingCardSession } from "../streaming/streaming-card.js"
 import { buildResponseCard } from "../feishu/card-builder.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
 import type { StreamingSession } from "../channel/types.js"
-import type { ChannelManager } from "../channel/manager.js"
-import type { ChannelId } from "../channel/types.js"
 
 // ── Types ──
 
@@ -23,7 +21,7 @@ export interface StreamingBridgeDeps {
   logger: Logger
   seenInteractiveIds: Set<string>
   outboundMedia?: OutboundMediaHandler
-  channelManager?: ChannelManager
+  channelManager?: any // ChannelManager
 }
 
 export interface StreamingBridge {
@@ -68,7 +66,7 @@ export function createStreamingBridge(
       let cardStartPromise: Promise<void> | null = null
       let streamSession: StreamingSession | null = null
 
-      const plugin = channelManager?.getChannel(channelId as ChannelId)
+      const plugin = channelManager?.getChannel(channelId)
       logger.info(`@@@@@ STREAMING BRIDGE V2 @@@@@ channelId=${channelId} plugin=${!!plugin}`)
       logger.info(`StreamingBridge handleMessage: sessionId=${sessionId}, channelId=${channelId}, pluginFound=${!!plugin}, outboundFound=${!!plugin?.outbound}`)
 

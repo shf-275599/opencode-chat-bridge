@@ -255,72 +255,93 @@ export function buildModelSelectorCard(
   const currentModel = models.find((m) => m.id === currentModelId)
   const otherModels = models.filter((m) => m.id !== currentModelId)
 
+  const byProvider = new Map<string, typeof otherModels>()
+  for (const m of otherModels) {
+    const p = m.providerName
+    if (!byProvider.has(p)) byProvider.set(p, [])
+    byProvider.get(p)!.push(m)
+  }
+
+  const elements: Record<string, unknown>[] = [
+    ...(currentModel
+      ? [{
+        tag: "div",
+        text: {
+          tag: "lark_md",
+          content: `**当前模型:** ${currentModel.providerName} / ${currentModel.modelName}`,
+        },
+      }]
+      : [{
+        tag: "div",
+        text: {
+          tag: "lark_md",
+          content: "**当前模型:** 点击按钮切换",
+        },
+      }]),
+  ]
+
+  if (otherModels.length === 0) {
+    if (!currentModel) {
+      elements.push({ tag: "markdown", content: "暂无可用模型。" })
+    }
+    return {
+      schema: "2.0",
+      config: { wide_screen_mode: true },
+      header: { title: { tag: "plain_text", content: "🧠 Model" }, template: "indigo" },
+      body: { elements },
+    }
+  }
+
+  elements.push({ tag: "markdown", content: "**选择要切换的模型：**" })
+
+  let totalShown = 0
+  const maxButtons = 8
+
+  for (const [provider, providerModels] of byProvider) {
+    if (totalShown >= maxButtons) break
+    const remaining = maxButtons - totalShown
+    const slice = providerModels.slice(0, remaining)
+    if (slice.length === 0) continue
+
+    elements.push({ tag: "hr" })
+    elements.push({ tag: "markdown", content: `**${provider}**` })
+
+    for (const m of slice) {
+      elements.push({
+        tag: "button",
+        text: { tag: "plain_text", content: m.modelName },
+        type: "default",
+        value: { action: "command_execute", command: `/models ${m.id}` },
+      })
+    }
+    totalShown += slice.length
+  }
+
+  const allRemaining = otherModels.slice(totalShown)
+  const overflowCount = allRemaining.length
+
+  if (overflowCount > 0) {
+    elements.push({ tag: "hr" })
+    elements.push({
+      tag: "overflow",
+      options: allRemaining.slice(0, 10).map((m) => ({
+        text: { tag: "plain_text", content: `${m.providerName} / ${m.modelName}` },
+        value: `/models ${m.id}`,
+      })),
+    })
+    if (overflowCount > 10) {
+      elements.push({
+        tag: "markdown",
+        content: `_还有 ${overflowCount - 10} 个模型，使用 \`/models provider/model\` 直接切换_`,
+      })
+    }
+  }
+
   return {
     schema: "2.0",
     config: { wide_screen_mode: true },
-    header: {
-      title: {
-        tag: "plain_text",
-        content: "🧠 Model",
-      },
-      template: "indigo",
-    },
-    body: {
-      elements: [
-        ...(currentModel
-          ? [{
-            tag: "div",
-            text: {
-              tag: "lark_md",
-              content: `**当前模型:** ${currentModel.providerName} / ${currentModel.modelName}`,
-            },
-          }]
-          : [{
-            tag: "div",
-            text: {
-              tag: "lark_md",
-              content: "**当前模型:** 点击按钮切换",
-            },
-          }]),
-        {
-          tag: "markdown",
-          content: otherModels.length > 0 ? "**选择要切换的模型：**" : "当前已是全部可用模型。",
-        },
-        ...otherModels.slice(0, 8).map((model) => ({
-          tag: "button",
-          text: {
-            tag: "plain_text",
-            content: `${model.providerName} / ${model.modelName}`,
-          },
-          type: "default",
-          value: { action: "command_execute", command: `/models ${model.id}` },
-        })),
-        ...(otherModels.length > 8
-          ? [{
-            tag: "overflow",
-            options: otherModels.slice(8, 18).map((model) => ({
-              text: {
-                tag: "plain_text",
-                content: `${model.providerName} / ${model.modelName}`,
-              },
-              value: `/models ${model.id}`,
-            })),
-          }]
-          : []),
-        ...(otherModels.length > 18
-          ? [{
-            tag: "markdown",
-            content: `_还有 ${otherModels.length - 18} 个模型，使用 \`/models provider/model\` 直接切换_`,
-          }]
-          : []),
-        ...(otherModels.length === 0 && !currentModel
-          ? [{
-            tag: "markdown",
-            content: "暂无可用模型。",
-          }]
-          : []),
-        ],
-    },
+    header: { title: { tag: "plain_text", content: "🧠 Model" }, template: "indigo" },
+    body: { elements },
   }
 }
 

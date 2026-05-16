@@ -294,14 +294,39 @@ export function buildModelSelectorCard(
 
   elements.push({ tag: "markdown", content: "**选择要切换的模型：**" })
 
-  let totalShown = 0
-  const maxButtons = 8
+  const providers = [...byProvider.entries()]
+  const maxButtons = 10
+  const minPerProvider = 2
 
-  for (const [provider, providerModels] of byProvider) {
-    if (totalShown >= maxButtons) break
-    const remaining = maxButtons - totalShown
-    const slice = providerModels.slice(0, remaining)
-    if (slice.length === 0) continue
+  const perProviderButtons = new Map<string, number>()
+  let usedSlots = 0
+  for (const [name, list] of providers) {
+    const take = Math.min(minPerProvider, list.length)
+    perProviderButtons.set(name, take)
+    usedSlots += take
+  }
+
+  if (usedSlots < maxButtons) {
+    const remainingSlots = maxButtons - usedSlots
+    const providersToFill = [...providers]
+      .map(([name, list]) => ({ name, unfilled: list.length - perProviderButtons.get(name)!, list }))
+      .filter(p => p.unfilled > 0)
+      .sort((a, b) => b.unfilled - a.unfilled)
+    for (const p of providersToFill) {
+      if (remainingSlots <= 0) break
+      const extra = Math.min(remainingSlots, p.unfilled)
+      perProviderButtons.set(p.name, (perProviderButtons.get(p.name) ?? 0) + extra)
+      usedSlots += extra
+      if (usedSlots >= maxButtons) break
+    }
+  }
+
+  let totalShown = 0
+  for (const [provider, providerModels] of providers) {
+    const take = perProviderButtons.get(provider) ?? 0
+    if (take === 0) continue
+
+    const slice = providerModels.slice(0, take)
 
     elements.push({ tag: "hr" })
     elements.push({ tag: "markdown", content: `**${provider}**` })
@@ -313,11 +338,19 @@ export function buildModelSelectorCard(
         type: "default",
         value: { action: "command_execute", command: `/models ${m.id}` },
       })
+      totalShown++
     }
-    totalShown += slice.length
   }
 
-  const allRemaining = otherModels.slice(totalShown)
+  const shownIds = new Set<string>()
+  for (const [provider, providerModels] of providers) {
+    const take = perProviderButtons.get(provider) ?? 0
+    for (let i = 0; i < take && i < providerModels.length; i++) {
+      shownIds.add(providerModels[i]!.id)
+    }
+  }
+
+  const allRemaining = otherModels.filter(m => !shownIds.has(m.id))
   const overflowCount = allRemaining.length
 
   if (overflowCount > 0) {

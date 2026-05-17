@@ -448,7 +448,6 @@ ${t(locale, "help.abort")}`
 
     if (sub === "list" || sub === undefined) {
       const tasks = await listScheduledTasks()
-      logger.info(`[handleCron] sub=${sub}, tasks=${tasks.length}`)
       const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
         id: task.id,
         name: task.name,
@@ -468,7 +467,6 @@ ${t(locale, "help.abort")}`
         } else {
           await replyText(chatId, messageId, card, channelId)
         }
-        logger.info(`[handleCron] replyText sent, tasks=${tasks.length}`)
       } else {
         const usage = sub === undefined
           ? "用法: /cron <描述> | /cron list | /cron remove\n\n"

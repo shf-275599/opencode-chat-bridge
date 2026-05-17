@@ -448,6 +448,7 @@ ${t(locale, "help.abort")}`
 
     if (sub === "list" || sub === undefined) {
       const tasks = await listScheduledTasks()
+      logger.info(`[handleCron] sub=${sub}, tasks=${tasks.length}`)
       const displayItems: TaskDisplayItem[] = tasks.map((task) => ({
         id: task.id,
         name: task.name,
@@ -461,10 +462,13 @@ ${t(locale, "help.abort")}`
 
       if (channelId === "feishu") {
         const card = buildTaskListCard(displayItems, locale)
-        const text = sub === undefined
-          ? `📋 **定时任务**\n\n用法:\n/cron \`每天19:10提醒我吃饭\` — 创建任务\n/cron list — 查看列表\n/cron remove — 删除任务\n\n${tasks.length > 0 ? `当前 ${tasks.length} 个任务:` : "暂无定时任务"}\n\n`
-          : `📋 **定时任务** (共 ${tasks.length} 个)\n\n`
-        await replyText(chatId, messageId, text + (card as string), channelId)
+        if (sub === undefined) {
+          const usage = `📋 **定时任务**\n\n用法:\n/cron \`每天19:10提醒我吃饭\` — 创建任务\n/cron list — 查看列表\n/cron remove — 删除任务\n\n`
+          await replyText(chatId, messageId, usage + (tasks.length > 0 ? card : "暂无定时任务"), channelId)
+        } else {
+          await replyText(chatId, messageId, card, channelId)
+        }
+        logger.info(`[handleCron] replyText sent, tasks=${tasks.length}`)
       } else {
         const usage = sub === undefined
           ? "用法: /cron <描述> | /cron list | /cron remove\n\n"
